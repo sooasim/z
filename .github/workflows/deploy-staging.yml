@@ -1,0 +1,162 @@
+# Staging: automatic (AGENTS_MASTER invariant 12 — AI/automation may deploy to staging only).
+# Triggered after `ci` succeeds on main. Builds immutable images, pushes to GHCR, runs migrations,
+# deploys via infra/scripts/deploy.sh (DEPLOY_TARGET = ecs | k8s | fly, repository variable),
+# smoke-tests /health + /ready, and tags the digests `verified-<sha>` — only verified digests can go to prod.
+name: deploy-staging
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write      # AWS OIDC (no long-lived cloud keys in GitHub)
+  attestations: write  # build provenance
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  API_REPO: ghcr.io/${{ github.repository_owner }}/jetpool-api
+  WEB_REPO: ghcr.io/${{ github.repository_owner }}/jetpool-web
+  DEPLOY_TARGET: ${{ vars.DEPLOY_TARGET || 'ecs' }}
+  AWS_REGION: ap-northeast-2
+
+jobs:
+  build:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.meta.outputs.sha }}
+      api_digest: ${{ steps.api.outputs.digest }}
+      web_digest: ${{ steps.web.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - id: meta
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: build & push api (api / worker / migrate commands)
+        id: api
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          build-args: GIT_SHA=${{ steps.meta.outputs.sha }}
+          tags: ${{ env.API_REPO }}:${{ steps.meta.outputs.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+          provenance: true
+          sbom: true
+      - name: build & push web
+        id: web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          build-args: |
+            GIT_SHA=${{ steps.meta.outputs.sha }}
+            NEXT_PUBLIC_API_URL=${{ vars.STAGING_API_URL || 'https://api.staging.jetpool.kr' }}
+          tags: ${{ env.WEB_REPO }}:${{ steps.meta.outputs.sha }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+          provenance: true
+          sbom: true
+      - uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.API_REPO }}
+          subject-digest: ${{ steps.api.outputs.digest }}
+          push-to-registry: true
+      - uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.WEB_REPO }}
+          subject-digest: ${{ steps.web.outputs.digest }}
+          push-to-registry: true
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_WEB_URL || 'https://staging.jetpool.kr' }}
+    env:
+      API_IMAGE: ghcr.io/${{ github.repository_owner }}/jetpool-api@${{ needs.build.outputs.api_digest }}
+      WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/jetpool-web@${{ needs.build.outputs.web_digest }}
+      STATE_FILE: .deploy-state-staging.json
+      ECS_SUBNETS: ${{ vars.ECS_SUBNETS }}
+      ECS_SECURITY_GROUPS: ${{ vars.ECS_SECURITY_GROUPS }}
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: AWS credentials (OIDC)
+        if: env.DEPLOY_TARGET == 'ecs'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: kubeconfig
+        if: env.DEPLOY_TARGET == 'k8s'
+        run: |
+          mkdir -p ~/.kube && echo "${{ secrets.KUBECONFIG_STAGING }}" | base64 -d > ~/.kube/config
+      - uses: superfly/flyctl-actions/setup-flyctl@1.5
+        if: env.DEPLOY_TARGET == 'fly'
+      - name: snapshot current release (for rollback)
+        run: infra/scripts/deploy.sh staging snapshot || echo "no previous release"
+      - name: migrate (one-shot job, forward-only)
+        run: infra/scripts/deploy.sh staging migrate
+      - name: deploy api / worker / web
+        run: infra/scripts/deploy.sh staging deploy
+      - name: smoke /health /ready
+        run: infra/scripts/smoke.sh "${{ vars.STAGING_API_URL || 'https://api.staging.jetpool.kr' }}" "${{ vars.STAGING_WEB_URL || 'https://staging.jetpool.kr' }}"
+      - name: rollback on failure
+        if: failure()
+        run: infra/scripts/deploy.sh staging rollback
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: mark digests verified (eligible for production)
+        run: |
+          docker buildx imagetools create -t "ghcr.io/${{ github.repository_owner }}/jetpool-api:verified-${{ needs.build.outputs.sha }}" "$API_IMAGE"
+          docker buildx imagetools create -t "ghcr.io/${{ github.repository_owner }}/jetpool-web:verified-${{ needs.build.outputs.sha }}" "$WEB_IMAGE"
+      - name: release manifest
+        run: |
+          cat > release-manifest.json <<EOF
+          {"sha":"${{ needs.build.outputs.sha }}","api_digest":"${{ needs.build.outputs.api_digest }}","web_digest":"${{ needs.build.outputs.web_digest }}","staging_run":"${{ github.run_id }}"}
+          EOF
+          cat release-manifest.json
+          {
+            echo "### Staging release verified"
+            echo "Promote to production with **deploy-production** (manual approval required):"
+            echo '```'; cat release-manifest.json; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with: { name: release-manifest, path: release-manifest.json }
+
+  e2e-staging:
+    name: post-deploy smoke/e2e (staging)
+    needs: [build, deploy]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: grafana/setup-k6-action@v1
+      - name: short k6 smoke against staging (search + quote read paths)
+        env:
+          BASE_URL: ${{ vars.STAGING_API_URL || 'https://api.staging.jetpool.kr' }}
+          K6_PROFILE: smoke
+        run: k6 run scripts/load/search.js

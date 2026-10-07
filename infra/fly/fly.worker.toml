@@ -1,0 +1,10 @@
+# Worker: outbox dispatcher + scheduled sweeps. No HTTP service; exactly one machine per region is
+# sufficient because jobs use DB row locks / advisory locks, but 2 machines are safe for availability.
+primary_region = "nrt"
+
+[processes]
+  worker = "worker"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

@@ -1,0 +1,161 @@
+# JETPOOL local full stack.
+#   docker compose up --build            # everything (migrate runs once, then api/worker/web start)
+#   docker compose up -d postgres redis meilisearch minio mailpit   # infra only, run apps with pnpm
+# Ports: web 3000 · api 4000 · postgres 5432 · redis 6379 · meili 7700 · minio 9000/9001 · mailpit 8025 (SMTP 1025)
+# All credentials below are LOCAL DEV ONLY placeholders.
+name: jetpool
+
+x-api-env: &api-env
+  NODE_ENV: development
+  PORT: "4000"
+  DATABASE_URL: postgres://postgres:postgres@postgres:5432/jetpool
+  JWT_SECRET: local-dev-jwt-secret-change-me-0123456789abcdef0123456789abcdef
+  DATA_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000001"
+  PUBLIC_WEB_URL: http://localhost:3000
+  PUBLIC_API_URL: http://localhost:4000
+  CORS_ORIGINS: http://localhost:3000
+  PAYMENT_PROVIDER: MOCK
+  OAUTH_MOCK: "true"
+  REDIS_URL: redis://redis:6379
+  MEILI_HOST: http://meilisearch:7700
+  MEILI_API_KEY: dev-master-key
+  # Server-side S3 calls go to the compose network; browsers use CDN_BASE_URL on localhost.
+  S3_ENDPOINT: http://minio:9000
+  S3_REGION: ap-northeast-2
+  S3_ACCESS_KEY_ID: minio
+  S3_SECRET_ACCESS_KEY: minio12345
+  S3_BUCKET_PRIVATE: jetpool-private
+  S3_BUCKET_PUBLIC: jetpool-public
+  CDN_BASE_URL: http://localhost:9000/jetpool-public
+  SMTP_URL: smtp://mailpit:1025
+  LOG_LEVEL: info
+
+services:
+  postgres:
+    # Official image ships contrib extensions (btree_gist, pgcrypto, citext) — created by migration 0001.
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: jetpool
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d jetpool"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports: ["6379:6379"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.11
+    environment:
+      MEILI_MASTER_KEY: dev-master-key
+      MEILI_ENV: development
+      MEILI_NO_ANALYTICS: "true"
+    ports: ["7700:7700"]
+    volumes: [meilidata:/meili_data]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:7700/health || wget -qO- http://127.0.0.1:7700/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio12345
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [miniodata:/data]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio-init:
+    # Creates the private (originals/ID docs; never public) and public (processed media) buckets.
+    image: minio/mc:latest
+    depends_on:
+      minio: { condition: service_healthy }
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        mc alias set local http://minio:9000 minio minio12345
+        mc mb --ignore-existing local/jetpool-private
+        mc mb --ignore-existing local/jetpool-public
+        mc anonymous set none local/jetpool-private
+        mc anonymous set download local/jetpool-public
+        echo "buckets ready"
+    restart: "no"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ["8025:8025", "1025:1025"]
+
+  migrate:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    image: jetpool-api:local
+    command: ["migrate"]
+    environment: *api-env
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
+  api:
+    image: jetpool-api:local
+    command: ["api"]
+    environment: *api-env
+    ports: ["4000:4000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      meilisearch: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  worker:
+    image: jetpool-api:local
+    command: ["worker"]
+    environment: *api-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      meilisearch: { condition: service_healthy }
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4000
+    image: jetpool-web:local
+    environment:
+      PORT: "3000"
+      # for server-side rendering inside the compose network
+      API_INTERNAL_URL: http://api:4000
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+    ports: ["3000:3000"]
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+
+volumes:
+  pgdata: {}
+  redisdata: {}
+  meilidata: {}
+  miniodata: {}

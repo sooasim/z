@@ -1,0 +1,305 @@
+# JETPOOL CI — release gates G0, G1, G2, G3, G4, G5 (+ G6 on schedule/dispatch) and the release report.
+# Every job writes machine-readable evidence to ./reports and uploads it as `report-<job>`;
+# the final `release-report` job merges them and renders docs/RELEASE_REPORT.md (scripts/release-report.mjs).
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 18 * * *" # nightly 03:17 KST — includes load tests (G6)
+  workflow_dispatch:
+    inputs:
+      run_load:
+        description: Run k6 load/concurrency tests (G6)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: "22"
+  # Tests use trust auth on the service container (see services.postgres below).
+  DATABASE_URL: postgres://postgres@localhost:5432/jetpool
+  TEST_DATABASE_URL: postgres://postgres@localhost:5432/jetpool
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  # ---------------------------------------------------------------- G0
+  spec:
+    name: G0 spec integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "${{ env.NODE_VERSION }}", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: validate-spec (errors fail; implementation gaps are warnings)
+        run: node scripts/validate-spec.mjs --json reports/g0-spec.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: report-spec, path: reports/, if-no-files-found: ignore }
+
+  # ---------------------------------------------------------------- G2
+  db:
+    name: G2 migrations (pg ${{ matrix.pg }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: ["16", "17"]
+    services:
+      postgres:
+        image: postgres:${{ matrix.pg }}
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: jetpool
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "${{ env.NODE_VERSION }}", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: migrate --verify (clean apply + idempotent re-run on scratch DB)
+        run: |
+          mkdir -p reports
+          set -o pipefail
+          node packages/db/migrate.mjs --verify 2>&1 | tee reports/g2-migrate-verify-pg${{ matrix.pg }}.log
+      - name: apply to jetpool DB + invariants present
+        run: |
+          node packages/db/migrate.mjs
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -At -c "
+            SELECT 'exclusion_constraints=' || count(*) FROM pg_constraint WHERE contype = 'x';
+            SELECT 'append_only_triggers=' || count(*) FROM pg_trigger WHERE tgname LIKE '%append_only%';
+            SELECT 'ledger_balanced_trigger=' || count(*) FROM pg_trigger WHERE tgname = 'ledger_entries_balanced';
+          " | tee reports/g2-invariants-pg${{ matrix.pg }}.txt
+          grep -q 'exclusion_constraints=[1-9]' reports/g2-invariants-pg${{ matrix.pg }}.txt
+          grep -q 'ledger_balanced_trigger=1' reports/g2-invariants-pg${{ matrix.pg }}.txt
+      - name: deterministic seed (run twice, compare row counts)
+        if: hashFiles('packages/db/seed-dev.mjs') != ''
+        run: |
+          node packages/db/seed-dev.mjs
+          psql "$DATABASE_URL" -At -c "SELECT relname||'='||n_live_tup FROM pg_stat_user_tables ORDER BY 1" > /tmp/seed1.txt
+          node packages/db/seed-dev.mjs
+          psql "$DATABASE_URL" -c "ANALYZE" >/dev/null
+          psql "$DATABASE_URL" -At -c "SELECT relname||'='||n_live_tup FROM pg_stat_user_tables ORDER BY 1" > /tmp/seed2.txt
+          diff /tmp/seed1.txt /tmp/seed2.txt && echo "seed deterministic" | tee reports/g2-seed-pg${{ matrix.pg }}.txt
+      - name: status
+        if: always()
+        run: echo '{"gate":"G2","pg":"${{ matrix.pg }}","status":"${{ job.status }}"}' > reports/g2-status-pg${{ matrix.pg }}.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: "report-db-pg${{ matrix.pg }}", path: reports/, if-no-files-found: ignore }
+
+  # ---------------------------------------------------------------- G3 / G4 / G5(permission-negative)
+  api:
+    name: G3/G4 api typecheck + tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: jetpool
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "${{ env.NODE_VERSION }}", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: typecheck
+        run: pnpm --filter @jetpool/api typecheck
+      - name: build
+        run: pnpm --filter @jetpool/api build
+      - name: vitest (unit + integration + negative-permission + idempotency + concurrency + E2E chains)
+        working-directory: apps/api
+        run: |
+          mkdir -p ../../reports
+          npx vitest run --reporter=default --reporter=json --outputFile.json=../../reports/vitest-api.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: report-api, path: reports/, if-no-files-found: ignore }
+
+  # ---------------------------------------------------------------- G1
+  contracts:
+    name: G1 contracts (OpenAPI export + lint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "${{ env.NODE_VERSION }}", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: export OpenAPI from live route schemas
+        run: pnpm contracts:generate
+      - name: lint OpenAPI (redocly) — errors fail, warnings allowed
+        run: |
+          mkdir -p reports
+          set +e
+          npx --yes @redocly/cli@1 lint packages/contracts/openapi.json --format=stylish > reports/g1-openapi-lint.txt 2>&1
+          code=$?
+          set -e
+          cat reports/g1-openapi-lint.txt
+          echo "{\"gate\":\"G1\",\"check\":\"openapi-lint\",\"exitCode\":$code}" > reports/g1-openapi-lint.json
+          exit $code
+      - name: validate AsyncAPI seed (advisory)
+        continue-on-error: true
+        run: npx --yes @asyncapi/cli@2 validate dd/JETPOOL_ASYNCAPI_SKELETON.yaml 2>&1 | tee reports/g1-asyncapi.txt
+      - name: breaking-change diff vs main (advisory)
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          git fetch --depth=1 origin "${{ github.base_ref }}"
+          if git show "origin/${{ github.base_ref }}:packages/contracts/openapi.json" > /tmp/base-openapi.json 2>/dev/null; then
+            npx --yes oasdiff@latest breaking /tmp/base-openapi.json packages/contracts/openapi.json | tee reports/g1-breaking.txt || true
+          else
+            echo "no base contract on ${{ github.base_ref }}" | tee reports/g1-breaking.txt
+          fi
+      - run: cp packages/contracts/openapi.json packages/contracts/openapi-report.json reports/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: report-contracts, path: reports/, if-no-files-found: ignore }
+
+  # ---------------------------------------------------------------- web
+  web:
+    name: web typecheck + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "${{ env.NODE_VERSION }}", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @jetpool/web typecheck
+      - name: build
+        env:
+          NEXT_PUBLIC_API_URL: https://api.staging.jetpool.kr
+        run: pnpm --filter @jetpool/web build
+      - name: status
+        if: always()
+        run: mkdir -p reports && echo '{"check":"web-build","status":"${{ job.status }}"}' > reports/web-build.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: report-web, path: reports/, if-no-files-found: ignore }
+
+  # ---------------------------------------------------------------- G5
+  security:
+    name: G5 security (secrets, SCA, SBOM, PAN/CVC)
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: "8.21.2"
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "${{ env.NODE_VERSION }}", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: secret scan (gitleaks, full history) — BLOCKING
+        run: |
+          mkdir -p reports
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz gitleaks
+          ./gitleaks detect --source . --config .gitleaks.toml --redact --no-banner \
+            --report-format json --report-path reports/gitleaks.json --exit-code 1
+      - name: PAN/CVC storage guard — BLOCKING
+        run: node scripts/check-no-pan.mjs --json reports/no-pan.json
+      - name: SCA (pnpm audit --audit-level=high)
+        # continue-on-error: an advisory without an upstream fix must not freeze all merges; the release
+        # report marks G5 FAIL when high/critical advisories exist, which blocks production (G10).
+        continue-on-error: true
+        run: |
+          pnpm audit --json > reports/pnpm-audit.json || true
+          pnpm audit --audit-level=high
+      - name: SBOM (SPDX)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: reports/sbom.spdx.json
+          upload-artifact: false
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: report-security, path: reports/, if-no-files-found: ignore }
+
+  # ---------------------------------------------------------------- G6 (nightly / on demand)
+  load:
+    name: G6 load + no-oversell (k6)
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_load)
+    needs: [api]
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: jetpool
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      NODE_ENV: test
+      PAYMENT_PROVIDER: MOCK
+      OAUTH_MOCK: "true"
+      RATE_LIMIT_PER_MIN: "1000000"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "${{ env.NODE_VERSION }}", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: node packages/db/migrate.mjs && pnpm --filter @jetpool/api build
+      - name: start api + worker
+        run: |
+          (cd apps/api && nohup node dist/server.js > /tmp/api.log 2>&1 &)
+          (cd apps/api && nohup node dist/worker.js > /tmp/worker.log 2>&1 &)
+          for i in $(seq 1 60); do curl -fsS http://localhost:4000/ready && break; sleep 1; done
+      - uses: grafana/setup-k6-action@v1
+      - name: k6 search / quote / hold-concurrency
+        env:
+          BASE_URL: http://localhost:4000
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+        run: bash scripts/load/run-all.sh reports
+      - if: always()
+        run: cp /tmp/api.log /tmp/worker.log reports/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: report-load, path: reports/, if-no-files-found: ignore }
+
+  # ---------------------------------------------------------------- report
+  release-report:
+    name: release report (G0–G10)
+    if: always()
+    needs: [spec, db, api, contracts, web, security, load]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "${{ env.NODE_VERSION }}", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with: { pattern: report-*, path: reports, merge-multiple: true }
+      - name: render docs/RELEASE_REPORT.md
+        env:
+          JOB_RESULTS: ${{ toJSON(needs) }}
+        run: node scripts/release-report.mjs --reports reports --out docs/RELEASE_REPORT.md
+      - run: cat docs/RELEASE_REPORT.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-report
+          path: |
+            docs/RELEASE_REPORT.md
+            reports/

@@ -1,0 +1,36 @@
+# G5 SAST — CodeQL for the TypeScript/JavaScript codebase (apps/api, apps/web, scripts).
+name: codeql
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "41 19 * * 1" # weekly, Tue 04:41 KST
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: CodeQL (javascript-typescript)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+          config: |
+            paths-ignore:
+              - "**/node_modules/**"
+              - "**/dist/**"
+              - "**/.next/**"
+              - dd/**
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"

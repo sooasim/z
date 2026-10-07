@@ -1,0 +1,28 @@
+# Keep the build context small and free of secrets.
+**/node_modules
+**/dist
+**/.next
+**/coverage
+**/.turbo
+**/*.tsbuildinfo
+**/playwright-report
+**/test-results
+.git
+.github
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+*.log
+# specs / docs are not needed in images (validate-spec runs in CI, not in containers)
+dd
+docs
+# IaC & ops assets (infra/docker is needed by the Dockerfiles)
+infra/terraform
+infra/k8s
+infra/observability
+scripts/load
+**/.terraform
+**/*.tfstate*

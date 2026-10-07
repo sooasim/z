@@ -1,6 +1,132 @@
 import type { FastifyInstance } from 'fastify';
+import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { z } from 'zod';
+import { requireAuth, requireRole, getActor } from '../../platform/auth.js';
+import { ctxFromRequest } from '../../platform/context.js';
+import {
+  PROPERTY_TYPES, ROOM_TYPES, archiveProperty, assertValidNights, blockProperty, createProperty, getProperty, getPublicBySlug,
+  listAmenities, listCancellationPolicies, listHostProperties, listPublicProperties, publishProperty, setAmenities, unblockProperty,
+  unlistProperty, updateProperty, withdrawProperty,
+} from './service.js';
 
-/** STAY-01 Property / Listing Management — routes, event handlers and adapters are registered here. */
+const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'HH:MM');
+const address = z.object({
+  line1: z.string().trim().min(1).max(300),
+  line2: z.string().trim().max(300).nullish(),
+  postalCode: z.string().trim().max(20).nullish(),
+  city: z.string().trim().max(100).nullish(),
+  region: z.string().trim().max(100).nullish(),
+  country: z.string().length(2).nullish(),
+  publicAreaLabel: z.string().trim().max(120).nullish(),
+});
+const houseRules = z.object({
+  smokingAllowed: z.boolean().optional(),
+  petsAllowed: z.boolean().optional(),
+  eventsAllowed: z.boolean().optional(),
+  quietHours: z.string().max(100).nullish(),
+  extraRules: z.string().max(4000).nullish(),
+});
+const fields = {
+  title: z.string().trim().min(2).max(120),
+  summary: z.string().trim().max(500).nullish(),
+  description: z.string().trim().max(10000).nullish(),
+  propertyType: z.enum(PROPERTY_TYPES),
+  roomType: z.enum(ROOM_TYPES).optional(),
+  maxGuests: z.number().int().min(1).max(50).optional(),
+  bedrooms: z.number().int().min(0).max(100).optional(),
+  beds: z.number().int().min(0).max(200).optional(),
+  bathrooms: z.number().min(0).max(100).multipleOf(0.5).optional(),
+  lat: z.number().min(-90).max(90).nullish(),
+  lng: z.number().min(-180).max(180).nullish(),
+  country: z.string().length(2).optional(),
+  region: z.string().trim().max(20).nullish(),
+  city: z.string().trim().max(100).nullish(),
+  timezone: z.string().max(64).optional(),
+  rentalEnabled: z.boolean().optional(),
+  exchangeEnabled: z.boolean().optional(),
+  instantBook: z.boolean().optional(),
+  basePriceMinor: z.number().int().min(0).max(1e12).nullish(),
+  cleaningFeeMinor: z.number().int().min(0).max(1e12).optional(),
+  currency: z.string().length(3).optional(),
+  minNights: z.number().int().min(1).max(365).optional(),
+  maxNights: z.number().int().min(1).max(1000).optional(),
+  checkInTime: time.optional(),
+  checkOutTime: time.optional(),
+  cancellationPolicyCode: z.string().max(40).nullish(),
+  address: address.nullish(),
+  houseRules: houseRules.nullish(),
+  amenities: z.array(z.string().max(60)).max(100).optional(),
+};
+const createBody = z.object(fields);
+const patchBody = z.object(fields).partial().refine((b) => Object.keys(b).length > 0, 'At least one field is required');
+const idParams = z.object({ id: z.uuid() });
+const reasonBody = z.object({ reason: z.string().trim().min(3).max(1000) });
+const STATUSES = ['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'UNLISTED', 'BLOCKED', 'ARCHIVED'] as const;
+
+/** STAY-01 Property / Listing Management — draft CRUD, content, lifecycle FSM and public detail. */
 export default async function propertiesModule(app: FastifyInstance) {
-  void app;
+  const r = app.withTypeProvider<ZodTypeProvider>();
+  const tags = ['STAY-01'];
+
+  r.get('/v1/amenities', { schema: { tags, summary: 'Amenity catalog' } }, async () => ({ items: await listAmenities(app.ctx.pool) }));
+  r.get('/v1/properties/cancellation-policies', { schema: { tags, summary: 'Selectable cancellation policies' } }, async () => ({
+    items: await listCancellationPolicies(app.ctx.pool),
+  }));
+
+  r.post('/v1/properties', { schema: { tags, body: createBody }, preHandler: requireAuth }, async (req, reply) => {
+    assertValidNights(req.body.minNights, req.body.maxNights);
+    return reply.status(201).send({ item: await createProperty(ctxFromRequest(req), getActor(req), req.body as any) });
+  });
+
+  r.patch('/v1/properties/:id', { schema: { tags, params: idParams, body: patchBody }, preHandler: requireAuth }, async (req) => {
+    assertValidNights(req.body.minNights, req.body.maxNights);
+    return { item: await updateProperty(ctxFromRequest(req), getActor(req), req.params.id, req.body as any) };
+  });
+
+  r.get('/v1/properties', {
+    schema: {
+      tags, summary: 'Published listings (public)',
+      querystring: z.object({ hostId: z.uuid().optional(), city: z.string().max(100).optional(), limit: z.coerce.number().int().min(1).max(100).default(20), offset: z.coerce.number().int().min(0).max(10000).default(0) }),
+    },
+  }, async (req) => ({ items: await listPublicProperties(app.ctx.pool, req.query) }));
+
+  r.get('/v1/properties/by-slug/:slug', { schema: { tags, summary: 'Public listing detail', params: z.object({ slug: z.string().min(1).max(200) }) } }, async (req) => ({
+    item: await getPublicBySlug(app.ctx.pool, req.params.slug),
+  }));
+
+  r.get('/v1/properties/:id', { schema: { tags, params: idParams } }, async (req) => ({
+    item: await getProperty(ctxFromRequest(req), req.actor ?? null, req.params.id),
+  }));
+
+  r.get('/v1/host/properties', {
+    schema: { tags, summary: "Host's own listings", querystring: z.object({ status: z.enum(STATUSES).optional() }) },
+    preHandler: requireAuth,
+  }, async (req) => ({ items: await listHostProperties(app.ctx.pool, getActor(req), req.query.status) }));
+
+  r.put('/v1/properties/:id/amenities', {
+    schema: { tags, params: idParams, body: z.object({ codes: z.array(z.string().max(60)).max(100) }) },
+    preHandler: requireAuth,
+  }, async (req) => ({ items: await setAmenities(ctxFromRequest(req), getActor(req), req.params.id, req.body.codes) }));
+
+  r.post('/v1/properties/:id/publish', { schema: { tags, params: idParams }, preHandler: requireAuth }, async (req, reply) => {
+    const res = await publishProperty(ctxFromRequest(req), getActor(req), req.params.id);
+    return reply.status(res.outcome === 'PUBLISHED' ? 200 : 202).send(res);
+  });
+  r.post('/v1/properties/:id/unlist', { schema: { tags, params: idParams }, preHandler: requireAuth }, async (req) => ({
+    item: await unlistProperty(ctxFromRequest(req), getActor(req), req.params.id),
+  }));
+  r.post('/v1/properties/:id/withdraw', { schema: { tags, params: idParams, summary: 'Withdraw an IN_REVIEW listing back to DRAFT' }, preHandler: requireAuth }, async (req) => ({
+    item: await withdrawProperty(ctxFromRequest(req), getActor(req), req.params.id),
+  }));
+  r.post('/v1/properties/:id/archive', { schema: { tags, params: idParams }, preHandler: requireAuth }, async (req) => ({
+    item: await archiveProperty(ctxFromRequest(req), getActor(req), req.params.id),
+  }));
+
+  const staff = requireRole('ADMIN', 'COMPLIANCE'); // staff-only → AAL2
+  r.post('/v1/admin/properties/:id/block', { schema: { tags: ['STAY-01', 'STAY-03'], params: idParams, body: reasonBody }, preHandler: staff }, async (req) => ({
+    item: await blockProperty(ctxFromRequest(req), req.params.id, req.body.reason),
+  }));
+  r.post('/v1/admin/properties/:id/unblock', { schema: { tags: ['STAY-01', 'STAY-03'], params: idParams, body: reasonBody }, preHandler: staff }, async (req) => ({
+    item: await unblockProperty(ctxFromRequest(req), req.params.id, req.body.reason),
+  }));
 }

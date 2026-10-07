@@ -1,0 +1,148 @@
+# Production: MANUAL ONLY (G10). Inputs are immutable digests that previously passed staging
+# (tagged `verified-<sha>` by deploy-staging). The `production` GitHub Environment must be configured with
+# required reviewers — the deploy job blocks until a human approves it.
+# Flow: verify artifact → approve → snapshot → migrate (forward-only) → canary → bake + smoke → promote →
+#       smoke; any failure after snapshot triggers automatic rollback to the snapshot.
+name: deploy-production
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Git SHA that was verified on staging
+        required: true
+        type: string
+      api_digest:
+        description: jetpool-api image digest (sha256:...)
+        required: true
+        type: string
+      web_digest:
+        description: jetpool-web image digest (sha256:...)
+        required: true
+        type: string
+      canary_bake_seconds:
+        description: Canary bake time before promotion
+        required: false
+        default: "600"
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+  packages: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  API_REPO: ghcr.io/${{ github.repository_owner }}/jetpool-api
+  WEB_REPO: ghcr.io/${{ github.repository_owner }}/jetpool-web
+  DEPLOY_TARGET: ${{ vars.DEPLOY_TARGET || 'ecs' }}
+  AWS_REGION: ap-northeast-2
+
+jobs:
+  verify-artifact:
+    name: verify immutable release artifact
+    runs-on: ubuntu-latest
+    steps:
+      - name: validate inputs
+        run: |
+          [[ "${{ inputs.api_digest }}" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "api_digest must be sha256:<64 hex>"; exit 1; }
+          [[ "${{ inputs.web_digest }}" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "web_digest must be sha256:<64 hex>"; exit 1; }
+          [[ "${{ inputs.release_sha }}" =~ ^[0-9a-f]{40}$ ]] || { echo "release_sha must be a full 40-char SHA"; exit 1; }
+          [[ "${{ github.ref }}" == "refs/heads/main" ]] || { echo "production deploys must be dispatched from main"; exit 1; }
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: digests were verified on staging
+        run: |
+          check() { # <repo> <expected digest>
+            got="$(docker buildx imagetools inspect "$1:verified-${{ inputs.release_sha }}" --format '{{json .Manifest.Digest}}' | tr -d '"')"
+            [[ "$got" == "$2" ]] || { echo "$1:verified-${{ inputs.release_sha }} is $got, expected $2"; exit 1; }
+            echo "ok $1@$2"
+          }
+          check "$API_REPO" "${{ inputs.api_digest }}"
+          check "$WEB_REPO" "${{ inputs.web_digest }}"
+      - uses: actions/checkout@v4
+        with: { ref: "${{ inputs.release_sha }}" }
+      - name: verify build provenance
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh attestation verify "oci://$API_REPO@${{ inputs.api_digest }}" --owner "${{ github.repository_owner }}"
+          gh attestation verify "oci://$WEB_REPO@${{ inputs.web_digest }}" --owner "${{ github.repository_owner }}"
+
+  deploy:
+    name: production (approval required)
+    needs: verify-artifact
+    runs-on: ubuntu-latest
+    environment:
+      name: production   # <- required reviewers configured in repo Settings → Environments (G10)
+      url: ${{ vars.PROD_WEB_URL || 'https://jetpool.kr' }}
+    env:
+      API_IMAGE: ghcr.io/${{ github.repository_owner }}/jetpool-api@${{ inputs.api_digest }}
+      WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/jetpool-web@${{ inputs.web_digest }}
+      STATE_FILE: .deploy-state-production.json
+      API_URL: ${{ vars.PROD_API_URL || 'https://api.jetpool.kr' }}
+      WEB_URL: ${{ vars.PROD_WEB_URL || 'https://jetpool.kr' }}
+      ECS_SUBNETS: ${{ vars.ECS_SUBNETS }}
+      ECS_SECURITY_GROUPS: ${{ vars.ECS_SECURITY_GROUPS }}
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      EXPECT_PRODUCTION: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ inputs.release_sha }}" }
+      - name: AWS credentials (OIDC)
+        if: env.DEPLOY_TARGET == 'ecs'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: kubeconfig
+        if: env.DEPLOY_TARGET == 'k8s'
+        run: mkdir -p ~/.kube && echo "${{ secrets.KUBECONFIG_PRODUCTION }}" | base64 -d > ~/.kube/config
+      - uses: superfly/flyctl-actions/setup-flyctl@1.5
+        if: env.DEPLOY_TARGET == 'fly'
+
+      - name: snapshot current release (rollback point)
+        id: snapshot
+        run: infra/scripts/deploy.sh production snapshot
+      - uses: actions/upload-artifact@v4
+        with: { name: prod-rollback-snapshot, path: .deploy-state-production.json }
+
+      - name: migrate (forward-only, expand/contract — old code must keep working)
+        run: infra/scripts/deploy.sh production migrate
+
+      - name: canary (1 api task alongside stable fleet)
+        id: canary
+        run: infra/scripts/deploy.sh production canary
+      - name: canary bake + smoke
+        env:
+          SMOKE_DURATION: ${{ inputs.canary_bake_seconds }}
+        run: infra/scripts/smoke.sh "$API_URL" "$WEB_URL"
+
+      - name: promote to 100%
+        id: promote
+        run: infra/scripts/deploy.sh production promote
+      - name: post-promote smoke
+        run: infra/scripts/smoke.sh "$API_URL" "$WEB_URL"
+
+      - name: AUTOMATIC ROLLBACK
+        if: failure() && steps.snapshot.outcome == 'success'
+        run: |
+          echo "::error::production release failed — rolling back to snapshot"
+          infra/scripts/deploy.sh production rollback
+          SMOKE_RETRIES=20 infra/scripts/smoke.sh "$API_URL" "$WEB_URL"
+      - name: summary
+        if: always()
+        run: |
+          {
+            echo "### Production release ${{ job.status }}"
+            echo "- sha: \`${{ inputs.release_sha }}\`"
+            echo "- api: \`${{ inputs.api_digest }}\`"
+            echo "- web: \`${{ inputs.web_digest }}\`"
+            echo "- approved by: environment reviewers (see run approvals)"
+          } >> "$GITHUB_STEP_SUMMARY"
