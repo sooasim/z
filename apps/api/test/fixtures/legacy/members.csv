@@ -1,0 +1,7 @@
+member_id,email,name,phone,joined_at,marketing_agree,marketing_agreed_at,password_hash,password_format
+1001,Minji.Kim@Example.com ,김민지,010-1234-5678,2021-03-04 10:00:00,Y,2021-03-04 10:00:00,$2y$10$abcdefghijklmnopqrstuuF1y4bH0sZqJ3I7k3vG0w3eYQm9p0x5S,bcrypt
+1002,jun@example.com,Jun Park,+82 10 9876 5432,2022-01-15,N,,5f4dcc3b5aa765d61d8327deb882cf99,md5
+1003,not-an-email,Broken Row,010-0000-0000,2022-02-01,Y,,,
+1004,minji.kim@example.com,Duplicate Minji,,2022-05-01,,,,
+1005,existing@jetpool.kr,Existing User,,2022-06-01,Y,,,
+1006,"lee,""quoted""@example.com",Lee,02-123-4567,2023-07-07,동의,2023-07-07,scrypt$16384$8$1$c2FsdHNhbHRzYWx0$aGFzaGhhc2hoYXNoaGFzaA,

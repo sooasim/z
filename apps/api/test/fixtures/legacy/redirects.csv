@@ -1,0 +1,5 @@
+legacy_url,target_path,status_code
+https://wont.kr/shop/item/12/,/stay/seoul-hanok,301
+/about,/p/about,301
+/evil,https://evil.example.com,301
+/about,/p/about-dup,301

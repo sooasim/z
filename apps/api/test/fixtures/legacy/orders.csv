@@ -1,0 +1,4 @@
+order_id,amount,currency,status
+o1,"150,000",KRW,PAID
+o2,85000,KRW,CANCELLED
+o3,abc,KRW,PAID

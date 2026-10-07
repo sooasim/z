@@ -1,0 +1,5 @@
+media_id,url,file,sha256,mime
+m1,https://cdn.sixshop.com/img/a.jpg,a.jpg,f918587ec4736ed0ddd44582930804f2cd95cd8bba1a6dd230c88dadc48dc628,image/jpeg
+m2,https://cdn.sixshop.com/img/b.png,b.png,0000000000000000000000000000000000000000000000000000000000000000,image/png
+m3,https://cdn.sixshop.com/img/missing.jpg,missing.jpg,,image/jpeg
+m4,https://cdn.sixshop.com/img/evil.jpg,../../../etc/passwd,,image/jpeg

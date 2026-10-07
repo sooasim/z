@@ -1,0 +1,4 @@
+post_id,board,title,body_html,slug,published_at,legacy_url
+p1,story,"제주 한 달 살기","<p>제주에서 한 달.</p><img src=""https://cdn.sixshop.com/img/a.jpg""><script>alert(1)</script><a href=""javascript:evil()"">x</a>",jeju-month,2022-03-01,https://wont.kr/board/story/1
+p2,faq,"환불은 어떻게 하나요?","<p>환불 <b>정책</b> 안내</p>",,2022-04-01,https://wont.kr/board/faq/2
+p3,notice,"",<p>no title</p>,,,
