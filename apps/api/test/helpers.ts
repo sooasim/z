@@ -10,7 +10,8 @@ import { runAllJobsOnce } from '../src/platform/jobs.js';
 import { setFlag } from '../src/platform/flags.js';
 import { systemCtx, type Ctx } from '../src/platform/context.js';
 
-const TEMPLATE_DB = 'jetpool_test_template';
+import { inject } from 'vitest';
+const templateDb = () => (inject as any)('template') ?? process.env.JETPOOL_TEST_TEMPLATE;
 const base = () => (process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL ?? 'postgres://postgres@localhost:5432/postgres').replace(/\/[^/]*$/, '');
 
 export interface TestApp {
@@ -32,7 +33,7 @@ export async function createTestApp(config: Record<string, unknown> = {}): Promi
   // template DB must have no other connections while cloning; retry briefly if a parallel clone is running
   for (let i = 0; ; i++) {
     try {
-      await admin.query(`CREATE DATABASE ${dbName} TEMPLATE ${TEMPLATE_DB}`);
+      await admin.query(`CREATE DATABASE ${dbName} TEMPLATE ${templateDb()}`);
       break;
     } catch (e: any) {
       if (i > 50 || !String(e.message).includes('being accessed')) throw e;
