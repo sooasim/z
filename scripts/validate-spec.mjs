@@ -132,7 +132,18 @@ function walk(dir, exts, out = []) {
 const usedTags = new Set();
 for (const f of walk(path.join(root, 'apps/api/src'), ['.ts', '.js'])) {
   const src = readFileSync(f, 'utf8');
-  for (const m of src.matchAll(/tags:\s*\[([^\]]*)\]/g)) for (const t of m[1].matchAll(/['"`]([A-Z]+-\d+)['"`]/g)) usedTags.add(t[1]);
+  // constants such as `const TAG_PAY = 'PAY-01'` used as `tags: [TAG_PAY]`
+  const consts = new Map([...src.matchAll(/\b([A-Za-z_$][\w$]*)\s*(?::\s*\w+\s*)?=\s*['"`]([A-Z]+-\d+)['"`]/g)].map((m) => [m[1], m[2]]));
+  let unresolved = false;
+  for (const m of src.matchAll(/tags:\s*\[([^\]]*)\]/g)) {
+    for (const t of m[1].matchAll(/['"`]([A-Z]+-\d+)['"`]/g)) usedTags.add(t[1]);
+    for (const id of m[1].matchAll(/(?:^|[\s,])([A-Za-z_$][\w$]*)(?=\s*(?:,|$))/g)) {
+      if (consts.has(id[1])) usedTags.add(consts.get(id[1]));
+      else unresolved = true;
+    }
+  }
+  // tags computed from a variable (e.g. a loop over [path, 'STAY-09']): count module-id literals in that file
+  if (unresolved) for (const t of src.matchAll(/['"`]([A-Z]+-\d+)['"`]/g)) usedTags.add(t[1]);
 }
 const NO_ROUTE_EXPECTED = (m) => (m.api_or_interfaces ?? []).every((a) => /internal|cli/i.test(a));
 const missingTags = [];
