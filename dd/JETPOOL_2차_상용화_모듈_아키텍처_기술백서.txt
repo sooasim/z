@@ -1,0 +1,2672 @@
+[]
+
+2차 목표: 1차 기술 백서를 “설명 문서”에서 “AI가 코드·테스트·인프라까지
+생성할 수 있는 구현 계약”으로 승격
+
+  -----------------------------------------------------------------------
+  항목                                기준
+  ----------------------------------- -----------------------------------
+  기준일                              2026-10-08
+
+  기준 문서                           첨부: 제트풀 상용 플랫폼
+                                      마이그레이션·리모델링 기술 백서
+                                      초안
+
+  상용화 원칙                         Staging까지 자동화, Production은
+                                      승인 Gate
+
+  핵심 Source of Truth                PostgreSQL 거래 원장
+
+  배포 단위                           8개 repository + 계약/인프라 중앙화
+  -----------------------------------------------------------------------
+
+1. Executive Summary
+
+1차 백서는 JETPOOL을 단일 Airbnb Clone 확장이 아니라 Paid Stay, Home
+Exchange, Guide Friend, Travel Commerce를 하나의 ID·신뢰·결제·채팅·운영
+체계로 묶는 다중 Marketplace로 정의하고, 예약/교환/가이드의 상태와 법적
+책임을 분리해야 한다는 구조를 제시했다. 2차 백서는 이 방향을 유지하면서
+실제 개발 단계에서 AI와 사람 개발팀이 해석을 달리하지 않도록 기능, UI,
+API, 데이터, 이벤트, 상태머신, 테스트, Release Gate를 하나의 추적 가능한
+구현 명세로 통합한다.
+
+  -----------------------------------------------------------------------
+  2차 핵심 결론
+  “원클릭 개발”의 실질적 의미는 모든 기능을 한 번에 무검증으로
+  Production에 넣는 것이 아니라, 명세를 Source of Truth로 삼아
+  코드·테스트·IaC를 반복 생성하고 Staging까지 자동 검증한 후 Production만
+  사람이 승인하는 구조다. 이 방식이 기능 누락과 AI 임의 해석을
+  최소화한다.
+  -----------------------------------------------------------------------
+
+  -----------------------------------------------------------------------
+
+-   Paid Stay는 재고·Hold·결제·취소·환불이 결합된 Reservation FSM으로
+    구현한다.
+
+-   Home Exchange는 상호 제안·반대제안·상호수락·검증·동일 약정 버전
+    동의·두 숙소 Calendar lock을 갖는 별도 Aggregate로 구현한다.
+
+-   Guide Friend는 FRIEND / VOLUNTEER / PAID / PROFESSIONAL 유형을
+    분리하고 유료 유형만 결제·사업자/자격 Gate를 연계한다.
+
+-   기존 WONT의 여행 콘텐츠·멤버십·전세기 공유 브랜드 자산은 버리지 않고
+    IA로 이전하되, 전세기 직접 거래 기능은 사업·법적 범위 승인 전
+    Feature Flag OFF로 둔다.
+
+-   PostgreSQL은 거래 사실의 권위 데이터이며,
+    Meilisearch/Redis/Realtime/AI 추천은 재생성 가능한 보조 계층이다.
+
+-   Payment/Refund/Ledger/Settlement는 예약 상태와 분리된 금융
+    도메인으로 만들고, PG 결과를 서버에서 재검증한 후 예약을 확정한다.
+
+2. 1차 백서 분석과 2차 보완 범위
+
+  --------------------------------------------------------------------------------------------
+  1차에서 이미 확립된 기반            2차에서 구현 가능 수준으로 추가 고정
+  ----------------------------------- --------------------------------------------------------
+  4개 Marketplace 및 공통             48개 구현 모듈 ID, 책임, 소유 데이터, API, 이벤트, UI,
+  Trust/Operations                    완료조건
+
+  Next.js / PostgreSQL / Supabase /   Repository별 경계, 계약 우선 생성 순서,
+  Meilisearch / MapLibre / Toss /     배포·버전·Feature Flag 규칙
+  Payload / Novu / Chatwoot           
+
+  Booking/Exchange 상태머신           Guide/Payment/Refund/Settlement/Dispute/Compliance까지
+                                      상태 전이·Gate 확대
+
+  핵심 DB 테이블                      실행 가능한 PostgreSQL schema seed, 제약조건,
+                                      idempotency/outbox/audit 구조
+
+  API 요약                            OpenAPI 3.1 seed, AsyncAPI 3.0 seed, 공통 오류/인증 규약
+
+  보안 체크리스트                     보안 Release Gate, 권한 negative test,
+                                      secrets/SBOM/DAST/AAL2 기준
+
+  마이그레이션 절차                   field/ID/URL/consent/password/media reconciliation
+                                      기준과 cutover 승인조건
+
+  원클릭 AI 방향                      AGENTS_MASTER + MASTER_BUILD_SPEC + traceability + AI
+                                      병렬 에이전트 분할
+  --------------------------------------------------------------------------------------------
+
+2.1 반드시 사람이 결정해야 하는 Release Decision
+
+-   숙소 유형·지역별 유료 영업 허용 조건 및 Home Exchange의 법률 분류
+
+-   FRIEND/VOLUNTEER/PAID/PROFESSIONAL 가이드 유형별 허용 활동·자격·보험
+
+-   여행상품별 seller / intermediary / merchant_of_record
+
+-   Host/Guide/Supplier 정산·세금·증빙·원천징수/부가세 적용 정책
+
+-   전세기 공유를 단순 정보/리드로 유지할지 직접 거래로 확장할지
+
+-   기존 Sixshop 데이터의 공식 Export 범위와 기존 비밀번호 이전 방식
+
+-   PG 외 실제 지급(payout) 실행 주체 및 계좌 검증 방식
+
+3. 목표 시스템 아키텍처
+
+[]
+
+그림 1. JETPOOL 시스템 컨텍스트
+
+JETPOOL은 고객·공급자·운영자를 하나의 플랫폼으로 연결하되 외부
+결제·OAuth·지도·메시지 공급자는 Adapter 뒤에 격리한다. 기존 WONT/Sixshop
+자산은 신규 시스템의 데이터와 URL로 통제된 마이그레이션을 수행한다.
+
+[]
+
+그림 2. 논리 컨테이너/서비스 구조
+
+3.1 경계 원칙
+
+-   비즈니스 상태는 각 도메인 서비스와 PostgreSQL에만 기록한다.
+
+-   BFF는 UI 편의용 조합을 제공하지만 Booking/Exchange/Guide의 핵심
+    상태를 중복 소유하지 않는다.
+
+-   서비스 간 동기 호출은 사용자 요청의 즉시 검증에 한정하고, 검색
+    동기화·알림·분석·비핵심 후처리는 Outbox 이벤트로 분리한다.
+
+-   초기에는 동일 Managed PostgreSQL cluster 내 schema 분리를 허용하지만
+    테이블 소유권을 명확히 하여 향후 분리 가능성을 보장한다.
+
+-   Kubernetes는 성장 단계에서 도입 가능하도록
+    컨테이너/healthcheck/12-factor 규칙을 지키되 MVP부터 운영 복잡도를
+    강제하지 않는다.
+
+4. Repository 및 코드 소유권
+
+  -----------------------------------------------------------------------
+  Repository                          책임
+  ----------------------------------- -----------------------------------
+  jetpool-web                         Customer Web/PWA; public
+                                      marketplace; traveler/host/guide
+                                      self-service UI
+
+  jetpool-api                         BFF/common APIs; identity; profile;
+                                      listing; travel commerce;
+                                      orchestration
+
+  jetpool-booking                     Availability, quote, hold,
+                                      reservation, cancellation and
+                                      inventory concurrency
+
+  jetpool-exchange                    Home Exchange request, counter,
+                                      verification, agreement and
+                                      calendar locking
+
+  jetpool-guide                       Guide Friend profile, availability,
+                                      matching, offers and bookings
+
+  jetpool-admin                       Admin/backoffice, compliance,
+                                      disputes, accounting, CMS
+                                      integration
+
+  jetpool-contracts                   OpenAPI, AsyncAPI, JSON Schema,
+                                      enums, generated clients/types
+
+  jetpool-infra                       Terraform, CI/CD, environment
+                                      bootstrap, observability, runbooks,
+                                      one-click orchestrator
+  -----------------------------------------------------------------------
+
+  -----------------------------------------------------------------------
+  Repository 간 변경 규칙
+  다른 repo의 데이터 모델을 직접 import하지 않는다. 공유되는 것은
+  `jetpool-contracts`가 생성한 API/Event DTO와 enum뿐이다. API breaking
+  change는 contracts version과 CHANGELOG를 먼저 변경하고 consumer
+  compatibility test를 통과해야 한다.
+  -----------------------------------------------------------------------
+
+  -----------------------------------------------------------------------
+
+jetpool-contracts/
+openapi/
+asyncapi/
+schemas/
+enums/
+generated/
+jetpool-infra/
+scripts/
+templates/
+terraform/environments/{dev,staging,prod}/
+runbooks/
+release-gates/
+
+5. 전체 기능 모듈 카탈로그
+
+  -------------------------------------------------------------------------------------------------------------------------------------
+  ID             모듈              우선           소유 Repo          핵심 책임
+  -------------- ----------------- -------------- ------------------ ------------------------------------------------------------------
+  CORE-01        Identity &        P0             jetpool-api        Email/password/OTP/social login, account linking, session
+                 Authentication                                      management, MFA policy and recovery.
+
+  CORE-02        Profile, Locale & P0             jetpool-api        Canonical profile, names, phone, locale, timezone, accessibility
+                 Preferences                                         and travel preferences.
+
+  CORE-03        Roles,            P0             jetpool-api        RBAC plus scoped entitlements for
+                 Entitlements &                                      USER/HOST/GUIDE/SUPPLIER/ADMIN/ACCOUNTING/SUPPORT.
+                 Policy                                              
+
+  CORE-04        Consent & Privacy P0             jetpool-api        Terms/privacy/marketing consent versioning, retention, export,
+                 Lifecycle                                           deletion and restricted processing.
+
+  TRUST-01       Identity /        P0             jetpool-admin      User identity, host/guide/supplier business and payout-account
+                 Business                                            verification state.
+                 Verification                                        
+
+  TRUST-02       Reviews &         P0             jetpool-api        Transaction-bound reviews, bilateral exchange reviews, guide
+                 Reputation                                          reviews, host responses, moderation.
+
+  TRUST-03       Safety, Reports & P0             jetpool-admin      Safety reports, evidence, disputes, case ownership, escalation,
+                 Disputes                                            sanctions and audited access.
+
+  HOST-01        Host Onboarding   P0             jetpool-api        Host application, verification checklist, payout profile reference
+                                                                     and host status.
+
+  STAY-01        Property /        P0             jetpool-api        Property draft, address, geo, occupancy, amenities, house rules,
+                 Listing                                             rental/exchange switches and lifecycle.
+                 Management                                          
+
+  STAY-02        Media Pipeline    P0             jetpool-api        Presigned uploads, private staging, image/video metadata,
+                                                                     transformation/moderation and CDN publication.
+
+  STAY-03        Accommodation     P0             jetpool-admin      Permit types, jurisdiction rules, guest eligibility, expiry and
+                 Compliance Gate                                     publish/booking block decisions.
+
+  STAY-04        Stay Search &     P0             jetpool-api        Text/geo/facet search projection, ranking, filters, map viewport
+                 Discovery                                           and date-aware candidate retrieval.
+
+  STAY-05        Favorites &       P1             jetpool-api        Saved properties, guides, trips and shareable collections.
+                 Collections                                         
+
+  STAY-06        Availability &    P0             jetpool-booking    Authoritative availability rules, host blocks, rate overrides, min
+                 Calendar                                            stay and calendar projection.
+
+  STAY-07        Pricing & Quote   P0             jetpool-booking    Nightly/base price, fees, taxes as rules, promotions, quote expiry
+                                                                     and price breakdown.
+
+  STAY-08        Inventory Hold    P0             jetpool-booking    Transactional hold acquisition, TTL expiry, idempotency and
+                                                                     collision protection.
+
+  STAY-09        Reservation FSM   P0             jetpool-booking    DRAFT→QUOTED→HELD→PAYMENT_PENDING→CONFIRMED→CHECKED_IN→COMPLETED
+                                                                     plus failure/cancel/refund branches.
+
+  STAY-10        Cancellation /    P0             jetpool-booking    Cancellation policy evaluation, no-show, check-in/out and refund
+                 No-show /                                           intent generation.
+                 Check-in                                            
+
+  EXCH-01        Exchange          P0             jetpool-exchange   Exchange-enabled property eligibility, household preferences,
+                 Eligibility                                         legal classification and safety prerequisites.
+
+  EXCH-02        Exchange Request  P0             jetpool-exchange   A↔B request, dates, property pair, terms, counter-offer version
+                 & Counter                                           chain and withdrawal/decline.
+
+  EXCH-03        Exchange          P0             jetpool-exchange   Mutual-acceptance verification checklist before contract
+                 Verification Gate                                   generation.
+
+  EXCH-04        Exchange          P0             jetpool-exchange   Versioned terms snapshot, deposit/damage policy, bilateral
+                 Agreement &                                         acceptance timestamps and evidence.
+                 E-consent                                           
+
+  EXCH-05        Exchange Calendar P0             jetpool-exchange   Atomic calendar blocks on both properties and rollback if either
+                 Lock                                                block fails.
+
+  EXCH-06        Exchange          P0             jetpool-exchange   In-progress/completed/disputed/reviewed lifecycle and bilateral
+                 Completion &                                        review eligibility.
+                 Review                                              
+
+  GUIDE-01       Guide Profile &   P0             jetpool-guide      FRIEND/VOLUNTEER/PAID/PROFESSIONAL classification, bio, languages,
+                 Type                                                areas, specialties, price and verification.
+
+  GUIDE-02       Guide             P0             jetpool-guide      Time windows, timezone-aware schedule, blackout and booking locks.
+                 Availability                                        
+
+  GUIDE-03       Guide Search &    P0             jetpool-guide      Location, language, interest, type, price, trust, availability and
+                 Matching                                            response-time ranking.
+
+  GUIDE-04       Guide Request &   P0             jetpool-guide      Traveler request, guide offer/counter, scope, duration, price or
+                 Offer                                               free confirmation.
+
+  GUIDE-05       Guide Booking FSM P0             jetpool-guide      Confirmed activity, payment dependency for paid types,
+                                                                     start/complete/cancel/dispute.
+
+  TRAVEL-01      Travel Catalog &  P1             jetpool-api        Tours/tickets/activities/packages, supplier profile, options,
+                 Supplier                                            terms and publish workflow.
+
+  TRAVEL-02      Departure /       P1             jetpool-api        Departure dates, capacity, minimum participants, inventory
+                 Inventory                                           allocations and cutoff rules.
+
+  TRAVEL-03      Itinerary Builder P1             jetpool-api        Day/activity itinerary, map points, attachments and
+                                                                     customer-facing schedule.
+
+  TRAVEL-04      Commerce Order /  P1             jetpool-api        Mixed travel-product order, line items, buyer, seller role, totals
+                 Cart                                                and cancellation linkage.
+
+  JET-01         Legacy Charter /  P1             jetpool-api        Preserve existing JETPOOL charter-sharing brand IA as
+                 Flight Share                                        content/lead/request flow; transactional air-charter booking
+                 Scope Gate                                          remains disabled until business/legal scope is approved.
+
+  PAY-01         Payment           P0             jetpool-api        PG adapter, prepare/confirm, server-side amount check, webhook
+                 Orchestrator                                        reconciliation and payment state.
+
+  PAY-02         Refund            P0             jetpool-api        Full/partial refund intents, provider execution, retries,
+                 Orchestrator                                        reconciliation and audit.
+
+  FIN-01         Double-entry      P0             jetpool-admin      Immutable financial transaction journal for gross, fee, refund,
+                 Ledger                                              tax adjustment, payable and payout.
+
+  FIN-02         Settlement &      P1             jetpool-admin      Settlement periods, payee statement, approval, payout
+                 Payout                                              execution/reconciliation and holds.
+
+  FIN-03         Fee / Tax /       P1             jetpool-admin      Configurable fee and tax evidence rules by merchant/supplier type;
+                 Evidence Rule                                       no unverified hard-coded universal tax rate.
+                 Engine                                              
+
+  COMMS-01       P2P Messaging     P0             jetpool-api        Context-bound conversation, message persistence, realtime
+                                                                     delivery, attachments, read state and abuse controls.
+
+  COMMS-02       Notification      P0             jetpool-api        Email/SMS/push/in-app preferences, templates, retries and
+                 Orchestration                                       event-driven delivery.
+
+  OPS-01         Customer Support  P0             jetpool-admin      Chatwoot-backed support intake linked to
+                 / Case Desk                                         user/booking/exchange/dispute context.
+
+  OPS-02         Admin /           P0             jetpool-admin      Operational console for users, listings, compliance, reservations,
+                 Backoffice                                          exchanges, guides, payments, refunds and settlements.
+
+  OPS-03         CMS, Content &    P0             jetpool-admin      Destination/story/FAQ/promotion/legacy WONT content, redirects,
+                 SEO                                                 metadata and structured content.
+
+  OPS-04         Analytics & Audit P0             jetpool-admin      GMV, conversion, cancellation, search, compliance, disputes,
+                                                                     finance dashboards and immutable audit trail.
+
+  PLAT-01        Search Projection P0             jetpool-api        Project PostgreSQL entities into Meilisearch; reindex, version,
+                 Service                                             lag monitoring and recovery.
+
+  PLAT-02        Map / Geo Adapter P0             jetpool-api        MapLibre rendering support, geocoding abstraction, viewport search
+                                                                     and provider cost controls.
+
+  PLAT-03        Transactional     P0             jetpool-api        Outbox in same transaction, durable queue, retries, dead-letter
+                 Outbox & Async                                      handling, event correlation and schema version.
+                 Jobs                                                
+
+  PLAT-04        Observability /   P0             jetpool-infra      OpenTelemetry traces, metrics, logs, synthetic checks, SLOs,
+                 SRE                                                 alerting and incident runbooks.
+
+  PLAT-05        Security / Risk   P0             jetpool-infra      WAF/rate-limit, bot protection, secret management, SAST/SCA/SBOM,
+                 Controls                                            DAST, upload scanning and risk flags.
+
+  PLAT-06        Configuration &   P0             jetpool-api        Environment-safe feature flags, business rules, percentage rollout
+                 Feature Flags                                       and kill switches.
+
+  MIG-01         Legacy            P0             jetpool-infra      Inventory existing URLs/content/member/order assets, official
+                 WONT/Sixshop                                        export, ID mapping, media import, consent audit, 301s and cutover
+                 Migration                                           reconciliation.
+
+  AI-01          AI Travel         P1             jetpool-api        Intent parsing, trip planning, explainable suggestions using live
+                 Assistant                                           search/availability; never autonomously commits paid transactions.
+
+  AI-02          Recommendation &  P1             jetpool-api        Behavioral/explicit preference ranking with cold-start rules,
+                 Personalization                                     opt-out and non-authoritative recommendations.
+
+  INT-01         PMS / Supplier    P2             jetpool-api        External PMS/channel/supplier adapter framework, polling/webhooks,
+                 Integrations                                        mapping and conflict handling.
+  -------------------------------------------------------------------------------------------------------------------------------------
+
+6. 모듈 상세 설계
+
+6.1 Core / Trust
+
+CORE-01 · Identity & Authentication
+
+책임: Email/password/OTP/social login, account linking, session
+management, MFA policy and recovery.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-api
+
+  Dependencies                        없음/공통 플랫폼
+
+  Primary data                        users, oauth_identities,
+                                      mfa_factors, sessions
+
+  API / interfaces                    /v1/auth/*, /v1/me
+
+  Events                              identity.user.created,
+                                      identity.mfa.changed
+
+  UI / routes                         /login, /signup, /account/security
+
+  Definition of Done                  OAuth login, logout,
+                                      account-linking and AAL2-gated
+                                      admin actions pass
+                                      positive/negative tests.
+  -----------------------------------------------------------------------
+
+CORE-02 · Profile, Locale & Preferences
+
+책임: Canonical profile, names, phone, locale, timezone, accessibility
+and travel preferences.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-api
+
+  Dependencies                        CORE-01
+
+  Primary data                        user_profiles, user_preferences
+
+  API / interfaces                    GET/PATCH /v1/me/profile, GET/PATCH
+                                      /v1/me/preferences
+
+  Events                              profile.updated
+
+  UI / routes                         /account/profile,
+                                      /account/preferences
+
+  Definition of Done                  Profile updates are audited,
+                                      validated and reflected across
+                                      customer/host/guide views.
+  -----------------------------------------------------------------------
+
+CORE-03 · Roles, Entitlements & Policy
+
+책임: RBAC plus scoped entitlements for
+USER/HOST/GUIDE/SUPPLIER/ADMIN/ACCOUNTING/SUPPORT.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-api
+
+  Dependencies                        CORE-01
+
+  Primary data                        user_roles, role_grants,
+                                      policy_overrides
+
+  API / interfaces                    /v1/me/roles,
+                                      /v1/admin/users/{id}/roles
+
+  Events                              role.granted, role.revoked
+
+  UI / routes                         /admin/access
+
+  Definition of Done                  Server-side authorization denies
+                                      every unauthorized API regardless
+                                      of UI visibility.
+  -----------------------------------------------------------------------
+
+CORE-04 · Consent & Privacy Lifecycle
+
+책임: Terms/privacy/marketing consent versioning, retention, export,
+deletion and restricted processing.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-api
+
+  Dependencies                        CORE-01
+
+  Primary data                        consent_records, privacy_requests,
+                                      retention_jobs
+
+  API / interfaces                    /v1/consents, /v1/privacy/export,
+                                      /v1/privacy/delete
+
+  Events                              consent.recorded,
+                                      privacy.requested,
+                                      privacy.completed
+
+  UI / routes                         /account/privacy
+
+  Definition of Done                  Consent evidence is versioned;
+                                      deletion/export workflows are
+                                      reproducible and auditable.
+  -----------------------------------------------------------------------
+
+TRUST-01 · Identity / Business Verification
+
+책임: User identity, host/guide/supplier business and payout-account
+verification state.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-admin
+
+  Dependencies                        CORE-01
+
+  Primary data                        verification_cases,
+                                      verification_documents,
+                                      business_profiles
+
+  API / interfaces                    /v1/verifications/*,
+                                      /v1/admin/verifications/*
+
+  Events                              verification.submitted,
+                                      verification.approved,
+                                      verification.rejected
+
+  UI / routes                         /verification, /admin/verifications
+
+  Definition of Done                  Restricted actions remain blocked
+                                      until required verification
+                                      predicates are true.
+  -----------------------------------------------------------------------
+
+TRUST-02 · Reviews & Reputation
+
+책임: Transaction-bound reviews, bilateral exchange reviews, guide
+reviews, host responses, moderation.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-api
+
+  Dependencies                        CORE-01
+
+  Primary data                        reviews, review_responses,
+                                      reputation_scores
+
+  API / interfaces                    /v1/reviews,
+                                      /v1/reviews/{id}/report
+
+  Events                              review.created, review.moderated
+
+  UI / routes                         /reviews, /account/reviews
+
+  Definition of Done                  Only eligible completed
+                                      transactions can create one review
+                                      per review target/policy window.
+  -----------------------------------------------------------------------
+
+TRUST-03 · Safety, Reports & Disputes
+
+책임: Safety reports, evidence, disputes, case ownership, escalation,
+sanctions and audited access.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-admin
+
+  Dependencies                        CORE-03
+
+  Primary data                        disputes, dispute_evidence,
+                                      safety_reports, sanctions
+
+  API / interfaces                    /v1/disputes, /v1/admin/disputes/*
+
+  Events                              dispute.opened, dispute.resolved,
+                                      sanction.applied
+
+  UI / routes                         /support/disputes, /admin/disputes
+
+  Definition of Done                  Cases retain immutable evidence
+                                      hashes and sensitive message access
+                                      requires audited elevation.
+  -----------------------------------------------------------------------
+
+6.2 Host / Stay
+
+HOST-01 · Host Onboarding
+
+책임: Host application, verification checklist, payout profile reference
+and host status.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-api
+
+  Dependencies                        CORE-01, TRUST-01
+
+  Primary data                        host_profiles, host_applications
+
+  API / interfaces                    /v1/host-applications,
+                                      /v1/hosts/{id}
+
+  Events                              host.applied, host.approved
+
+  UI / routes                         /host/onboarding, /host/dashboard
+
+  Definition of Done                  Host cannot publish paid inventory
+                                      until role, verification and
+                                      compliance predicates are
+                                      satisfied.
+  -----------------------------------------------------------------------
+
+STAY-01 · Property / Listing Management
+
+책임: Property draft, address, geo, occupancy, amenities, house rules,
+rental/exchange switches and lifecycle.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-api
+
+  Dependencies                        HOST-01
+
+  Primary data                        properties, property_addresses,
+                                      property_amenities, house_rules
+
+  API / interfaces                    /v1/properties,
+                                      /v1/properties/{id}/publish
+
+  Events                              property.created, property.updated,
+                                      property.published
+
+  UI / routes                         /host/listings, /stay/{slug}
+
+  Definition of Done                  Draft-to-publish flow validates
+                                      required content and compliance
+                                      gate before public visibility.
+  -----------------------------------------------------------------------
+
+STAY-02 · Media Pipeline
+
+책임: Presigned uploads, private staging, image/video metadata,
+transformation/moderation and CDN publication.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-api
+
+  Dependencies                        CORE-01
+
+  Primary data                        media_assets, property_media
+
+  API / interfaces                    /v1/media/upload-url,
+                                      /v1/media/{id}/complete
+
+  Events                              media.uploaded, media.ready
+
+  UI / routes                         /host/listings/{id}/media
+
+  Definition of Done                  MIME/size/ownership validation and
+                                      private-to-public promotion occur
+                                      only after successful processing.
+  -----------------------------------------------------------------------
+
+STAY-03 · Accommodation Compliance Gate
+
+책임: Permit types, jurisdiction rules, guest eligibility, expiry and
+publish/booking block decisions.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-admin
+
+  Dependencies                        STAY-01, TRUST-01
+
+  Primary data                        property_permits, compliance_rules,
+                                      compliance_decisions
+
+  API / interfaces                    /v1/properties/{id}/permits,
+                                      /v1/compliance/evaluate
+
+  Events                              compliance.verified,
+                                      compliance.expired, listing.blocked
+
+  UI / routes                         /host/listings/{id}/compliance,
+                                      /admin/compliance
+
+  Definition of Done                  Paid booking cannot be enabled when
+                                      required permit/eligibility checks
+                                      are missing, expired or rejected.
+  -----------------------------------------------------------------------
+
+STAY-04 · Stay Search & Discovery
+
+책임: Text/geo/facet search projection, ranking, filters, map viewport
+and date-aware candidate retrieval.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-api
+
+  Dependencies                        STAY-01, STAY-06
+
+  Primary data                        search_sync_state
+
+  API / interfaces                    /v1/search/properties
+
+  Events                              search.reindex.requested
+
+  UI / routes                         /stay, /map
+
+  Definition of Done                  Search produces candidates but
+                                      checkout revalidates authoritative
+                                      availability in booking DB.
+  -----------------------------------------------------------------------
+
+STAY-05 · Favorites & Collections
+
+책임: Saved properties, guides, trips and shareable collections.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P1 / jetpool-api
+
+  Dependencies                        CORE-01
+
+  Primary data                        favorites, collections,
+                                      collection_items
+
+  API / interfaces                    /v1/favorites, /v1/collections
+
+  Events                              favorite.added
+
+  UI / routes                         /saved
+
+  Definition of Done                  Idempotent add/remove and privacy
+                                      controls work across web/mobile PWA
+                                      sessions.
+  -----------------------------------------------------------------------
+
+STAY-06 · Availability & Calendar
+
+책임: Authoritative availability rules, host blocks, rate overrides, min
+stay and calendar projection.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-booking
+
+  Dependencies                        STAY-01
+
+  Primary data                        availability_days, inventory_blocks
+
+  API / interfaces                    /v1/properties/{id}/calendar,
+                                      /v1/properties/{id}/availability
+
+  Events                              availability.changed
+
+  UI / routes                         /host/calendar,
+                                      /stay/{slug}/calendar
+
+  Definition of Done                  Calendar reads and writes preserve
+                                      no-overlap invariant across paid
+                                      stay/exchange/host blocks.
+  -----------------------------------------------------------------------
+
+STAY-07 · Pricing & Quote
+
+책임: Nightly/base price, fees, taxes as rules, promotions, quote expiry
+and price breakdown.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-booking
+
+  Dependencies                        STAY-06, FIN-03
+
+  Primary data                        rate_rules, fee_rules,
+                                      booking_quotes
+
+  API / interfaces                    POST /v1/booking/quotes
+
+  Events                              quote.created, quote.expired
+
+  UI / routes                         /stay/{slug}/checkout
+
+  Definition of Done                  Quote is deterministic,
+                                      currency-safe, itemized,
+                                      time-bounded and immutable after
+                                      booking confirmation.
+  -----------------------------------------------------------------------
+
+STAY-08 · Inventory Hold
+
+책임: Transactional hold acquisition, TTL expiry, idempotency and
+collision protection.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-booking
+
+  Dependencies                        STAY-06, STAY-07
+
+  Primary data                        reservation_holds,
+                                      inventory_blocks, idempotency_keys
+
+  API / interfaces                    POST/DELETE /v1/booking/holds
+
+  Events                              reservation.held,
+                                      reservation.hold_expired
+
+  UI / routes                         checkout internal
+
+  Definition of Done                  Concurrent hold tests prove
+                                      capacity cannot be exceeded for
+                                      overlapping dates.
+  -----------------------------------------------------------------------
+
+STAY-09 · Reservation FSM
+
+책임: DRAFT→QUOTED→HELD→PAYMENT_PENDING→CONFIRMED→CHECKED_IN→COMPLETED
+plus failure/cancel/refund branches.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-booking
+
+  Dependencies                        STAY-08, PAY-01
+
+  Primary data                        reservations,
+                                      reservation_state_history
+
+  API / interfaces                    /v1/reservations,
+                                      /v1/reservations/{id}/cancel,
+                                      /check-in, /complete
+
+  Events                              reservation.confirmed,
+                                      reservation.cancelled,
+                                      reservation.completed
+
+  UI / routes                         /trips/{id}, /host/reservations
+
+  Definition of Done                  Only enumerated transitions are
+                                      accepted; all transitions store
+                                      actor, reason and correlation id.
+  -----------------------------------------------------------------------
+
+STAY-10 · Cancellation / No-show / Check-in
+
+책임: Cancellation policy evaluation, no-show, check-in/out and refund
+intent generation.
+
+  -------------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -------------------------------------
+  Priority / Owner                    P0 / jetpool-booking
+
+  Dependencies                        STAY-09, PAY-02
+
+  Primary data                        cancellation_policies,
+                                      reservation_adjustments
+
+  API / interfaces                    /v1/reservations/{id}/cancel,
+                                      /v1/reservations/{id}/check-in
+
+  Events                              reservation.cancellation_requested,
+                                      reservation.no_show
+
+  UI / routes                         /trips/{id}/manage
+
+  Definition of Done                  Policy calculation is tested at
+                                      boundary dates and never mutates
+                                      historical quote breakdown.
+  -------------------------------------------------------------------------
+
+6.3 Home Exchange
+
+EXCH-01 · Exchange Eligibility
+
+책임: Exchange-enabled property eligibility, household preferences,
+legal classification and safety prerequisites.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-exchange
+
+  Dependencies                        STAY-01, STAY-03, TRUST-01
+
+  Primary data                        exchange_profiles,
+                                      exchange_eligibility
+
+  API / interfaces                    /v1/exchange/eligibility
+
+  Events                              exchange.eligibility.updated
+
+  UI / routes                         /exchange/onboarding
+
+  Definition of Done                  No exchange request can enter
+                                      agreement stage unless both sides
+                                      satisfy configured legal/safety
+                                      policy.
+  -----------------------------------------------------------------------
+
+EXCH-02 · Exchange Request & Counter
+
+책임: A↔B request, dates, property pair, terms, counter-offer version
+chain and withdrawal/decline.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-exchange
+
+  Dependencies                        EXCH-01
+
+  Primary data                        exchange_requests, exchange_offers
+
+  API / interfaces                    /v1/exchanges,
+                                      /v1/exchanges/{id}/counter, /accept
+
+  Events                              exchange.requested,
+                                      exchange.countered,
+                                      exchange.mutual_accepted
+
+  UI / routes                         /exchange, /exchange/{id}
+
+  Definition of Done                  Both parties see one canonical
+                                      offer version; stale-version
+                                      acceptance is rejected.
+  -----------------------------------------------------------------------
+
+EXCH-03 · Exchange Verification Gate
+
+책임: Mutual-acceptance verification checklist before contract
+generation.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-exchange
+
+  Dependencies                        EXCH-02, TRUST-01
+
+  Primary data                        exchange_verifications
+
+  API / interfaces                    /v1/exchanges/{id}/verify
+
+  Events                              exchange.verification_pending,
+                                      exchange.verified
+
+  UI / routes                         /exchange/{id}/verification
+
+  Definition of Done                  Agreement generation is impossible
+                                      until required identity/property
+                                      checks are approved.
+  -----------------------------------------------------------------------
+
+EXCH-04 · Exchange Agreement & E-consent
+
+책임: Versioned terms snapshot, deposit/damage policy, bilateral
+acceptance timestamps and evidence.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-exchange
+
+  Dependencies                        EXCH-03
+
+  Primary data                        exchange_agreements,
+                                      agreement_acceptances
+
+  API / interfaces                    /v1/exchanges/{id}/agreement,
+                                      /v1/exchanges/{id}/confirm
+
+  Events                              exchange.agreement.created,
+                                      exchange.confirmed
+
+  UI / routes                         /exchange/{id}/agreement
+
+  Definition of Done                  Both parties accept exactly the
+                                      same terms_version; acceptance
+                                      evidence cannot be overwritten.
+  -----------------------------------------------------------------------
+
+EXCH-05 · Exchange Calendar Lock
+
+책임: Atomic calendar blocks on both properties and rollback if either
+block fails.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-exchange
+
+  Dependencies                        EXCH-04, STAY-06
+
+  Primary data                        inventory_blocks
+
+  API / interfaces                    internal calendar lock API
+
+  Events                              exchange.calendar_blocked,
+                                      exchange.cancelled
+
+  UI / routes                         internal
+
+  Definition of Done                  Confirmed exchange blocks both
+                                      homes without colliding with paid
+                                      reservations or host blocks.
+  -----------------------------------------------------------------------
+
+EXCH-06 · Exchange Completion & Review
+
+책임: In-progress/completed/disputed/reviewed lifecycle and bilateral
+review eligibility.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-exchange
+
+  Dependencies                        EXCH-05, TRUST-02, TRUST-03
+
+  Primary data                        exchange_state_history
+
+  API / interfaces                    /v1/exchanges/{id}/complete
+
+  Events                              exchange.completed,
+                                      exchange.disputed
+
+  UI / routes                         /exchange/{id}/trip
+
+  Definition of Done                  Completion unlocks reviews; dispute
+                                      preserves evidence and blocks
+                                      premature settlement/deposit
+                                      release.
+  -----------------------------------------------------------------------
+
+6.4 Guide Friend
+
+GUIDE-01 · Guide Profile & Type
+
+책임: FRIEND/VOLUNTEER/PAID/PROFESSIONAL classification, bio, languages,
+areas, specialties, price and verification.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-guide
+
+  Dependencies                        CORE-01, TRUST-01
+
+  Primary data                        guide_profiles, guide_languages,
+                                      guide_specialties
+
+  API / interfaces                    /v1/guides/profile, /v1/guides/{id}
+
+  Events                              guide.profile.updated,
+                                      guide.verified
+
+  UI / routes                         /guide/onboarding, /guides/{id}
+
+  Definition of Done                  Paid/professional offerings are
+                                      blocked until required
+                                      business/qualification gates are
+                                      satisfied.
+  -----------------------------------------------------------------------
+
+GUIDE-02 · Guide Availability
+
+책임: Time windows, timezone-aware schedule, blackout and booking locks.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-guide
+
+  Dependencies                        GUIDE-01
+
+  Primary data                        guide_availability,
+                                      guide_time_blocks
+
+  API / interfaces                    /v1/guides/{id}/availability
+
+  Events                              guide.availability.changed
+
+  UI / routes                         /guide/calendar
+
+  Definition of Done                  Overlapping confirmed guide
+                                      bookings cannot exceed capacity and
+                                      timezone conversions are
+                                      deterministic.
+  -----------------------------------------------------------------------
+
+GUIDE-03 · Guide Search & Matching
+
+책임: Location, language, interest, type, price, trust, availability and
+response-time ranking.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-guide
+
+  Dependencies                        GUIDE-01, GUIDE-02
+
+  Primary data                        guide_search_projection
+
+  API / interfaces                    /v1/search/guides
+
+  Events                              guide.search.reindex
+
+  UI / routes                         /guide-friends
+
+  Definition of Done                  Result candidates are filtered by
+                                      eligibility and authoritative
+                                      availability is rechecked before
+                                      booking.
+  -----------------------------------------------------------------------
+
+GUIDE-04 · Guide Request & Offer
+
+책임: Traveler request, guide offer/counter, scope, duration, price or
+free confirmation.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-guide
+
+  Dependencies                        GUIDE-03
+
+  Primary data                        guide_requests, guide_offers
+
+  API / interfaces                    /v1/guide-requests,
+                                      /v1/guide-requests/{id}/offers
+
+  Events                              guide.requested,
+                                      guide.offer.created,
+                                      guide.offer.accepted
+
+  UI / routes                         /guide-requests/{id}
+
+  Definition of Done                  Offer acceptance uses version
+                                      checks; free and paid paths are
+                                      explicit and never conflated.
+  -----------------------------------------------------------------------
+
+GUIDE-05 · Guide Booking FSM
+
+책임: Confirmed activity, payment dependency for paid types,
+start/complete/cancel/dispute.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-guide
+
+  Dependencies                        GUIDE-04, PAY-01
+
+  Primary data                        guide_bookings,
+                                      guide_booking_history
+
+  API / interfaces                    /v1/guide-bookings, /cancel,
+                                      /complete
+
+  Events                              guide.booking.confirmed,
+                                      guide.booking.completed
+
+  UI / routes                         /guide-bookings/{id}
+
+  Definition of Done                  Paid booking confirms only after
+                                      server-verified payment; free
+                                      booking confirms with no payment
+                                      object.
+  -----------------------------------------------------------------------
+
+6.5 Travel / Legacy JETPOOL
+
+TRAVEL-01 · Travel Catalog & Supplier
+
+책임: Tours/tickets/activities/packages, supplier profile, options,
+terms and publish workflow.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P1 / jetpool-api
+
+  Dependencies                        TRUST-01
+
+  Primary data                        suppliers, travel_products,
+                                      travel_product_options
+
+  API / interfaces                    /v1/travel-products,
+                                      /v1/admin/travel-products
+
+  Events                              travel.product.published
+
+  UI / routes                         /travel, /supplier/products
+
+  Definition of Done                  Published product identifies
+                                      seller/merchant role and has valid
+                                      supplier/compliance status.
+  -----------------------------------------------------------------------
+
+TRAVEL-02 · Departure / Inventory
+
+책임: Departure dates, capacity, minimum participants, inventory
+allocations and cutoff rules.
+
+  -------------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -------------------------------------
+  Priority / Owner                    P1 / jetpool-api
+
+  Dependencies                        TRAVEL-01
+
+  Primary data                        travel_departures, travel_inventory
+
+  API / interfaces                    /v1/travel-products/{id}/departures
+
+  Events                              travel.inventory.changed
+
+  UI / routes                         /travel/{id}
+
+  Definition of Done                  Checkout cannot oversell departure
+                                      capacity and minimum-participant
+                                      status is explicit.
+  -------------------------------------------------------------------------
+
+TRAVEL-03 · Itinerary Builder
+
+책임: Day/activity itinerary, map points, attachments and
+customer-facing schedule.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P1 / jetpool-api
+
+  Dependencies                        TRAVEL-01
+
+  Primary data                        itineraries, itinerary_days,
+                                      itinerary_activities
+
+  API / interfaces                    /v1/itineraries
+
+  Events                              itinerary.updated
+
+  UI / routes                         /travel/{id}/itinerary,
+                                      /trip-planner
+
+  Definition of Done                  Versioned itinerary edits preserve
+                                      booked-customer snapshot when
+                                      required.
+  -----------------------------------------------------------------------
+
+TRAVEL-04 · Commerce Order / Cart
+
+책임: Mixed travel-product order, line items, buyer, seller role, totals
+and cancellation linkage.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P1 / jetpool-api
+
+  Dependencies                        TRAVEL-02, PAY-01
+
+  Primary data                        orders, order_items
+
+  API / interfaces                    /v1/orders, /v1/orders/{id}
+
+  Events                              order.created, order.paid,
+                                      order.cancelled
+
+  UI / routes                         /checkout, /orders/{id}
+
+  Definition of Done                  Server recalculates totals; client
+                                      amount is never authoritative.
+  -----------------------------------------------------------------------
+
+JET-01 · Legacy Charter / Flight Share Scope Gate
+
+책임: Preserve existing JETPOOL charter-sharing brand IA as
+content/lead/request flow; transactional air-charter booking remains
+disabled until business/legal scope is approved.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P1 / jetpool-api
+
+  Dependencies                        CORE-01, OPS-03
+
+  Primary data                        charter_requests, charter_content
+
+  API / interfaces                    /v1/charter/requests,
+                                      /v1/content/charter
+
+  Events                              charter.requested
+
+  UI / routes                         /jetpool-charter
+
+  Definition of Done                  Existing brand/content is migrated;
+                                      direct booking/payment flag remains
+                                      OFF until an explicit release ADR
+                                      and compliance approval.
+  -----------------------------------------------------------------------
+
+6.6 Payment / Finance
+
+PAY-01 · Payment Orchestrator
+
+책임: PG adapter, prepare/confirm, server-side amount check, webhook
+reconciliation and payment state.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-api
+
+  Dependencies                        CORE-01
+
+  Primary data                        payments, payment_attempts,
+                                      webhook_events
+
+  API / interfaces                    /v1/payments/toss/prepare,
+                                      /confirm, /v1/webhooks/toss
+
+  Events                              payment.approved, payment.failed,
+                                      payment.reconciled
+
+  UI / routes                         checkout embedded
+
+  Definition of Done                  Success redirect alone never
+                                      confirms a transaction; server
+                                      confirmation and idempotent webhook
+                                      reconciliation do.
+  -----------------------------------------------------------------------
+
+PAY-02 · Refund Orchestrator
+
+책임: Full/partial refund intents, provider execution, retries,
+reconciliation and audit.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-api
+
+  Dependencies                        PAY-01
+
+  Primary data                        refunds
+
+  API / interfaces                    /v1/payments/{id}/refunds
+
+  Events                              payment.refund_requested,
+                                      payment.refunded
+
+  UI / routes                         /admin/refunds
+
+  Definition of Done                  Refund amount cannot exceed
+                                      refundable balance; duplicate
+                                      provider callbacks are harmless.
+  -----------------------------------------------------------------------
+
+FIN-01 · Double-entry Ledger
+
+책임: Immutable financial transaction journal for gross, fee, refund,
+tax adjustment, payable and payout.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-admin
+
+  Dependencies                        PAY-01, PAY-02
+
+  Primary data                        ledger_accounts,
+                                      ledger_transactions, ledger_entries
+
+  API / interfaces                    internal finance API
+
+  Events                              ledger.posted
+
+  UI / routes                         /admin/ledger
+
+  Definition of Done                  Every posted transaction balances
+                                      debit/credit per currency;
+                                      corrections are compensating
+                                      entries, not edits.
+  -----------------------------------------------------------------------
+
+FIN-02 · Settlement & Payout
+
+책임: Settlement periods, payee statement, approval, payout
+execution/reconciliation and holds.
+
+  ------------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- ------------------------------------
+  Priority / Owner                    P1 / jetpool-admin
+
+  Dependencies                        FIN-01, TRUST-01
+
+  Primary data                        settlements, payouts,
+                                      payout_accounts
+
+  API / interfaces                    /v1/provider/settlements,
+                                      /v1/admin/settlements/{id}/approve
+
+  Events                              settlement.ready, payout.sent,
+                                      payout.reconciled
+
+  UI / routes                         /earnings, /admin/settlements
+
+  Definition of Done                  Settlement net derives from ledger;
+                                      payout account changes require AAL2
+                                      and audit.
+  ------------------------------------------------------------------------
+
+FIN-03 · Fee / Tax / Evidence Rule Engine
+
+책임: Configurable fee and tax evidence rules by merchant/supplier type;
+no unverified hard-coded universal tax rate.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P1 / jetpool-admin
+
+  Dependencies                        CORE-03
+
+  Primary data                        fee_rules, tax_rules,
+                                      receipt_records
+
+  API / interfaces                    /v1/finance/rules, /v1/receipts
+
+  Events                              finance.rule.changed
+
+  UI / routes                         /admin/finance/rules
+
+  Definition of Done                  Rules are effective-dated/versioned
+                                      and changes do not retroactively
+                                      mutate historical transactions.
+  -----------------------------------------------------------------------
+
+6.7 Communication / Operations
+
+COMMS-01 · P2P Messaging
+
+책임: Context-bound conversation, message persistence, realtime
+delivery, attachments, read state and abuse controls.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-api
+
+  Dependencies                        CORE-01
+
+  Primary data                        conversations,
+                                      conversation_members, messages
+
+  API / interfaces                    /v1/conversations,
+                                      /v1/conversations/{id}/messages
+
+  Events                              message.created, message.reported
+
+  UI / routes                         /messages
+
+  Definition of Done                  RLS/API policy prevents non-members
+                                      from reading/subscribing; admin
+                                      access requires case-based audited
+                                      elevation.
+  -----------------------------------------------------------------------
+
+COMMS-02 · Notification Orchestration
+
+책임: Email/SMS/push/in-app preferences, templates, retries and
+event-driven delivery.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-api
+
+  Dependencies                        PLAT-03
+
+  Primary data                        notifications,
+                                      notification_preferences,
+                                      notification_deliveries
+
+  API / interfaces                    /v1/notifications,
+                                      /v1/notification-preferences
+
+  Events                              notification.requested,
+                                      notification.delivered
+
+  UI / routes                         /notifications,
+                                      /account/notifications
+
+  Definition of Done                  Critical booking/payment notices
+                                      ignore marketing opt-out but honor
+                                      mandatory-channel policy and
+                                      delivery audit.
+  -----------------------------------------------------------------------
+
+OPS-01 · Customer Support / Case Desk
+
+책임: Chatwoot-backed support intake linked to
+user/booking/exchange/dispute context.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-admin
+
+  Dependencies                        TRUST-03, COMMS-01
+
+  Primary data                        support_case_links
+
+  API / interfaces                    /v1/support/cases
+
+  Events                              support.case.opened
+
+  UI / routes                         /support, /admin/support
+
+  Definition of Done                  Support agent access is scoped and
+                                      sensitive data is masked unless
+                                      elevation is granted.
+  -----------------------------------------------------------------------
+
+OPS-02 · Admin / Backoffice
+
+책임: Operational console for users, listings, compliance, reservations,
+exchanges, guides, payments, refunds and settlements.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-admin
+
+  Dependencies                        CORE-03
+
+  Primary data                        admin_saved_views
+
+  API / interfaces                    /v1/admin/*
+
+  Events                              admin.action.performed
+
+  UI / routes                         /admin/*
+
+  Definition of Done                  Every money/permission/compliance
+                                      mutation is AAL2-gated and
+                                      append-only audited.
+  -----------------------------------------------------------------------
+
+OPS-03 · CMS, Content & SEO
+
+책임: Destination/story/FAQ/promotion/legacy WONT content, redirects,
+metadata and structured content.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-admin
+
+  Dependencies                        없음/공통 플랫폼
+
+  Primary data                        cms_external_refs, seo_redirects
+
+  API / interfaces                    Payload API, /v1/seo/redirects
+
+  Events                              content.published
+
+  UI / routes                         /discover, /stories, /admin/cms
+
+  Definition of Done                  Legacy high-value URLs have 301
+                                      mappings and content publication is
+                                      separated from transaction truth.
+  -----------------------------------------------------------------------
+
+OPS-04 · Analytics & Audit
+
+책임: GMV, conversion, cancellation, search, compliance, disputes,
+finance dashboards and immutable audit trail.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-admin
+
+  Dependencies                        PLAT-03
+
+  Primary data                        audit_logs, analytics_events
+
+  API / interfaces                    /v1/admin/analytics/*,
+                                      /v1/admin/audit-logs
+
+  Events                              audit.recorded
+
+  UI / routes                         /admin/analytics, /admin/audit
+
+  Definition of Done                  Operational metrics reconcile
+                                      against source tables; audit logs
+                                      exclude secrets while retaining
+                                      actor/resource/effect.
+  -----------------------------------------------------------------------
+
+6.8 Platform / Migration / AI / Integration
+
+PLAT-01 · Search Projection Service
+
+책임: Project PostgreSQL entities into Meilisearch; reindex, version,
+lag monitoring and recovery.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-api
+
+  Dependencies                        PLAT-03
+
+  Primary data                        search_projection_offsets
+
+  API / interfaces                    internal /search-sync
+
+  Events                              search.projection.updated
+
+  UI / routes                         internal
+
+  Definition of Done                  Index can be rebuilt from
+                                      PostgreSQL and never acts as final
+                                      authority for sellable
+                                      availability.
+  -----------------------------------------------------------------------
+
+PLAT-02 · Map / Geo Adapter
+
+책임: MapLibre rendering support, geocoding abstraction, viewport search
+and provider cost controls.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-api
+
+  Dependencies                        없음/공통 플랫폼
+
+  Primary data                        geo_cache
+
+  API / interfaces                    /v1/geo/geocode, /v1/geo/reverse
+
+  Events                              geo.cache.updated
+
+  UI / routes                         map components
+
+  Definition of Done                  Provider is replaceable behind
+                                      adapter; address precision exposure
+                                      follows privacy policy.
+  -----------------------------------------------------------------------
+
+PLAT-03 · Transactional Outbox & Async Jobs
+
+책임: Outbox in same transaction, durable queue, retries, dead-letter
+handling, event correlation and schema version.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-api
+
+  Dependencies                        없음/공통 플랫폼
+
+  Primary data                        outbox_events, job_runs,
+                                      dead_letters
+
+  API / interfaces                    internal
+
+  Events                              * domain events
+
+  UI / routes                         internal
+
+  Definition of Done                  No domain mutation emits only an
+                                      in-memory event; retries are
+                                      idempotent and observable.
+  -----------------------------------------------------------------------
+
+PLAT-04 · Observability / SRE
+
+책임: OpenTelemetry traces, metrics, logs, synthetic checks, SLOs,
+alerting and incident runbooks.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-infra
+
+  Dependencies                        없음/공통 플랫폼
+
+  Primary data                        none
+
+  API / interfaces                    /health, /ready, /metrics
+
+  Events                              incident.opened
+
+  UI / routes                         /admin/ops
+
+  Definition of Done                  Dashboards cover p95 latency, error
+                                      rate, queue lag, payment
+                                      reconciliation lag and booking
+                                      collision errors.
+  -----------------------------------------------------------------------
+
+PLAT-05 · Security / Risk Controls
+
+책임: WAF/rate-limit, bot protection, secret management, SAST/SCA/SBOM,
+DAST, upload scanning and risk flags.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-infra
+
+  Dependencies                        CORE-01
+
+  Primary data                        risk_events, security_incidents
+
+  API / interfaces                    internal risk API
+
+  Events                              risk.detected, security.incident
+
+  UI / routes                         /admin/security
+
+  Definition of Done                  Release blocks on critical
+                                      vulnerabilities, leaked secrets,
+                                      failed permission-negative tests or
+                                      missing SBOM.
+  -----------------------------------------------------------------------
+
+PLAT-06 · Configuration & Feature Flags
+
+책임: Environment-safe feature flags, business rules, percentage rollout
+and kill switches.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-api
+
+  Dependencies                        CORE-03
+
+  Primary data                        feature_flags, config_versions
+
+  API / interfaces                    /v1/admin/feature-flags
+
+  Events                              config.changed
+
+  UI / routes                         /admin/config
+
+  Definition of Done                  Critical features such as paid
+                                      charter flow can remain OFF
+                                      independently of deployment.
+  -----------------------------------------------------------------------
+
+MIG-01 · Legacy WONT/Sixshop Migration
+
+책임: Inventory existing URLs/content/member/order assets, official
+export, ID mapping, media import, consent audit, 301s and cutover
+reconciliation.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P0 / jetpool-infra
+
+  Dependencies                        OPS-03, CORE-01
+
+  Primary data                        migration_id_map, migration_audit,
+                                      seo_redirects
+
+  API / interfaces                    migration CLI
+
+  Events                              migration.batch.completed
+
+  UI / routes                         internal migration dashboard
+
+  Definition of Done                  Dry-run reconciliation proves row
+                                      counts, amounts, media references
+                                      and URL mappings before cutover.
+  -----------------------------------------------------------------------
+
+AI-01 · AI Travel Assistant
+
+책임: Intent parsing, trip planning, explainable suggestions using live
+search/availability; never autonomously commits paid transactions.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P1 / jetpool-api
+
+  Dependencies                        STAY-04, GUIDE-03, TRAVEL-01
+
+  Primary data                        ai_sessions, ai_recommendations
+
+  API / interfaces                    /v1/ai/travel-assistant
+
+  Events                              ai.recommendation.created
+
+  UI / routes                         /assistant
+
+  Definition of Done                  AI suggestions cite live
+                                      availability snapshot and require
+                                      explicit user confirmation before
+                                      hold/payment.
+  -----------------------------------------------------------------------
+
+AI-02 · Recommendation & Personalization
+
+책임: Behavioral/explicit preference ranking with cold-start rules,
+opt-out and non-authoritative recommendations.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P1 / jetpool-api
+
+  Dependencies                        CORE-02, OPS-04
+
+  Primary data                        recommendation_features,
+                                      recommendation_impressions
+
+  API / interfaces                    /v1/recommendations
+
+  Events                              recommendation.impression
+
+  UI / routes                         home/discovery rails
+
+  Definition of Done                  Opt-out removes behavioral
+                                      personalization; ranking never
+                                      bypasses
+                                      legal/compliance/availability
+                                      filters.
+  -----------------------------------------------------------------------
+
+INT-01 · PMS / Supplier Integrations
+
+책임: External PMS/channel/supplier adapter framework, polling/webhooks,
+mapping and conflict handling.
+
+  -----------------------------------------------------------------------
+  구분                                명세
+  ----------------------------------- -----------------------------------
+  Priority / Owner                    P2 / jetpool-api
+
+  Dependencies                        STAY-06, PLAT-03
+
+  Primary data                        integration_accounts,
+                                      integration_mappings,
+                                      integration_events
+
+  API / interfaces                    /v1/integrations/*
+
+  Events                              integration.sync.completed
+
+  UI / routes                         /host/integrations
+
+  Definition of Done                  External state is reconciled into
+                                      Jetpool authority rules with clear
+                                      conflict policy and audit.
+  -----------------------------------------------------------------------
+
+7. 상태머신 및 도메인 불변식
+
+7.1 Paid Stay 예약
+
+[]
+
+그림 3. 예약/결제 핵심 시퀀스
+
+DRAFT → QUOTED → HELD → PAYMENT_PENDING → CONFIRMED → CHECKED_IN →
+COMPLETED
+↘ PAYMENT_FAILED / EXPIRED
+CONFIRMED → CANCELLED → REFUND_PENDING → PARTIALLY_REFUNDED | REFUNDED
+COMPLETED → DISPUTED
+
+-   동일 property와 겹치는 기간의 ACTIVE inventory block은 capacity를
+    초과하지 않는다.
+
+-   Hold는 TTL이 있고 만료 시 block을 해제한다. 결제 처리 중 TTL 정책은
+    별도 ADR로 고정한다.
+
+-   CONFIRMED 전이는 서버의 PG 승인/조회 결과, 내부 order/quote 금액,
+    currency, subject ID가 일치할 때만 허용한다.
+
+-   환불은 Payment 도메인에서 처리하고 Reservation은 환불 결과 이벤트를
+    받아 표시 상태를 갱신한다.
+
+7.2 Home Exchange
+
+[]
+
+그림 4. Home Exchange 상호 합의/Calendar lock 시퀀스
+
+REQUESTED ↔ COUNTERED → MUTUAL_ACCEPTED → VERIFICATION_PENDING →
+AGREEMENT_PENDING → CONFIRMED → IN_PROGRESS → COMPLETED → REVIEWED
+REQUESTED/COUNTERED → DECLINED | WITHDRAWN
+CONFIRMED/IN_PROGRESS → DISPUTED
+
+-   accept는 current_offer_version에 대해 낙관적 버전검사를 수행한다.
+
+-   양측은 동일 terms_version을 수락해야 한다.
+
+-   Calendar block A/B는 한 트랜잭션/보상 가능한 saga로 처리하고 어느
+    한쪽만 잠긴 상태를 허용하지 않는다.
+
+7.3 Guide Friend
+
+REQUESTED → OFFERED/COUNTERED → ACCEPTED → [PAID: PAYMENT_PENDING →
+CONFIRMED] | [FREE: CONFIRMED] → IN_PROGRESS → COMPLETED → REVIEWED
+각 단계에서 CANCELLED / DISPUTED 분기 가능
+
+FRIEND/VOLUNTEER는 원칙적으로 무료 흐름, PAID/PROFESSIONAL은
+가격·결제·자격/사업 검증이 필요한 흐름으로 분리한다.
+
+7.4 Payment / Refund / Settlement
+
+Payment: CREATED → CONFIRMING → APPROVED | FAILED | CANCELLED
+Refund: REQUESTED → PROVIDER_PENDING → PARTIAL/REFUNDED | FAILED
+Settlement: DRAFT → READY → APPROVAL_PENDING → APPROVED → PAYOUT_PENDING
+→ PAID → RECONCILED | HELD
+
+8. 데이터 모델·무결성·인덱스
+
+본 패키지의 `JETPOOL_DB_SCHEMA_BLUEPRINT.sql`은 실제 migration 작성 전에
+사용할 schema seed다. 핵심 무결성은 “응용프로그램 코드가 실수해도 DB가
+위험 거래를 거부”하는 방향으로 설계한다.
+
+  -----------------------------------------------------------------------
+  Invariant                           DB / Service enforcement
+  ----------------------------------- -----------------------------------
+  숙소 중복 점유 금지                 `inventory_blocks(property_id,
+                                      daterange)` exclusion constraint +
+                                      ACTIVE state
+
+  동일 거래 중복 호출 방지            `idempotency_keys(scope,key)`
+                                      unique + request hash
+
+  Webhook 중복 처리 방지              provider + external_event_id 또는
+                                      payload hash unique
+
+  Exchange stale acceptance 금지      exchange_id + offer version
+                                      unique + current_offer_version
+                                      compare
+
+  리뷰 중복 금지                      author + transaction + target
+                                      unique
+
+  Ledger 불변성                       append-only transaction/entries;
+                                      balancing validation; no
+                                      update/delete in normal role
+
+  계약 증거                           agreement terms snapshot +
+                                      terms_version + bilateral
+                                      accepted_at
+
+  감사 가능성                         correlation_id, actor, reason,
+                                      before/after on privileged
+                                      mutations
+  -----------------------------------------------------------------------
+
+8.1 데이터 분류와 보존
+
+-   Class A: 금융·감사·계약 증거 — 법적/회계 보존 정책에 따라 삭제 대신
+    제한·분리보관 가능하도록 설계.
+
+-   Class B: 계정 PII — 목적/동의/보존기간에 따라 암호화·접근로그·삭제
+    workflow.
+
+-   Class C: 공개 Marketplace 콘텐츠 — publish 상태와 moderation 기록
+    유지.
+
+-   Class D: 캐시/검색/추천 feature — 원천 데이터에서 재구축 가능해야
+    하며 권위 데이터로 사용하지 않음.
+
+9. API / Event Contract 규약
+
+-   OpenAPI 3.1을 동기 API Source of Truth로 사용하고 generated
+    client/type을 직접 수정하지 않는다.
+
+-   AsyncAPI 3.0을 도메인 이벤트 카탈로그로 사용한다. 이벤트에는
+    eventId, eventType, version, aggregateId, correlationId,
+    causationId, occurredAt을 포함한다.
+
+-   Mutation API는 중요한 중복 위험이 있는 경우 `Idempotency-Key`를
+    요구한다.
+
+-   오류는 RFC 7807 형태의 Problem object를 기본으로 사용하고
+    correlationId를 노출한다.
+
+-   외부 provider webhook은 raw body 검증 요구를 고려하고 처리 결과와
+    원본 hash를 보존한다.
+
+  -----------------------------------------------------------------------
+  계약 파일
+  `JETPOOL_OPENAPI_SKELETON.yaml`과 `JETPOOL_ASYNCAPI_SKELETON.yaml`은
+  코드 생성용 시작점이다. 실제 구현 전에 request/response payload, enum,
+  auth scope, examples, error codes를 모듈별 ADR과 함께 완성해야 한다.
+  -----------------------------------------------------------------------
+
+  -----------------------------------------------------------------------
+
+10. UI/UX Information Architecture
+
+  ------------------------------------------------------------------------
+  영역                    대표 Route              사용자 가치
+  ----------------------- ----------------------- ------------------------
+  Public                  /                       Unified discovery home
+
+  Public                  /stay                   Stay search
+
+  Public                  /stay/{slug}            Stay detail
+
+  Public                  /exchange               Home Exchange discovery
+
+  Public                  /guide-friends          Guide Friend discovery
+
+  Public                  /travel                 Tours/tickets/packages
+
+  Public                  /jetpool-charter        Legacy charter/flight
+                                                  share
+
+  Auth                    /login /signup          Authentication
+
+  Traveler                /trips                  Traveler dashboard
+
+  Traveler                /messages               Messaging
+
+  Traveler                /payments               Payments/refunds
+
+  Host                    /host/onboarding        Host onboarding
+
+  Host                    /host/listings          Listing management
+
+  Host                    /host/calendar          Calendar
+
+  Host                    /host/reservations      Reservation operations
+
+  Host                    /earnings               Earnings
+
+  Guide                   /guide/onboarding       Guide onboarding
+
+  Guide                   /guide/calendar         Guide schedule
+
+  Guide                   /guide/requests         Requests/offers
+
+  Supplier                /supplier/products      Travel supplier extranet
+
+  Admin                   /admin                  Ops overview
+
+  Admin                   /admin/compliance       Compliance workbench
+
+  Admin                   /admin/disputes         Dispute workbench
+
+  Admin                   /admin/payments         Payment/refund ops
+
+  Admin                   /admin/settlements      Settlement ops
+
+  Admin                   /admin/cms              Content/SEO
+
+  Admin                   /admin/audit            Audit logs
+  ------------------------------------------------------------------------
+
+10.1 UX 공통 원칙
+
+-   모바일 우선 PWA이며 데스크톱에서는 지도+리스트, 운영자에서는 고밀도
+    업무 테이블을 사용한다.
+
+-   한 계정이 Traveler/Host/Guide/Supplier 역할을 동시에 가질 수
+    있으므로 계정 분리를 강제하지 않고 역할별 Dashboard context를
+    제공한다.
+
+-   각 화면은 loading / empty / error / offline / permission denied /
+    verification required 상태를 명시한다.
+
+-   결제·교환계약·정산계좌 변경·관리자 중요작업에는 일반 CTA와 다른
+    단계적 확인을 제공한다.
+
+-   한국어/영어를 초기 언어로 설계하고 텍스트를 코드에 직접 박지 않고
+    locale resource로 분리한다.
+
+-   접근성 목표는 키보드 탐색, 명확한 focus, form label/error, contrast,
+    semantic landmark를 포함한 WCAG 2.2 AA 수준을 Release QA 기준으로
+    권장한다.
+
+10.2 핵심 사용자 여정
+
+  1. Paid Stay: 검색 → 상세 → 날짜/인원 → Quote → Hold → PG → Server
+  confirm → 예약 → 채팅 → 체크인 → 완료 → 리뷰 → 정산
+
+  2. Home Exchange: Exchange 홈 탐색 → A가 B에게 제안 → B 반대제안 →
+  양측 수락 → 검증 → 약정 → 양측 서명 → 두 숙소 일정 잠금 → 교환 → 상호
+  리뷰
+
+  3. Guide Friend: 지역/언어/관심사 검색 → 요청 → Offer/Counter →
+  무료/유료 분기 → 확정 → 채팅 → 활동 → 완료 → 리뷰
+
+  4. Travel Commerce: 상품/출발일 → 옵션/인원 → order → 결제 →
+  바우처/일정 → 취소/환불 → supplier settlement
+
+  5. Host: 신청/검증 → 숙소 작성 → 미디어 → 인허가 → publish →
+  calendar/pricing → 예약 운영 → review/settlement
+
+  6. Guide: 유형선택/검증 → profile/availability → request/offer →
+  booking → activity → review/settlement
+
+11. 검색·매칭·추천 설계
+
+  -----------------------------------------------------------------------------------------
+  도메인            1차 필터                   Ranking signals            최종 확정
+  ----------------- -------------------------- -------------------------- -----------------
+  Stay              지역/날짜/인원/법적        거리, 가격, 품질, 리뷰,    Booking DB에서
+                    eligibility                응답성, 개인화             availability
+                                                                          재검증
+
+  Exchange          교환 활성화/날짜/숙소      상호 지역 선호, household  양측 수락 +
+                    적합/검증                  fit, amenities, trust      verification +
+                                                                          agreement + dual
+                                                                          block
+
+  Guide             지역/언어/시간/유형/검증   관심사 match, rating,      Guide DB
+                                               response, price, trust     availability +
+                                                                          offer version
+
+  Travel            출발일/재고/공급자 status  관련도, 가격, 인기, 일정   Travel
+                                               적합성                     inventory + order
+                                                                          calculation
+
+  AI                사용자 intent + 위 검색    선호/과거행동/설명가능성   사용자 명시 확인
+                    결과                                                  후 hold/payment
+  -----------------------------------------------------------------------------------------
+
+12. 결제·환불·원장·정산
+
+PG 결제와 공급자 정산을 분리한다. Payment는 provider fact를 기록하고,
+Ledger는 플랫폼 경제적 사실을 기록하며, Settlement는 Ledger에서 특정
+payee/기간의 지급 가능 잔액을 집계한다. 예약·가이드·여행 주문은 Payment
+ID를 참조하지만 금융 원장을 직접 수정하지 않는다.
+
+-   금액은 minor unit integer로 저장하고 currency를 항상 함께 저장한다.
+
+-   결제 confirm은 order/quote 내부 금액과 provider 금액 일치 검증 후
+    승인한다.
+
+-   부분 환불 누계는 승인 결제액을 초과할 수 없다.
+
+-   정산은 gross, platform fee, refund, tax adjustment, reserve/hold,
+    net payout을 분리 표시한다.
+
+-   정산계좌 변경, 수동 refund, settlement approve, payout execute는
+    AAL2 + 감사로그 + 최소권한 정책을 적용한다.
+
+13. 보안·개인정보·신뢰
+
+  -----------------------------------------------------------------------
+  영역                                상용 Release Gate
+  ----------------------------------- -----------------------------------
+  Auth                                Google/Kakao/Naver 전략, session
+                                      rotation, account-linking hijack
+                                      방지, Admin/Accounting AAL2
+
+  Authorization                       API RBAC/ABAC + DB RLS 적용 지점
+                                      정의; frontend-only 권한 금지
+
+  Payment                             PAN/CVC 미저장, server confirm,
+                                      webhook validation/replay
+                                      protection
+
+  Uploads                             presigned private upload,
+                                      MIME/size, malware/moderation
+                                      pipeline, ownership check
+
+  PII                                 최소수집, encryption, retention,
+                                      access log, export/delete workflow
+
+  Secrets                             repo/log 노출 금지, secret manager,
+                                      OIDC-based CI access
+
+  Supply chain                        lockfile, SCA, SBOM, license scan,
+                                      critical CVE block
+
+  Admin                               AAL2, timeout, risk control,
+                                      audited elevation, high-risk dual
+                                      approval 검토
+
+  Incident                            security incident runbook, evidence
+                                      preservation, contact tree,
+                                      postmortem
+  -----------------------------------------------------------------------
+
+14. 사업·법규 Compliance Gate 설계
+
+1차 백서가 제시한 한국 숙박·여행·전자상거래·개인정보 요구는 코드에
+“법률을 자동 해석하는 로직”으로 넣기보다, 법률/세무 자문에서 확정된
+정책을 버전 관리 가능한 rule data로 반영해야 한다. 아래 항목은 출시 전
+반드시 확정되어야 하는 제품 Gate다.
+
+  -----------------------------------------------------------------------------------------
+  Gate                    질문                            시스템 동작
+  ----------------------- ------------------------------- ---------------------------------
+  Accommodation           이 property                     publish 또는 paid booking
+                          type/jurisdiction/guest         enable/disable
+                          조건에서 유료 숙박이 가능한가?  
+
+  Home Exchange           대가성/반복성/주택형태/지역에   exchange_legal_classification +
+                          따른 운영 허용정책은?           region feature flag
+
+  Guide                   유료/전문 guide의               paid/pro publish and booking gate
+                          사업/자격/보험 조건은?          
+
+  Travel                  JETPOOL이 seller인지            merchant_of_record +
+                          intermediary인지, 여행업/보증   supplier/compliance state
+                          요건은?                         
+
+  Tax/Settlement          개인/사업자/외국인 공급자별     effective-dated finance rule
+                          지급·증빙·세금 정책은?          
+
+  Charter                 전세기 공유가 content/lead인지  JET-01 transactional flag default
+                          직접 거래인지?                  OFF
+  -----------------------------------------------------------------------------------------
+
+15. WONT/Sixshop 마이그레이션
+
+  1. Discovery inventory: URL, menu, content, products, members,
+  orders/inquiries, media, policies, SEO metadata.
+
+  2. Official export: 가능한 공식 Export/API 우선.
+  비밀번호/결제민감정보를 임의 scraping하지 않는다.
+
+  3. Canonicalization: legacy ID → UUID map, email/phone normalization,
+  duplicate rules.
+
+  4. Account transition: hash 호환 불명 시 secure password reset/invite
+  flow.
+
+  5. Media import: original fetch → object storage → checksum →
+  transformed assets → CDN URLs.
+
+  6. SEO: 301 map, canonical, structured data, sitemap, important
+  inbound URLs.
+
+  7. Dry run: row count, unique identities, amount totals, media broken
+  links, consent evidence, redirect coverage reconciliation.
+
+  8. Cutover: write freeze → final delta → DB backup → DNS/CDN switch →
+  smoke → rollback window.
+
+  9. Post-cutover: auth/payment/404/error monitoring and migration audit
+  report.
+
+16. 인프라·배포·DR
+
+[]
+
+그림 5. MVP/성장 공통 배포 토폴로지
+
+  -------------------------------------------------------------------------
+  영역                    MVP                       성장 이후
+  ----------------------- ------------------------- -----------------------
+  App                     Managed                   Independent
+                          containers/serverless +   autoscaling; Kubernetes
+                          Docker                    when justified
+
+  DB                      Managed PostgreSQL + PITR HA/read
+                                                    replica/partitioning as
+                                                    needed
+
+  Cache                   Redis                     Redis HA/cluster
+
+  Search                  Dedicated Meilisearch +   HA/replicated search
+                          snapshot                  
+
+  Queue                   Transactional Outbox +    NATS/Kafka/managed
+                          PostgreSQL/Supabase queue queue when volume
+                                                    requires
+
+  Storage                 S3-compatible + CDN +     Cross-region
+                          versioning                replication where RPO
+                                                    requires
+
+  Observability           logs/errors/uptime + OTel centralized
+                                                    traces/metrics/logs,
+                                                    SLO burn alerts
+
+  IaC                     Terraform + GitHub        Terraform + Helm/GitOps
+                          Actions                   
+  -------------------------------------------------------------------------
+
+16.1 SLO / RPO / RTO 초기 기준
+
+  -----------------------------------------------------------------------
+  항목                                목표
+  ----------------------------------- -----------------------------------
+  Search API                          p95 < 500 ms (load test로 확정)
+
+  General read API                    p95 < 300 ms
+
+  Booking write                       p95 < 1 s, 외부 PG 시간 제외
+
+  API availability                    월 99.9%+ 초기 SLO
+
+  Reservation/Payment RPO             5–15분 이하 권고
+
+  Reservation/Payment RTO             1시간 이하 권고
+
+  Ledger/Settlement                   PITR + immutable export; RPO 5분
+                                      이하 권고
+
+  Quarterly DR                        실제 restore +
+                                      checksum/reconciliation 필수
+  -----------------------------------------------------------------------
+
+17. 테스트 전략과 상용 완료 기준
+
+  ------------------------------------------------------------------------------------------
+  Test layer                          Required coverage
+  ----------------------------------- ------------------------------------------------------
+  Unit                                price/fee/cancellation policy, role policy, pure FSM
+                                      transitions
+
+  Property-based                      invalid state transitions, monetary invariants, quote
+                                      determinism
+
+  DB integration                      transaction, RLS, overlap exclusion, idempotency
+
+  Contract                            OpenAPI provider/consumer, AsyncAPI schema
+                                      compatibility
+
+  Payment                             sandbox approve/cancel/partial refund/webhook
+                                      replay/reconciliation
+
+  Search                              Postgres→Meili projection lag/rebuild and
+                                      authoritative recheck
+
+  Realtime                            conversation membership/RLS unauthorized subscription
+                                      denial
+
+  E2E Stay                            signup→listing→search→hold→pay→confirm→cancel/refund
+
+  E2E Exchange                        two browsers: request→counter→accept→verify→terms→dual
+                                      block
+
+  E2E Guide                           search→request→offer→free/paid confirm→complete
+
+  Concurrency                         dozens/hundreds of overlapping hold attempts; no
+                                      oversell
+
+  Load                                search/availability/checkout profiles; queue and DB
+                                      saturation
+
+  Security                            SAST/SCA/secret scan/DAST/permission-negative/AAL2
+
+  DR                                  restore backup and reconcile critical totals
+
+  Migration                           legacy/new counts, amount totals, media, URLs, consent
+                                      evidence
+  ------------------------------------------------------------------------------------------
+
+  -----------------------------------------------------------------------
+  상용 MVP Done
+  “화면이 있다”가 아니라 Paid Stay, Home Exchange, Guide Friend의
+  end-to-end 거래가 각각 감사로그·알림·분쟁 경로를 포함해 끝까지
+  실행되고, 유료 흐름은 Payment→Ledger→Settlement까지 대사되는 상태가
+  기준이다.
+  -----------------------------------------------------------------------
+
+  -----------------------------------------------------------------------
+
+18. 원클릭 AI 개발 오케스트레이션
+
+[]
+
+그림 6. Spec-driven AI build pipeline
+
+./scripts/bootstrap.sh
+./scripts/validate-spec.sh
+./scripts/generate-contracts.sh
+./scripts/db-migrate.sh --env dev
+./scripts/generate-services.sh
+./scripts/generate-web.sh
+./scripts/generate-tests.sh
+./scripts/deploy.sh staging
+./scripts/run-gates.sh G0..G8
+# 사람이 G9/G10 승인 후
+./scripts/deploy.sh production --immutable-sha <SHA>
+
+18.1 AI 작업 분할
+
+  ------------------------------------------------------------------------------------------------
+  Agent                   전담 산출물                                      금지
+  ----------------------- ------------------------------------------------ -----------------------
+  Contracts               OpenAPI/AsyncAPI/JSON Schema/enums               도메인 로직 임의 작성
+
+  Data                    migrations/constraints/indexes/RLS               UI/API 변경
+
+  Booking                 availability/quote/hold/reservation FSM          Exchange 상태 재사용
+
+  Exchange                request/counter/agreement/dual calendar lock     Reservation 테이블에
+                                                                           흡수
+
+  Guide                   profile/match/request/offer/booking              무료/유료 경로 혼합
+
+  Finance                 payment/refund/ledger/settlement                 client payment success
+                                                                           신뢰
+
+  Web                     public/traveler/host/guide/supplier UX           server auth 대체
+
+  Admin                   ops/compliance/dispute/accounting/audit          무감사 메시지 열람
+
+  Platform                IaC/CI/observability/security/outbox             business state 직접
+                                                                           수정
+
+  QA                      contract/E2E/concurrency/security/DR/migration   실패 테스트 무시
+  ------------------------------------------------------------------------------------------------
+
+18.2 AI가 반드시 중단하고 결정을 요청할 조건
+
+-   법률/세무/merchant_of_record 정책이 없는데 결제/정산 코드를 확정해야
+    하는 경우
+
+-   Home Exchange의 지역별 허용 여부를 추정해야 하는 경우
+
+-   PAID/PROFESSIONAL guide 자격요건을 추정해야 하는 경우
+
+-   전세기 직접 거래를 켜야 하는 경우
+
+-   legacy 비밀번호/민감 결제데이터를 비공식 방식으로 이관해야 하는 경우
+
+-   Production secret/approval 없이 배포하라는 지시가 들어오는 경우
+
+19. Release Gates
+
+  ------------------------------------------------------------------------------------
+  Gate                    이름                    핵심 통과 조건
+  ----------------------- ----------------------- ------------------------------------
+  G0                      Spec integrity          All P0 modules have owner, API,
+                                                  data, event, UI and acceptance
+                                                  criteria / No unresolved contract
+                                                  references
+
+  G1                      Contracts               OpenAPI/AsyncAPI lint pass /
+                                                  Generated client/types compile /
+                                                  Breaking changes explicitly
+                                                  versioned
+
+  G2                      Data                    Migrations up/down or forward-fix
+                                                  tested / Constraints/invariants
+                                                  enabled / Seed data deterministic
+
+  G3                      Domain                  Unit/property/integration tests pass
+                                                  / State transition negative tests
+                                                  pass / Idempotency tests pass
+
+  G4                      End-to-end              Stay paid flow passes / Exchange
+                                                  bilateral flow passes / Guide
+                                                  free/paid flow passes / Travel order
+                                                  flow passes where enabled
+
+  G5                      Security                SAST/SCA/secret scan pass /
+                                                  Permission-negative tests pass /
+                                                  AAL2 gates pass / No PAN/CVC storage
+
+  G6                      Performance             Search/read/write SLO targets meet
+                                                  load-test plan / No oversell under
+                                                  concurrency test
+
+  G7                      Migration               Dry-run reconciliation approved /
+                                                  301 URL map approved /
+                                                  Consent/password migration strategy
+                                                  approved
+
+  G8                      DR & Ops                Restore drill successful / Runbooks
+                                                  and alert routes tested / Payment
+                                                  reconciliation tested
+
+  G9                      Legal/Business approval Accommodation/guide/travel/charter
+                                                  gates signed off /
+                                                  Merchant-of-record and settlement
+                                                  policy approved /
+                                                  Terms/privacy/refund policies
+                                                  published
+
+  G10                     Production approval     Immutable release artifact / GitHub
+                                                  Environment manual approval /
+                                                  Canary + smoke + rollback readiness
+  ------------------------------------------------------------------------------------
+
+20. 개발 로드맵 — 18~20주 병렬 MVP 기준
+
+  ------------------------------------------------------------------------------------------------------------
+  Sprint                  기간                    주요 결과
+  ----------------------- ----------------------- ------------------------------------------------------------
+  0 Discovery             2주                     legacy inventory/export 조사, ADR, legal decision register,
+                                                  UX IA, spec freeze
+
+  1 Foundation            2주                     8 repos, CI, dev/staging, auth/RBAC/AAL2, contracts pipeline
+
+  2 Marketplace           2주                     property/media/host/compliance, public detail
+
+  3 Discovery             2주                     Meilisearch/MapLibre, filters, calendar read model
+
+  4 Booking               2주                     quote/hold/FSM/concurrency/cancellation
+
+  5 Payment & Finance     2주                     Toss confirm/webhook/refund, ledger seed
+
+  6 Exchange              2주                     request/counter/verification/agreement/dual block
+
+  7 Guide                 2주                     types/profile/search/request/offer/free-paid booking
+
+  8 Travel/Ops            2주                     travel
+                                                  products/itinerary/admin/CMS/notifications/support/reviews
+
+  9 Hardening/Launch      2주                     migration rehearsal, security/load/E2E, settlement, DR, UAT,
+                                                  legal/business release gates
+  ------------------------------------------------------------------------------------------------------------
+
+21. 운영 KPI / Observability 대시보드
+
+  -----------------------------------------------------------------------
+  대시보드                            지표
+  ----------------------------------- -----------------------------------
+  Marketplace                         search success, zero-result rate,
+                                      detail→quote, map interactions
+
+  Booking                             quote→hold, hold collision, hold
+                                      expiry, payment approval,
+                                      confirmation latency, cancellation
+
+  Exchange                            request→counter, mutual accept,
+                                      verification drop-off, agreement
+                                      completion, dispute
+
+  Guide                               search→request, offer response,
+                                      paid/free split, completion, review
+
+  Finance                             GMV, take rate, refund rate,
+                                      unreconciled payments, settlement
+                                      aging, payout failure
+
+  Trust                               verification backlog, report rate,
+                                      dispute resolution time, sanctions
+
+  Platform                            API p95/error, DB saturation, queue
+                                      lag, outbox lag, Meili sync lag,
+                                      realtime error, storage failures
+
+  Migration                           404 rate, login reset completion,
+                                      legacy/new reconciliation deltas
+  -----------------------------------------------------------------------
+
+22. 2차 산출물 목록과 사용법
+
+  ---------------------------------------------------------------------------------------------
+  파일                                             용도
+  ------------------------------------------------ --------------------------------------------
+  JETPOOL_2차_상용화_모듈_아키텍처_기술백서.docx   사람/개발사/RFP용 통합 설명·설계 문서
+
+  JETPOOL_AI_ONECLICK_BUILD_SPEC.md                AI 코딩 에이전트가 읽는 실행 규칙
+
+  AGENTS_MASTER.md                                 모든 repo에 공통 적용하는 불변식/금지사항
+
+  JETPOOL_MASTER_BUILD_SPEC.yaml                   모듈/의존성/API/data/event/UI/acceptance의
+                                                   machine-readable master
+
+  JETPOOL_MODULE_TRACEABILITY.csv                  기능 누락 검산용 traceability matrix
+
+  JETPOOL_UI_ROUTE_MAP.csv                         화면/역할/필수 콘텐츠 IA
+
+  JETPOOL_OPENAPI_SKELETON.yaml                    API contract seed
+
+  JETPOOL_ASYNCAPI_SKELETON.yaml                   domain event contract seed
+
+  JETPOOL_DB_SCHEMA_BLUEPRINT.sql                  PostgreSQL migration seed
+
+  JETPOOL_RELEASE_GATES.yaml                       상용 출시 gate 자동화 입력
+
+  diagrams/*.svg + *.dot                           편집 가능한 vector 아키텍처 구조도
+  ---------------------------------------------------------------------------------------------
+
+부록 A. 1차 문서 보존 원칙
+
+-   기존 WONT 콘텐츠/회원/미디어/SEO URL/운영 데이터를 공식 경로로
+    추출하여 리플랫폼한다.
+
+-   Airbnb clone/QloApps/Medusa 등 외부 코드는 전체 병합하지 않고
+    UI/업무규칙/commerce primitive를 선택적으로 참조한다.
+
+-   Booking, Exchange, Guide, Compliance, Settlement의 핵심
+    IP/업무규칙은 JETPOOL 자체 도메인으로 유지한다.
+
+-   검색·Realtime·캐시보다 PostgreSQL 거래 데이터가 우선한다.
+
+-   법률/세무 미확정 영역은 임의 결론이 아니라 configurable Gate로
+    남긴다.
+
+부록 B. 상용화 직전 체크리스트
+
+☐ P0 module traceability 100%
+
+☐ OpenAPI/AsyncAPI lint 0 errors
+
+☐ DB migrations clean on empty + previous staging snapshot
+
+☐ all auth/permission negative tests pass
+
+☐ concurrency test: no oversell
+
+☐ payment webhook replay safe
+
+☐ refund cumulative amount bounded
+
+☐ ledger balanced and immutable
+
+☐ exchange dual calendar lock atomic
+
+☐ guide paid/free route separation
+
+☐ compliance blocks unverified paid supply
+
+☐ message privacy/elevated access audit
+
+☐ PII retention/export/delete workflow
+
+☐ SAST/SCA/SBOM/secret/DAST pass
+
+☐ backup restore drill passed
+
+☐ legacy migration reconciliation signed
+
+☐ SEO redirect coverage approved
+
+☐ support/dispute runbooks tested
+
+☐ monitoring/alerts on-call routing tested
+
+☐ terms/privacy/refund/cancellation policy published
+
+☐ legal/tax/merchant-of-record decisions signed
+
+☐ production environment approval enabled
+
+☐ canary + rollback procedure tested
+
+부록 C. 출처 및 변경 구분
+
+본 v2의 베이스는 사용자가 첨부한 「제트풀 상용 플랫폼
+마이그레이션·리모델링 기술 백서 초안」이다. 해당 문서가 정의한 목표,
+도메인 분리, 핵심 스택, 상태머신, 마이그레이션, 보안, 한국 규제 Gate,
+테스트, 8-repository 방향과 원클릭 AI 원칙을 유지했다. v2에서 추가된
+내용은 기능 추적성, UI route inventory, machine-readable build spec,
+API/Event/DB seed, 추가 상태머신, Release Gate, AI agent 역할 분할 및
+운영 KPI다. 외부 법률·서비스 버전은 본 작업에서 재검증하지 않았으므로
+실제 출시 직전 최신 공식 자료로 재확인해야 한다.

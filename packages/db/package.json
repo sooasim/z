@@ -1,0 +1,16 @@
+{
+  "name": "@jetpool/db",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "migrate": "node ./migrate.mjs",
+    "seed": "node ./seed-dev.mjs",
+    "test": "node ./migrate.mjs --verify",
+    "typecheck": "echo 'no ts'",
+    "build": "echo 'no build'"
+  },
+  "dependencies": {
+    "pg": "^8.16.0"
+  }
+}

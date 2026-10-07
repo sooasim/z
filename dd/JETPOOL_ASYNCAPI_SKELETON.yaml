@@ -1,0 +1,507 @@
+asyncapi: 3.0.0
+info:
+  title: JETPOOL Domain Events Seed
+  version: 2.0.0
+channels:
+  admin.action.performed:
+    address: admin.action.performed
+    messages:
+      admin_action_performed:
+        $ref: '#/components/messages/DomainEvent'
+  ai.recommendation.created:
+    address: ai.recommendation.created
+    messages:
+      ai_recommendation_created:
+        $ref: '#/components/messages/DomainEvent'
+  audit.recorded:
+    address: audit.recorded
+    messages:
+      audit_recorded:
+        $ref: '#/components/messages/DomainEvent'
+  availability.changed:
+    address: availability.changed
+    messages:
+      availability_changed:
+        $ref: '#/components/messages/DomainEvent'
+  charter.requested:
+    address: charter.requested
+    messages:
+      charter_requested:
+        $ref: '#/components/messages/DomainEvent'
+  compliance.expired:
+    address: compliance.expired
+    messages:
+      compliance_expired:
+        $ref: '#/components/messages/DomainEvent'
+  compliance.verified:
+    address: compliance.verified
+    messages:
+      compliance_verified:
+        $ref: '#/components/messages/DomainEvent'
+  config.changed:
+    address: config.changed
+    messages:
+      config_changed:
+        $ref: '#/components/messages/DomainEvent'
+  consent.recorded:
+    address: consent.recorded
+    messages:
+      consent_recorded:
+        $ref: '#/components/messages/DomainEvent'
+  content.published:
+    address: content.published
+    messages:
+      content_published:
+        $ref: '#/components/messages/DomainEvent'
+  dispute.opened:
+    address: dispute.opened
+    messages:
+      dispute_opened:
+        $ref: '#/components/messages/DomainEvent'
+  dispute.resolved:
+    address: dispute.resolved
+    messages:
+      dispute_resolved:
+        $ref: '#/components/messages/DomainEvent'
+  exchange.agreement.created:
+    address: exchange.agreement.created
+    messages:
+      exchange_agreement_created:
+        $ref: '#/components/messages/DomainEvent'
+  exchange.calendar_blocked:
+    address: exchange.calendar_blocked
+    messages:
+      exchange_calendar_blocked:
+        $ref: '#/components/messages/DomainEvent'
+  exchange.cancelled:
+    address: exchange.cancelled
+    messages:
+      exchange_cancelled:
+        $ref: '#/components/messages/DomainEvent'
+  exchange.completed:
+    address: exchange.completed
+    messages:
+      exchange_completed:
+        $ref: '#/components/messages/DomainEvent'
+  exchange.confirmed:
+    address: exchange.confirmed
+    messages:
+      exchange_confirmed:
+        $ref: '#/components/messages/DomainEvent'
+  exchange.countered:
+    address: exchange.countered
+    messages:
+      exchange_countered:
+        $ref: '#/components/messages/DomainEvent'
+  exchange.disputed:
+    address: exchange.disputed
+    messages:
+      exchange_disputed:
+        $ref: '#/components/messages/DomainEvent'
+  exchange.eligibility.updated:
+    address: exchange.eligibility.updated
+    messages:
+      exchange_eligibility_updated:
+        $ref: '#/components/messages/DomainEvent'
+  exchange.mutual_accepted:
+    address: exchange.mutual_accepted
+    messages:
+      exchange_mutual_accepted:
+        $ref: '#/components/messages/DomainEvent'
+  exchange.requested:
+    address: exchange.requested
+    messages:
+      exchange_requested:
+        $ref: '#/components/messages/DomainEvent'
+  exchange.verification_pending:
+    address: exchange.verification_pending
+    messages:
+      exchange_verification_pending:
+        $ref: '#/components/messages/DomainEvent'
+  exchange.verified:
+    address: exchange.verified
+    messages:
+      exchange_verified:
+        $ref: '#/components/messages/DomainEvent'
+  favorite.added:
+    address: favorite.added
+    messages:
+      favorite_added:
+        $ref: '#/components/messages/DomainEvent'
+  finance.rule.changed:
+    address: finance.rule.changed
+    messages:
+      finance_rule_changed:
+        $ref: '#/components/messages/DomainEvent'
+  geo.cache.updated:
+    address: geo.cache.updated
+    messages:
+      geo_cache_updated:
+        $ref: '#/components/messages/DomainEvent'
+  guide.availability.changed:
+    address: guide.availability.changed
+    messages:
+      guide_availability_changed:
+        $ref: '#/components/messages/DomainEvent'
+  guide.booking.completed:
+    address: guide.booking.completed
+    messages:
+      guide_booking_completed:
+        $ref: '#/components/messages/DomainEvent'
+  guide.booking.confirmed:
+    address: guide.booking.confirmed
+    messages:
+      guide_booking_confirmed:
+        $ref: '#/components/messages/DomainEvent'
+  guide.offer.accepted:
+    address: guide.offer.accepted
+    messages:
+      guide_offer_accepted:
+        $ref: '#/components/messages/DomainEvent'
+  guide.offer.created:
+    address: guide.offer.created
+    messages:
+      guide_offer_created:
+        $ref: '#/components/messages/DomainEvent'
+  guide.profile.updated:
+    address: guide.profile.updated
+    messages:
+      guide_profile_updated:
+        $ref: '#/components/messages/DomainEvent'
+  guide.requested:
+    address: guide.requested
+    messages:
+      guide_requested:
+        $ref: '#/components/messages/DomainEvent'
+  guide.search.reindex:
+    address: guide.search.reindex
+    messages:
+      guide_search_reindex:
+        $ref: '#/components/messages/DomainEvent'
+  guide.verified:
+    address: guide.verified
+    messages:
+      guide_verified:
+        $ref: '#/components/messages/DomainEvent'
+  host.applied:
+    address: host.applied
+    messages:
+      host_applied:
+        $ref: '#/components/messages/DomainEvent'
+  host.approved:
+    address: host.approved
+    messages:
+      host_approved:
+        $ref: '#/components/messages/DomainEvent'
+  identity.mfa.changed:
+    address: identity.mfa.changed
+    messages:
+      identity_mfa_changed:
+        $ref: '#/components/messages/DomainEvent'
+  identity.user.created:
+    address: identity.user.created
+    messages:
+      identity_user_created:
+        $ref: '#/components/messages/DomainEvent'
+  incident.opened:
+    address: incident.opened
+    messages:
+      incident_opened:
+        $ref: '#/components/messages/DomainEvent'
+  integration.sync.completed:
+    address: integration.sync.completed
+    messages:
+      integration_sync_completed:
+        $ref: '#/components/messages/DomainEvent'
+  itinerary.updated:
+    address: itinerary.updated
+    messages:
+      itinerary_updated:
+        $ref: '#/components/messages/DomainEvent'
+  ledger.posted:
+    address: ledger.posted
+    messages:
+      ledger_posted:
+        $ref: '#/components/messages/DomainEvent'
+  listing.blocked:
+    address: listing.blocked
+    messages:
+      listing_blocked:
+        $ref: '#/components/messages/DomainEvent'
+  media.ready:
+    address: media.ready
+    messages:
+      media_ready:
+        $ref: '#/components/messages/DomainEvent'
+  media.uploaded:
+    address: media.uploaded
+    messages:
+      media_uploaded:
+        $ref: '#/components/messages/DomainEvent'
+  message.created:
+    address: message.created
+    messages:
+      message_created:
+        $ref: '#/components/messages/DomainEvent'
+  message.reported:
+    address: message.reported
+    messages:
+      message_reported:
+        $ref: '#/components/messages/DomainEvent'
+  migration.batch.completed:
+    address: migration.batch.completed
+    messages:
+      migration_batch_completed:
+        $ref: '#/components/messages/DomainEvent'
+  notification.delivered:
+    address: notification.delivered
+    messages:
+      notification_delivered:
+        $ref: '#/components/messages/DomainEvent'
+  notification.requested:
+    address: notification.requested
+    messages:
+      notification_requested:
+        $ref: '#/components/messages/DomainEvent'
+  order.cancelled:
+    address: order.cancelled
+    messages:
+      order_cancelled:
+        $ref: '#/components/messages/DomainEvent'
+  order.created:
+    address: order.created
+    messages:
+      order_created:
+        $ref: '#/components/messages/DomainEvent'
+  order.paid:
+    address: order.paid
+    messages:
+      order_paid:
+        $ref: '#/components/messages/DomainEvent'
+  payment.approved:
+    address: payment.approved
+    messages:
+      payment_approved:
+        $ref: '#/components/messages/DomainEvent'
+  payment.failed:
+    address: payment.failed
+    messages:
+      payment_failed:
+        $ref: '#/components/messages/DomainEvent'
+  payment.reconciled:
+    address: payment.reconciled
+    messages:
+      payment_reconciled:
+        $ref: '#/components/messages/DomainEvent'
+  payment.refund_requested:
+    address: payment.refund_requested
+    messages:
+      payment_refund_requested:
+        $ref: '#/components/messages/DomainEvent'
+  payment.refunded:
+    address: payment.refunded
+    messages:
+      payment_refunded:
+        $ref: '#/components/messages/DomainEvent'
+  payout.reconciled:
+    address: payout.reconciled
+    messages:
+      payout_reconciled:
+        $ref: '#/components/messages/DomainEvent'
+  payout.sent:
+    address: payout.sent
+    messages:
+      payout_sent:
+        $ref: '#/components/messages/DomainEvent'
+  privacy.completed:
+    address: privacy.completed
+    messages:
+      privacy_completed:
+        $ref: '#/components/messages/DomainEvent'
+  privacy.requested:
+    address: privacy.requested
+    messages:
+      privacy_requested:
+        $ref: '#/components/messages/DomainEvent'
+  profile.updated:
+    address: profile.updated
+    messages:
+      profile_updated:
+        $ref: '#/components/messages/DomainEvent'
+  property.created:
+    address: property.created
+    messages:
+      property_created:
+        $ref: '#/components/messages/DomainEvent'
+  property.published:
+    address: property.published
+    messages:
+      property_published:
+        $ref: '#/components/messages/DomainEvent'
+  property.updated:
+    address: property.updated
+    messages:
+      property_updated:
+        $ref: '#/components/messages/DomainEvent'
+  quote.created:
+    address: quote.created
+    messages:
+      quote_created:
+        $ref: '#/components/messages/DomainEvent'
+  quote.expired:
+    address: quote.expired
+    messages:
+      quote_expired:
+        $ref: '#/components/messages/DomainEvent'
+  recommendation.impression:
+    address: recommendation.impression
+    messages:
+      recommendation_impression:
+        $ref: '#/components/messages/DomainEvent'
+  reservation.cancellation_requested:
+    address: reservation.cancellation_requested
+    messages:
+      reservation_cancellation_requested:
+        $ref: '#/components/messages/DomainEvent'
+  reservation.cancelled:
+    address: reservation.cancelled
+    messages:
+      reservation_cancelled:
+        $ref: '#/components/messages/DomainEvent'
+  reservation.completed:
+    address: reservation.completed
+    messages:
+      reservation_completed:
+        $ref: '#/components/messages/DomainEvent'
+  reservation.confirmed:
+    address: reservation.confirmed
+    messages:
+      reservation_confirmed:
+        $ref: '#/components/messages/DomainEvent'
+  reservation.held:
+    address: reservation.held
+    messages:
+      reservation_held:
+        $ref: '#/components/messages/DomainEvent'
+  reservation.hold_expired:
+    address: reservation.hold_expired
+    messages:
+      reservation_hold_expired:
+        $ref: '#/components/messages/DomainEvent'
+  reservation.no_show:
+    address: reservation.no_show
+    messages:
+      reservation_no_show:
+        $ref: '#/components/messages/DomainEvent'
+  review.created:
+    address: review.created
+    messages:
+      review_created:
+        $ref: '#/components/messages/DomainEvent'
+  review.moderated:
+    address: review.moderated
+    messages:
+      review_moderated:
+        $ref: '#/components/messages/DomainEvent'
+  risk.detected:
+    address: risk.detected
+    messages:
+      risk_detected:
+        $ref: '#/components/messages/DomainEvent'
+  role.granted:
+    address: role.granted
+    messages:
+      role_granted:
+        $ref: '#/components/messages/DomainEvent'
+  role.revoked:
+    address: role.revoked
+    messages:
+      role_revoked:
+        $ref: '#/components/messages/DomainEvent'
+  sanction.applied:
+    address: sanction.applied
+    messages:
+      sanction_applied:
+        $ref: '#/components/messages/DomainEvent'
+  search.projection.updated:
+    address: search.projection.updated
+    messages:
+      search_projection_updated:
+        $ref: '#/components/messages/DomainEvent'
+  search.reindex.requested:
+    address: search.reindex.requested
+    messages:
+      search_reindex_requested:
+        $ref: '#/components/messages/DomainEvent'
+  security.incident:
+    address: security.incident
+    messages:
+      security_incident:
+        $ref: '#/components/messages/DomainEvent'
+  settlement.ready:
+    address: settlement.ready
+    messages:
+      settlement_ready:
+        $ref: '#/components/messages/DomainEvent'
+  support.case.opened:
+    address: support.case.opened
+    messages:
+      support_case_opened:
+        $ref: '#/components/messages/DomainEvent'
+  travel.inventory.changed:
+    address: travel.inventory.changed
+    messages:
+      travel_inventory_changed:
+        $ref: '#/components/messages/DomainEvent'
+  travel.product.published:
+    address: travel.product.published
+    messages:
+      travel_product_published:
+        $ref: '#/components/messages/DomainEvent'
+  verification.approved:
+    address: verification.approved
+    messages:
+      verification_approved:
+        $ref: '#/components/messages/DomainEvent'
+  verification.rejected:
+    address: verification.rejected
+    messages:
+      verification_rejected:
+        $ref: '#/components/messages/DomainEvent'
+  verification.submitted:
+    address: verification.submitted
+    messages:
+      verification_submitted:
+        $ref: '#/components/messages/DomainEvent'
+components:
+  messages:
+    DomainEvent:
+      payload:
+        type: object
+        required:
+        - eventId
+        - eventType
+        - version
+        - occurredAt
+        - aggregateId
+        - correlationId
+        properties:
+          eventId:
+            type: string
+            format: uuid
+          eventType:
+            type: string
+          version:
+            type: integer
+          occurredAt:
+            type: string
+            format: date-time
+          aggregateId:
+            type: string
+          correlationId:
+            type: string
+          causationId:
+            type: string
+          data:
+            type: object
+            additionalProperties: true

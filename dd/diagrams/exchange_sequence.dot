@@ -1,0 +1,3 @@
+digraph G { graph [rankdir=LR, bgcolor="white", pad=0.2]; node [shape=box, style="rounded,filled", fillcolor="#F7F9FA", color="#355A6B", fontname="NanumSquare", fontsize=9]; edge [fontname="NanumSquare", fontsize=8, color="#6F8088"];
+A[label="User A"]; E[label="Exchange Service"]; B[label="User B"]; V[label="Verification\nCompliance"]; C[label="Shared Calendar"]; O[label="Outbox/Events"];
+A->E[label="request home/date"]; E->B[label="notify"]; B->E[label="counter v2"]; E->A[label="show v2"]; A->E[label="accept v2"]; E->V[label="verify both sides"]; V->E[label="approved"]; E->A[label="terms_version"]; E->B[label="same terms_version"]; A->E[label="accept"]; B->E[label="accept"]; E->C[label="atomic block A + B"]; C->E[label="success"]; E->O[label="exchange.confirmed"]; }

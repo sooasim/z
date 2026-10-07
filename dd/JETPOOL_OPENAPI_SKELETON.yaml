@@ -1,0 +1,1627 @@
+openapi: 3.1.0
+info:
+  title: JETPOOL API Seed
+  version: 2.0.0
+  description: Contract seed generated from the v2 module blueprint. Payload schemas must be completed before code generation.
+servers:
+- url: https://api.staging.jetpool.example
+  description: staging
+security:
+- bearerAuth: []
+paths:
+  /v1/auth/{wildcard}:
+    get:
+      operationId: core_01_get_63748
+      summary: Identity & Authentication
+      tags:
+      - CORE-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/me:
+    get:
+      operationId: core_01_get_74512
+      summary: Identity & Authentication
+      tags:
+      - CORE-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/me/roles:
+    get:
+      operationId: core_03_get_41001
+      summary: Roles, Entitlements & Policy
+      tags:
+      - CORE-03
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/admin/users/{id}/roles:
+    get:
+      operationId: core_03_get_89109
+      summary: Roles, Entitlements & Policy
+      tags:
+      - CORE-03
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/consents:
+    get:
+      operationId: core_04_get_64729
+      summary: Consent & Privacy Lifecycle
+      tags:
+      - CORE-04
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/privacy/export:
+    get:
+      operationId: core_04_get_99219
+      summary: Consent & Privacy Lifecycle
+      tags:
+      - CORE-04
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/privacy/delete:
+    get:
+      operationId: core_04_get_70593
+      summary: Consent & Privacy Lifecycle
+      tags:
+      - CORE-04
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/verifications/{wildcard}:
+    get:
+      operationId: trust_01_get_68990
+      summary: Identity / Business Verification
+      tags:
+      - TRUST-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/admin/verifications/{wildcard}:
+    get:
+      operationId: trust_01_get_95048
+      summary: Identity / Business Verification
+      tags:
+      - TRUST-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/reviews:
+    get:
+      operationId: trust_02_get_67363
+      summary: Reviews & Reputation
+      tags:
+      - TRUST-02
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/reviews/{id}/report:
+    get:
+      operationId: trust_02_get_5842
+      summary: Reviews & Reputation
+      tags:
+      - TRUST-02
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/disputes:
+    get:
+      operationId: trust_03_get_43725
+      summary: Safety, Reports & Disputes
+      tags:
+      - TRUST-03
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/admin/disputes/{wildcard}:
+    get:
+      operationId: trust_03_get_44180
+      summary: Safety, Reports & Disputes
+      tags:
+      - TRUST-03
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/host-applications:
+    get:
+      operationId: host_01_get_40706
+      summary: Host Onboarding
+      tags:
+      - HOST-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/hosts/{id}:
+    get:
+      operationId: host_01_get_62356
+      summary: Host Onboarding
+      tags:
+      - HOST-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/properties:
+    get:
+      operationId: stay_01_get_5929
+      summary: Property / Listing Management
+      tags:
+      - STAY-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/properties/{id}/publish:
+    get:
+      operationId: stay_01_get_30194
+      summary: Property / Listing Management
+      tags:
+      - STAY-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/media/upload-url:
+    get:
+      operationId: stay_02_get_41740
+      summary: Media Pipeline
+      tags:
+      - STAY-02
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/media/{id}/complete:
+    get:
+      operationId: stay_02_get_78445
+      summary: Media Pipeline
+      tags:
+      - STAY-02
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/properties/{id}/permits:
+    get:
+      operationId: stay_03_get_40903
+      summary: Accommodation Compliance Gate
+      tags:
+      - STAY-03
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/compliance/evaluate:
+    get:
+      operationId: stay_03_get_28843
+      summary: Accommodation Compliance Gate
+      tags:
+      - STAY-03
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/search/properties:
+    get:
+      operationId: stay_04_get_70942
+      summary: Stay Search & Discovery
+      tags:
+      - STAY-04
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/favorites:
+    get:
+      operationId: stay_05_get_90445
+      summary: Favorites & Collections
+      tags:
+      - STAY-05
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/collections:
+    get:
+      operationId: stay_05_get_60883
+      summary: Favorites & Collections
+      tags:
+      - STAY-05
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/properties/{id}/calendar:
+    get:
+      operationId: stay_06_get_63472
+      summary: Availability & Calendar
+      tags:
+      - STAY-06
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/properties/{id}/availability:
+    get:
+      operationId: stay_06_get_79474
+      summary: Availability & Calendar
+      tags:
+      - STAY-06
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/booking/quotes:
+    post:
+      operationId: stay_07_post_51374
+      summary: Pricing & Quote
+      tags:
+      - STAY-07
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/booking/holds:
+    post:
+      operationId: stay_08_create
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+    delete:
+      operationId: stay_08_delete
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+  /v1/reservations:
+    get:
+      operationId: stay_09_get_26161
+      summary: Reservation FSM
+      tags:
+      - STAY-09
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/reservations/{id}/cancel:
+    get:
+      operationId: stay_10_get_53911
+      summary: Cancellation / No-show / Check-in
+      tags:
+      - STAY-10
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /check-in:
+    get:
+      operationId: stay_09_get_19879
+      summary: Reservation FSM
+      tags:
+      - STAY-09
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /complete:
+    get:
+      operationId: guide_05_get_41958
+      summary: Guide Booking FSM
+      tags:
+      - GUIDE-05
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/reservations/{id}/check-in:
+    get:
+      operationId: stay_10_get_3593
+      summary: Cancellation / No-show / Check-in
+      tags:
+      - STAY-10
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/exchange/eligibility:
+    get:
+      operationId: exch_01_get_64464
+      summary: Exchange Eligibility
+      tags:
+      - EXCH-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/exchanges:
+    get:
+      operationId: exch_02_get_93632
+      summary: Exchange Request & Counter
+      tags:
+      - EXCH-02
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/exchanges/{id}/counter:
+    get:
+      operationId: exch_02_get_63818
+      summary: Exchange Request & Counter
+      tags:
+      - EXCH-02
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /accept:
+    get:
+      operationId: exch_02_get_6189
+      summary: Exchange Request & Counter
+      tags:
+      - EXCH-02
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/exchanges/{id}/verify:
+    get:
+      operationId: exch_03_get_61689
+      summary: Exchange Verification Gate
+      tags:
+      - EXCH-03
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/exchanges/{id}/agreement:
+    get:
+      operationId: exch_04_get_38802
+      summary: Exchange Agreement & E-consent
+      tags:
+      - EXCH-04
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/exchanges/{id}/confirm:
+    get:
+      operationId: exch_04_get_6275
+      summary: Exchange Agreement & E-consent
+      tags:
+      - EXCH-04
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/exchanges/{id}/complete:
+    get:
+      operationId: exch_06_get_95154
+      summary: Exchange Completion & Review
+      tags:
+      - EXCH-06
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/guides/profile:
+    get:
+      operationId: guide_01_get_20569
+      summary: Guide Profile & Type
+      tags:
+      - GUIDE-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/guides/{id}:
+    get:
+      operationId: guide_01_get_1127
+      summary: Guide Profile & Type
+      tags:
+      - GUIDE-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/guides/{id}/availability:
+    get:
+      operationId: guide_02_get_78363
+      summary: Guide Availability
+      tags:
+      - GUIDE-02
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/search/guides:
+    get:
+      operationId: guide_03_get_81078
+      summary: Guide Search & Matching
+      tags:
+      - GUIDE-03
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/guide-requests:
+    get:
+      operationId: guide_04_get_94214
+      summary: Guide Request & Offer
+      tags:
+      - GUIDE-04
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/guide-requests/{id}/offers:
+    get:
+      operationId: guide_04_get_89844
+      summary: Guide Request & Offer
+      tags:
+      - GUIDE-04
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/guide-bookings:
+    get:
+      operationId: guide_05_get_23139
+      summary: Guide Booking FSM
+      tags:
+      - GUIDE-05
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /cancel:
+    get:
+      operationId: guide_05_get_64737
+      summary: Guide Booking FSM
+      tags:
+      - GUIDE-05
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/travel-products:
+    get:
+      operationId: travel_01_get_97456
+      summary: Travel Catalog & Supplier
+      tags:
+      - TRAVEL-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/admin/travel-products:
+    get:
+      operationId: travel_01_get_33100
+      summary: Travel Catalog & Supplier
+      tags:
+      - TRAVEL-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/travel-products/{id}/departures:
+    get:
+      operationId: travel_02_get_69115
+      summary: Departure / Inventory
+      tags:
+      - TRAVEL-02
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/itineraries:
+    get:
+      operationId: travel_03_get_14665
+      summary: Itinerary Builder
+      tags:
+      - TRAVEL-03
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/orders:
+    get:
+      operationId: travel_04_get_66365
+      summary: Commerce Order / Cart
+      tags:
+      - TRAVEL-04
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/orders/{id}:
+    get:
+      operationId: travel_04_get_93848
+      summary: Commerce Order / Cart
+      tags:
+      - TRAVEL-04
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/charter/requests:
+    get:
+      operationId: jet_01_get_47798
+      summary: Legacy Charter / Flight Share Scope Gate
+      tags:
+      - JET-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/content/charter:
+    get:
+      operationId: jet_01_get_47853
+      summary: Legacy Charter / Flight Share Scope Gate
+      tags:
+      - JET-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/payments/toss/prepare:
+    get:
+      operationId: pay_01_get_22087
+      summary: Payment Orchestrator
+      tags:
+      - PAY-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /confirm:
+    get:
+      operationId: pay_01_get_76025
+      summary: Payment Orchestrator
+      tags:
+      - PAY-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/webhooks/toss:
+    get:
+      operationId: pay_01_get_99144
+      summary: Payment Orchestrator
+      tags:
+      - PAY-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/payments/{id}/refunds:
+    get:
+      operationId: pay_02_get_74957
+      summary: Refund Orchestrator
+      tags:
+      - PAY-02
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/provider/settlements:
+    get:
+      operationId: fin_02_get_79672
+      summary: Settlement & Payout
+      tags:
+      - FIN-02
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/admin/settlements/{id}/approve:
+    get:
+      operationId: fin_02_get_65626
+      summary: Settlement & Payout
+      tags:
+      - FIN-02
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/finance/rules:
+    get:
+      operationId: fin_03_get_43297
+      summary: Fee / Tax / Evidence Rule Engine
+      tags:
+      - FIN-03
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/receipts:
+    get:
+      operationId: fin_03_get_31271
+      summary: Fee / Tax / Evidence Rule Engine
+      tags:
+      - FIN-03
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/conversations:
+    get:
+      operationId: comms_01_get_77459
+      summary: P2P Messaging
+      tags:
+      - COMMS-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/conversations/{id}/messages:
+    get:
+      operationId: comms_01_get_44858
+      summary: P2P Messaging
+      tags:
+      - COMMS-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/notifications:
+    get:
+      operationId: comms_02_get_43984
+      summary: Notification Orchestration
+      tags:
+      - COMMS-02
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/notification-preferences:
+    get:
+      operationId: comms_02_get_39352
+      summary: Notification Orchestration
+      tags:
+      - COMMS-02
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/support/cases:
+    get:
+      operationId: ops_01_get_66230
+      summary: Customer Support / Case Desk
+      tags:
+      - OPS-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/admin/{wildcard}:
+    get:
+      operationId: ops_02_get_63334
+      summary: Admin / Backoffice
+      tags:
+      - OPS-02
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/seo/redirects:
+    get:
+      operationId: ops_03_get_90555
+      summary: CMS, Content & SEO
+      tags:
+      - OPS-03
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/admin/analytics/{wildcard}:
+    get:
+      operationId: ops_04_get_58479
+      summary: Analytics & Audit
+      tags:
+      - OPS-04
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/admin/audit-logs:
+    get:
+      operationId: ops_04_get_55376
+      summary: Analytics & Audit
+      tags:
+      - OPS-04
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/geo/geocode:
+    get:
+      operationId: plat_02_get_89234
+      summary: Map / Geo Adapter
+      tags:
+      - PLAT-02
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/geo/reverse:
+    get:
+      operationId: plat_02_get_44834
+      summary: Map / Geo Adapter
+      tags:
+      - PLAT-02
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /health:
+    get:
+      operationId: plat_04_get_40348
+      summary: Observability / SRE
+      tags:
+      - PLAT-04
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /ready:
+    get:
+      operationId: plat_04_get_18622
+      summary: Observability / SRE
+      tags:
+      - PLAT-04
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /metrics:
+    get:
+      operationId: plat_04_get_80134
+      summary: Observability / SRE
+      tags:
+      - PLAT-04
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/admin/feature-flags:
+    get:
+      operationId: plat_06_get_48003
+      summary: Configuration & Feature Flags
+      tags:
+      - PLAT-06
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/ai/travel-assistant:
+    get:
+      operationId: ai_01_get_39901
+      summary: AI Travel Assistant
+      tags:
+      - AI-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/recommendations:
+    get:
+      operationId: ai_02_get_86941
+      summary: Recommendation & Personalization
+      tags:
+      - AI-02
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+  /v1/integrations/{wildcard}:
+    get:
+      operationId: int_01_get_70998
+      summary: PMS / Supplier Integrations
+      tags:
+      - INT-01
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+        '500':
+          description: Server error
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Money:
+      type: object
+      required:
+      - currency
+      - amount
+      properties:
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        amount:
+          type: integer
+          description: Minor currency unit
+    Problem:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        correlationId:
+          type: string

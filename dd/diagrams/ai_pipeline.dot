@@ -1,0 +1,3 @@
+digraph G { graph [rankdir=LR, bgcolor="white", pad=0.2]; node [shape=box, style="rounded,filled", fillcolor="#F7F9FA", color="#355A6B", fontname="NanumSquare", fontsize=9]; edge [color="#71838C", fontname="NanumSquare", fontsize=8];
+BR[label="Business\nRequirements"]; ADR[label="ADR + Domain Specs"]; C[label="OpenAPI + AsyncAPI\nJSON Schemas"]; DB[label="DB Migrations"]; GEN[label="Generated Types\nClients/Skeletons"]; AI[label="AI Implementation\nper AGENTS.md"]; T[label="Generated + Human Tests"]; CI[label="CI Gates"]; ST[label="Auto Staging Deploy"]; AP[label="Manual Prod Approval", fillcolor="#FFF4DC"]; PR[label="Canary → Smoke → Rollout"];
+BR->ADR->C->DB->GEN->AI->T->CI->ST->AP->PR; }

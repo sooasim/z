@@ -1,0 +1,28 @@
+﻿Area,Route,Screen,Primary actor,Required contents
+Public,/,Unified discovery home,guest/user,"Search entry, stay/exchange/guide/travel rails, legacy WONT brand content"
+Public,/stay,Stay search,guest/user,"Map/list toggle, dates, guests, price/amenities, compliance badges"
+Public,/stay/{slug},Stay detail,guest/user,"Media, availability, quote CTA, house rules, reviews, host trust"
+Public,/exchange,Home Exchange discovery,user,"Exchange-enabled homes, dates, mutual fit, safety explanation"
+Public,/guide-friends,Guide Friend discovery,guest/user,FRIEND/VOLUNTEER/PAID/PROFESSIONAL filters and availability
+Public,/travel,Tours/tickets/packages,guest/user,"Catalog, departure dates, supplier role, cancellation terms"
+Public,/jetpool-charter,Legacy charter/flight share,guest/user,Content + request/lead; direct booking off by default
+Auth,/login /signup,Authentication,guest,"Email/social login, recovery, account linking"
+Traveler,/trips,Traveler dashboard,user,"Reservations, exchanges, guide bookings, travel orders"
+Traveler,/messages,Messaging,user,"Context conversations, unread state, report action"
+Traveler,/payments,Payments/refunds,user,"Receipts, payment status, refund status"
+Host,/host/onboarding,Host onboarding,host candidate,Verification and compliance checklist
+Host,/host/listings,Listing management,host,"Draft/publish, media, rules, permits"
+Host,/host/calendar,Calendar,host,"Paid stay, exchange and host block overlay"
+Host,/host/reservations,Reservation operations,host,Upcoming/current/completed/cancelled reservations
+Host,/earnings,Earnings,host/guide/supplier,Ledger-derived settlement statements
+Guide,/guide/onboarding,Guide onboarding,guide candidate,"Type, profile, verification, paid/pro gate"
+Guide,/guide/calendar,Guide schedule,guide,Availability and booking blocks
+Guide,/guide/requests,Requests/offers,guide,"Accept/counter/decline, paid/free distinction"
+Supplier,/supplier/products,Travel supplier extranet,supplier,"Products, departures, inventory, orders"
+Admin,/admin,Ops overview,admin,"GMV, incidents, queues, compliance backlog"
+Admin,/admin/compliance,Compliance workbench,admin,Property/guide/supplier verification
+Admin,/admin/disputes,Dispute workbench,admin/support,Case/evidence/timeline/elevated message access
+Admin,/admin/payments,Payment/refund ops,admin/accounting,"Reconciliation, refund controls"
+Admin,/admin/settlements,Settlement ops,accounting,Approval/payout/reconciliation
+Admin,/admin/cms,Content/SEO,admin/editor,Destination/story/FAQ/promotion/redirects
+Admin,/admin/audit,Audit logs,admin/accounting,"Money, permission, compliance and elevated access logs"

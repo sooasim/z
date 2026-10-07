@@ -1,0 +1,67 @@
+release_gates:
+- id: G0
+  name: Spec integrity
+  criteria:
+  - All P0 modules have owner, API, data, event, UI and acceptance criteria
+  - No unresolved contract references
+- id: G1
+  name: Contracts
+  criteria:
+  - OpenAPI/AsyncAPI lint pass
+  - Generated client/types compile
+  - Breaking changes explicitly versioned
+- id: G2
+  name: Data
+  criteria:
+  - Migrations up/down or forward-fix tested
+  - Constraints/invariants enabled
+  - Seed data deterministic
+- id: G3
+  name: Domain
+  criteria:
+  - Unit/property/integration tests pass
+  - State transition negative tests pass
+  - Idempotency tests pass
+- id: G4
+  name: End-to-end
+  criteria:
+  - Stay paid flow passes
+  - Exchange bilateral flow passes
+  - Guide free/paid flow passes
+  - Travel order flow passes where enabled
+- id: G5
+  name: Security
+  criteria:
+  - SAST/SCA/secret scan pass
+  - Permission-negative tests pass
+  - AAL2 gates pass
+  - No PAN/CVC storage
+- id: G6
+  name: Performance
+  criteria:
+  - Search/read/write SLO targets meet load-test plan
+  - No oversell under concurrency test
+- id: G7
+  name: Migration
+  criteria:
+  - Dry-run reconciliation approved
+  - 301 URL map approved
+  - Consent/password migration strategy approved
+- id: G8
+  name: DR & Ops
+  criteria:
+  - Restore drill successful
+  - Runbooks and alert routes tested
+  - Payment reconciliation tested
+- id: G9
+  name: Legal/Business approval
+  criteria:
+  - Accommodation/guide/travel/charter gates signed off
+  - Merchant-of-record and settlement policy approved
+  - Terms/privacy/refund policies published
+- id: G10
+  name: Production approval
+  criteria:
+  - Immutable release artifact
+  - GitHub Environment manual approval
+  - Canary + smoke + rollback readiness

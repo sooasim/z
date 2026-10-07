@@ -1,0 +1,1183 @@
+meta:
+  name: JETPOOL Commercial Platform
+  version: '2.0'
+  generated: '2026-10-08'
+  source: Uploaded v1 technical whitepaper
+  production_rule: AI may generate and deploy to staging automatically; production requires explicit environment approval.
+architecture:
+  source_of_truth: PostgreSQL
+  non_authoritative:
+  - Meilisearch
+  - Redis
+  - Realtime delivery
+  - AI recommendations
+  repos:
+    jetpool-web: Customer Web/PWA; public marketplace; traveler/host/guide self-service UI
+    jetpool-api: BFF/common APIs; identity; profile; listing; travel commerce; orchestration
+    jetpool-booking: Availability, quote, hold, reservation, cancellation and inventory concurrency
+    jetpool-exchange: Home Exchange request, counter, verification, agreement and calendar locking
+    jetpool-guide: Guide Friend profile, availability, matching, offers and bookings
+    jetpool-admin: Admin/backoffice, compliance, disputes, accounting, CMS integration
+    jetpool-contracts: OpenAPI, AsyncAPI, JSON Schema, enums, generated clients/types
+    jetpool-infra: Terraform, CI/CD, environment bootstrap, observability, runbooks, one-click orchestrator
+  cross_domain_invariants:
+  - Paid Stay, Home Exchange and Guide Friend retain independent state machines.
+  - Search results never finalize availability; checkout must revalidate authoritative inventory.
+  - Client-side payment success never confirms a reservation/order.
+  - All external callbacks are idempotent and replay-safe.
+  - Double-entry ledger entries are immutable; corrections are compensating entries.
+  - Paid accommodation publication is blocked by jurisdiction/compliance predicates.
+  - Admin access to private messages requires a case reason and audited elevation.
+  - Tax rates and legal classifications are configurable policy, not universal hard-coded constants.
+environments:
+- dev
+- staging
+- prod
+modules:
+- id: CORE-01
+  name: Identity & Authentication
+  priority: P0
+  repo: jetpool-api
+  responsibility: Email/password/OTP/social login, account linking, session management, MFA policy and recovery.
+  owned_or_primary_tables:
+  - users
+  - oauth_identities
+  - mfa_factors
+  - sessions
+  api_or_interfaces:
+  - /v1/auth/*
+  - /v1/me
+  events:
+  - identity.user.created
+  - identity.mfa.changed
+  depends_on: []
+  ui_routes:
+  - /login
+  - /signup
+  - /account/security
+  acceptance: OAuth login, logout, account-linking and AAL2-gated admin actions pass positive/negative tests.
+- id: CORE-02
+  name: Profile, Locale & Preferences
+  priority: P0
+  repo: jetpool-api
+  responsibility: Canonical profile, names, phone, locale, timezone, accessibility and travel preferences.
+  owned_or_primary_tables:
+  - user_profiles
+  - user_preferences
+  api_or_interfaces:
+  - GET/PATCH /v1/me/profile
+  - GET/PATCH /v1/me/preferences
+  events:
+  - profile.updated
+  depends_on:
+  - CORE-01
+  ui_routes:
+  - /account/profile
+  - /account/preferences
+  acceptance: Profile updates are audited, validated and reflected across customer/host/guide views.
+- id: CORE-03
+  name: Roles, Entitlements & Policy
+  priority: P0
+  repo: jetpool-api
+  responsibility: RBAC plus scoped entitlements for USER/HOST/GUIDE/SUPPLIER/ADMIN/ACCOUNTING/SUPPORT.
+  owned_or_primary_tables:
+  - user_roles
+  - role_grants
+  - policy_overrides
+  api_or_interfaces:
+  - /v1/me/roles
+  - /v1/admin/users/{id}/roles
+  events:
+  - role.granted
+  - role.revoked
+  depends_on:
+  - CORE-01
+  ui_routes:
+  - /admin/access
+  acceptance: Server-side authorization denies every unauthorized API regardless of UI visibility.
+- id: CORE-04
+  name: Consent & Privacy Lifecycle
+  priority: P0
+  repo: jetpool-api
+  responsibility: Terms/privacy/marketing consent versioning, retention, export, deletion and restricted processing.
+  owned_or_primary_tables:
+  - consent_records
+  - privacy_requests
+  - retention_jobs
+  api_or_interfaces:
+  - /v1/consents
+  - /v1/privacy/export
+  - /v1/privacy/delete
+  events:
+  - consent.recorded
+  - privacy.requested
+  - privacy.completed
+  depends_on:
+  - CORE-01
+  ui_routes:
+  - /account/privacy
+  acceptance: Consent evidence is versioned; deletion/export workflows are reproducible and auditable.
+- id: TRUST-01
+  name: Identity / Business Verification
+  priority: P0
+  repo: jetpool-admin
+  responsibility: User identity, host/guide/supplier business and payout-account verification state.
+  owned_or_primary_tables:
+  - verification_cases
+  - verification_documents
+  - business_profiles
+  api_or_interfaces:
+  - /v1/verifications/*
+  - /v1/admin/verifications/*
+  events:
+  - verification.submitted
+  - verification.approved
+  - verification.rejected
+  depends_on:
+  - CORE-01
+  ui_routes:
+  - /verification
+  - /admin/verifications
+  acceptance: Restricted actions remain blocked until required verification predicates are true.
+- id: TRUST-02
+  name: Reviews & Reputation
+  priority: P0
+  repo: jetpool-api
+  responsibility: Transaction-bound reviews, bilateral exchange reviews, guide reviews, host responses, moderation.
+  owned_or_primary_tables:
+  - reviews
+  - review_responses
+  - reputation_scores
+  api_or_interfaces:
+  - /v1/reviews
+  - /v1/reviews/{id}/report
+  events:
+  - review.created
+  - review.moderated
+  depends_on:
+  - CORE-01
+  ui_routes:
+  - /reviews
+  - /account/reviews
+  acceptance: Only eligible completed transactions can create one review per review target/policy window.
+- id: TRUST-03
+  name: Safety, Reports & Disputes
+  priority: P0
+  repo: jetpool-admin
+  responsibility: Safety reports, evidence, disputes, case ownership, escalation, sanctions and audited access.
+  owned_or_primary_tables:
+  - disputes
+  - dispute_evidence
+  - safety_reports
+  - sanctions
+  api_or_interfaces:
+  - /v1/disputes
+  - /v1/admin/disputes/*
+  events:
+  - dispute.opened
+  - dispute.resolved
+  - sanction.applied
+  depends_on:
+  - CORE-03
+  ui_routes:
+  - /support/disputes
+  - /admin/disputes
+  acceptance: Cases retain immutable evidence hashes and sensitive message access requires audited elevation.
+- id: HOST-01
+  name: Host Onboarding
+  priority: P0
+  repo: jetpool-api
+  responsibility: Host application, verification checklist, payout profile reference and host status.
+  owned_or_primary_tables:
+  - host_profiles
+  - host_applications
+  api_or_interfaces:
+  - /v1/host-applications
+  - /v1/hosts/{id}
+  events:
+  - host.applied
+  - host.approved
+  depends_on:
+  - CORE-01
+  - TRUST-01
+  ui_routes:
+  - /host/onboarding
+  - /host/dashboard
+  acceptance: Host cannot publish paid inventory until role, verification and compliance predicates are satisfied.
+- id: STAY-01
+  name: Property / Listing Management
+  priority: P0
+  repo: jetpool-api
+  responsibility: Property draft, address, geo, occupancy, amenities, house rules, rental/exchange switches and lifecycle.
+  owned_or_primary_tables:
+  - properties
+  - property_addresses
+  - property_amenities
+  - house_rules
+  api_or_interfaces:
+  - /v1/properties
+  - /v1/properties/{id}/publish
+  events:
+  - property.created
+  - property.updated
+  - property.published
+  depends_on:
+  - HOST-01
+  ui_routes:
+  - /host/listings
+  - /stay/{slug}
+  acceptance: Draft-to-publish flow validates required content and compliance gate before public visibility.
+- id: STAY-02
+  name: Media Pipeline
+  priority: P0
+  repo: jetpool-api
+  responsibility: Presigned uploads, private staging, image/video metadata, transformation/moderation and CDN publication.
+  owned_or_primary_tables:
+  - media_assets
+  - property_media
+  api_or_interfaces:
+  - /v1/media/upload-url
+  - /v1/media/{id}/complete
+  events:
+  - media.uploaded
+  - media.ready
+  depends_on:
+  - CORE-01
+  ui_routes:
+  - /host/listings/{id}/media
+  acceptance: MIME/size/ownership validation and private-to-public promotion occur only after successful processing.
+- id: STAY-03
+  name: Accommodation Compliance Gate
+  priority: P0
+  repo: jetpool-admin
+  responsibility: Permit types, jurisdiction rules, guest eligibility, expiry and publish/booking block decisions.
+  owned_or_primary_tables:
+  - property_permits
+  - compliance_rules
+  - compliance_decisions
+  api_or_interfaces:
+  - /v1/properties/{id}/permits
+  - /v1/compliance/evaluate
+  events:
+  - compliance.verified
+  - compliance.expired
+  - listing.blocked
+  depends_on:
+  - STAY-01
+  - TRUST-01
+  ui_routes:
+  - /host/listings/{id}/compliance
+  - /admin/compliance
+  acceptance: Paid booking cannot be enabled when required permit/eligibility checks are missing, expired or rejected.
+- id: STAY-04
+  name: Stay Search & Discovery
+  priority: P0
+  repo: jetpool-api
+  responsibility: Text/geo/facet search projection, ranking, filters, map viewport and date-aware candidate retrieval.
+  owned_or_primary_tables:
+  - search_sync_state
+  api_or_interfaces:
+  - /v1/search/properties
+  events:
+  - search.reindex.requested
+  depends_on:
+  - STAY-01
+  - STAY-06
+  ui_routes:
+  - /stay
+  - /map
+  acceptance: Search produces candidates but checkout revalidates authoritative availability in booking DB.
+- id: STAY-05
+  name: Favorites & Collections
+  priority: P1
+  repo: jetpool-api
+  responsibility: Saved properties, guides, trips and shareable collections.
+  owned_or_primary_tables:
+  - favorites
+  - collections
+  - collection_items
+  api_or_interfaces:
+  - /v1/favorites
+  - /v1/collections
+  events:
+  - favorite.added
+  depends_on:
+  - CORE-01
+  ui_routes:
+  - /saved
+  acceptance: Idempotent add/remove and privacy controls work across web/mobile PWA sessions.
+- id: STAY-06
+  name: Availability & Calendar
+  priority: P0
+  repo: jetpool-booking
+  responsibility: Authoritative availability rules, host blocks, rate overrides, min stay and calendar projection.
+  owned_or_primary_tables:
+  - availability_days
+  - inventory_blocks
+  api_or_interfaces:
+  - /v1/properties/{id}/calendar
+  - /v1/properties/{id}/availability
+  events:
+  - availability.changed
+  depends_on:
+  - STAY-01
+  ui_routes:
+  - /host/calendar
+  - /stay/{slug}/calendar
+  acceptance: Calendar reads and writes preserve no-overlap invariant across paid stay/exchange/host blocks.
+- id: STAY-07
+  name: Pricing & Quote
+  priority: P0
+  repo: jetpool-booking
+  responsibility: Nightly/base price, fees, taxes as rules, promotions, quote expiry and price breakdown.
+  owned_or_primary_tables:
+  - rate_rules
+  - fee_rules
+  - booking_quotes
+  api_or_interfaces:
+  - POST /v1/booking/quotes
+  events:
+  - quote.created
+  - quote.expired
+  depends_on:
+  - STAY-06
+  - FIN-03
+  ui_routes:
+  - /stay/{slug}/checkout
+  acceptance: Quote is deterministic, currency-safe, itemized, time-bounded and immutable after booking confirmation.
+- id: STAY-08
+  name: Inventory Hold
+  priority: P0
+  repo: jetpool-booking
+  responsibility: Transactional hold acquisition, TTL expiry, idempotency and collision protection.
+  owned_or_primary_tables:
+  - reservation_holds
+  - inventory_blocks
+  - idempotency_keys
+  api_or_interfaces:
+  - POST/DELETE /v1/booking/holds
+  events:
+  - reservation.held
+  - reservation.hold_expired
+  depends_on:
+  - STAY-06
+  - STAY-07
+  ui_routes:
+  - checkout internal
+  acceptance: Concurrent hold tests prove capacity cannot be exceeded for overlapping dates.
+- id: STAY-09
+  name: Reservation FSM
+  priority: P0
+  repo: jetpool-booking
+  responsibility: DRAFT→QUOTED→HELD→PAYMENT_PENDING→CONFIRMED→CHECKED_IN→COMPLETED plus failure/cancel/refund branches.
+  owned_or_primary_tables:
+  - reservations
+  - reservation_state_history
+  api_or_interfaces:
+  - /v1/reservations
+  - /v1/reservations/{id}/cancel
+  - /check-in
+  - /complete
+  events:
+  - reservation.confirmed
+  - reservation.cancelled
+  - reservation.completed
+  depends_on:
+  - STAY-08
+  - PAY-01
+  ui_routes:
+  - /trips/{id}
+  - /host/reservations
+  acceptance: Only enumerated transitions are accepted; all transitions store actor, reason and correlation id.
+- id: STAY-10
+  name: Cancellation / No-show / Check-in
+  priority: P0
+  repo: jetpool-booking
+  responsibility: Cancellation policy evaluation, no-show, check-in/out and refund intent generation.
+  owned_or_primary_tables:
+  - cancellation_policies
+  - reservation_adjustments
+  api_or_interfaces:
+  - /v1/reservations/{id}/cancel
+  - /v1/reservations/{id}/check-in
+  events:
+  - reservation.cancellation_requested
+  - reservation.no_show
+  depends_on:
+  - STAY-09
+  - PAY-02
+  ui_routes:
+  - /trips/{id}/manage
+  acceptance: Policy calculation is tested at boundary dates and never mutates historical quote breakdown.
+- id: EXCH-01
+  name: Exchange Eligibility
+  priority: P0
+  repo: jetpool-exchange
+  responsibility: Exchange-enabled property eligibility, household preferences, legal classification and safety prerequisites.
+  owned_or_primary_tables:
+  - exchange_profiles
+  - exchange_eligibility
+  api_or_interfaces:
+  - /v1/exchange/eligibility
+  events:
+  - exchange.eligibility.updated
+  depends_on:
+  - STAY-01
+  - STAY-03
+  - TRUST-01
+  ui_routes:
+  - /exchange/onboarding
+  acceptance: No exchange request can enter agreement stage unless both sides satisfy configured legal/safety policy.
+- id: EXCH-02
+  name: Exchange Request & Counter
+  priority: P0
+  repo: jetpool-exchange
+  responsibility: A↔B request, dates, property pair, terms, counter-offer version chain and withdrawal/decline.
+  owned_or_primary_tables:
+  - exchange_requests
+  - exchange_offers
+  api_or_interfaces:
+  - /v1/exchanges
+  - /v1/exchanges/{id}/counter
+  - /accept
+  events:
+  - exchange.requested
+  - exchange.countered
+  - exchange.mutual_accepted
+  depends_on:
+  - EXCH-01
+  ui_routes:
+  - /exchange
+  - /exchange/{id}
+  acceptance: Both parties see one canonical offer version; stale-version acceptance is rejected.
+- id: EXCH-03
+  name: Exchange Verification Gate
+  priority: P0
+  repo: jetpool-exchange
+  responsibility: Mutual-acceptance verification checklist before contract generation.
+  owned_or_primary_tables:
+  - exchange_verifications
+  api_or_interfaces:
+  - /v1/exchanges/{id}/verify
+  events:
+  - exchange.verification_pending
+  - exchange.verified
+  depends_on:
+  - EXCH-02
+  - TRUST-01
+  ui_routes:
+  - /exchange/{id}/verification
+  acceptance: Agreement generation is impossible until required identity/property checks are approved.
+- id: EXCH-04
+  name: Exchange Agreement & E-consent
+  priority: P0
+  repo: jetpool-exchange
+  responsibility: Versioned terms snapshot, deposit/damage policy, bilateral acceptance timestamps and evidence.
+  owned_or_primary_tables:
+  - exchange_agreements
+  - agreement_acceptances
+  api_or_interfaces:
+  - /v1/exchanges/{id}/agreement
+  - /v1/exchanges/{id}/confirm
+  events:
+  - exchange.agreement.created
+  - exchange.confirmed
+  depends_on:
+  - EXCH-03
+  ui_routes:
+  - /exchange/{id}/agreement
+  acceptance: Both parties accept exactly the same terms_version; acceptance evidence cannot be overwritten.
+- id: EXCH-05
+  name: Exchange Calendar Lock
+  priority: P0
+  repo: jetpool-exchange
+  responsibility: Atomic calendar blocks on both properties and rollback if either block fails.
+  owned_or_primary_tables:
+  - inventory_blocks
+  api_or_interfaces:
+  - internal calendar lock API
+  events:
+  - exchange.calendar_blocked
+  - exchange.cancelled
+  depends_on:
+  - EXCH-04
+  - STAY-06
+  ui_routes:
+  - internal
+  acceptance: Confirmed exchange blocks both homes without colliding with paid reservations or host blocks.
+- id: EXCH-06
+  name: Exchange Completion & Review
+  priority: P0
+  repo: jetpool-exchange
+  responsibility: In-progress/completed/disputed/reviewed lifecycle and bilateral review eligibility.
+  owned_or_primary_tables:
+  - exchange_state_history
+  api_or_interfaces:
+  - /v1/exchanges/{id}/complete
+  events:
+  - exchange.completed
+  - exchange.disputed
+  depends_on:
+  - EXCH-05
+  - TRUST-02
+  - TRUST-03
+  ui_routes:
+  - /exchange/{id}/trip
+  acceptance: Completion unlocks reviews; dispute preserves evidence and blocks premature settlement/deposit release.
+- id: GUIDE-01
+  name: Guide Profile & Type
+  priority: P0
+  repo: jetpool-guide
+  responsibility: FRIEND/VOLUNTEER/PAID/PROFESSIONAL classification, bio, languages, areas, specialties, price and verification.
+  owned_or_primary_tables:
+  - guide_profiles
+  - guide_languages
+  - guide_specialties
+  api_or_interfaces:
+  - /v1/guides/profile
+  - /v1/guides/{id}
+  events:
+  - guide.profile.updated
+  - guide.verified
+  depends_on:
+  - CORE-01
+  - TRUST-01
+  ui_routes:
+  - /guide/onboarding
+  - /guides/{id}
+  acceptance: Paid/professional offerings are blocked until required business/qualification gates are satisfied.
+- id: GUIDE-02
+  name: Guide Availability
+  priority: P0
+  repo: jetpool-guide
+  responsibility: Time windows, timezone-aware schedule, blackout and booking locks.
+  owned_or_primary_tables:
+  - guide_availability
+  - guide_time_blocks
+  api_or_interfaces:
+  - /v1/guides/{id}/availability
+  events:
+  - guide.availability.changed
+  depends_on:
+  - GUIDE-01
+  ui_routes:
+  - /guide/calendar
+  acceptance: Overlapping confirmed guide bookings cannot exceed capacity and timezone conversions are deterministic.
+- id: GUIDE-03
+  name: Guide Search & Matching
+  priority: P0
+  repo: jetpool-guide
+  responsibility: Location, language, interest, type, price, trust, availability and response-time ranking.
+  owned_or_primary_tables:
+  - guide_search_projection
+  api_or_interfaces:
+  - /v1/search/guides
+  events:
+  - guide.search.reindex
+  depends_on:
+  - GUIDE-01
+  - GUIDE-02
+  ui_routes:
+  - /guide-friends
+  acceptance: Result candidates are filtered by eligibility and authoritative availability is rechecked before booking.
+- id: GUIDE-04
+  name: Guide Request & Offer
+  priority: P0
+  repo: jetpool-guide
+  responsibility: Traveler request, guide offer/counter, scope, duration, price or free confirmation.
+  owned_or_primary_tables:
+  - guide_requests
+  - guide_offers
+  api_or_interfaces:
+  - /v1/guide-requests
+  - /v1/guide-requests/{id}/offers
+  events:
+  - guide.requested
+  - guide.offer.created
+  - guide.offer.accepted
+  depends_on:
+  - GUIDE-03
+  ui_routes:
+  - /guide-requests/{id}
+  acceptance: Offer acceptance uses version checks; free and paid paths are explicit and never conflated.
+- id: GUIDE-05
+  name: Guide Booking FSM
+  priority: P0
+  repo: jetpool-guide
+  responsibility: Confirmed activity, payment dependency for paid types, start/complete/cancel/dispute.
+  owned_or_primary_tables:
+  - guide_bookings
+  - guide_booking_history
+  api_or_interfaces:
+  - /v1/guide-bookings
+  - /cancel
+  - /complete
+  events:
+  - guide.booking.confirmed
+  - guide.booking.completed
+  depends_on:
+  - GUIDE-04
+  - PAY-01
+  ui_routes:
+  - /guide-bookings/{id}
+  acceptance: Paid booking confirms only after server-verified payment; free booking confirms with no payment object.
+- id: TRAVEL-01
+  name: Travel Catalog & Supplier
+  priority: P1
+  repo: jetpool-api
+  responsibility: Tours/tickets/activities/packages, supplier profile, options, terms and publish workflow.
+  owned_or_primary_tables:
+  - suppliers
+  - travel_products
+  - travel_product_options
+  api_or_interfaces:
+  - /v1/travel-products
+  - /v1/admin/travel-products
+  events:
+  - travel.product.published
+  depends_on:
+  - TRUST-01
+  ui_routes:
+  - /travel
+  - /supplier/products
+  acceptance: Published product identifies seller/merchant role and has valid supplier/compliance status.
+- id: TRAVEL-02
+  name: Departure / Inventory
+  priority: P1
+  repo: jetpool-api
+  responsibility: Departure dates, capacity, minimum participants, inventory allocations and cutoff rules.
+  owned_or_primary_tables:
+  - travel_departures
+  - travel_inventory
+  api_or_interfaces:
+  - /v1/travel-products/{id}/departures
+  events:
+  - travel.inventory.changed
+  depends_on:
+  - TRAVEL-01
+  ui_routes:
+  - /travel/{id}
+  acceptance: Checkout cannot oversell departure capacity and minimum-participant status is explicit.
+- id: TRAVEL-03
+  name: Itinerary Builder
+  priority: P1
+  repo: jetpool-api
+  responsibility: Day/activity itinerary, map points, attachments and customer-facing schedule.
+  owned_or_primary_tables:
+  - itineraries
+  - itinerary_days
+  - itinerary_activities
+  api_or_interfaces:
+  - /v1/itineraries
+  events:
+  - itinerary.updated
+  depends_on:
+  - TRAVEL-01
+  ui_routes:
+  - /travel/{id}/itinerary
+  - /trip-planner
+  acceptance: Versioned itinerary edits preserve booked-customer snapshot when required.
+- id: TRAVEL-04
+  name: Commerce Order / Cart
+  priority: P1
+  repo: jetpool-api
+  responsibility: Mixed travel-product order, line items, buyer, seller role, totals and cancellation linkage.
+  owned_or_primary_tables:
+  - orders
+  - order_items
+  api_or_interfaces:
+  - /v1/orders
+  - /v1/orders/{id}
+  events:
+  - order.created
+  - order.paid
+  - order.cancelled
+  depends_on:
+  - TRAVEL-02
+  - PAY-01
+  ui_routes:
+  - /checkout
+  - /orders/{id}
+  acceptance: Server recalculates totals; client amount is never authoritative.
+- id: JET-01
+  name: Legacy Charter / Flight Share Scope Gate
+  priority: P1
+  repo: jetpool-api
+  responsibility: Preserve existing JETPOOL charter-sharing brand IA as content/lead/request flow; transactional air-charter
+    booking remains disabled until business/legal scope is approved.
+  owned_or_primary_tables:
+  - charter_requests
+  - charter_content
+  api_or_interfaces:
+  - /v1/charter/requests
+  - /v1/content/charter
+  events:
+  - charter.requested
+  depends_on:
+  - CORE-01
+  - OPS-03
+  ui_routes:
+  - /jetpool-charter
+  acceptance: Existing brand/content is migrated; direct booking/payment flag remains OFF until an explicit release ADR and
+    compliance approval.
+- id: PAY-01
+  name: Payment Orchestrator
+  priority: P0
+  repo: jetpool-api
+  responsibility: PG adapter, prepare/confirm, server-side amount check, webhook reconciliation and payment state.
+  owned_or_primary_tables:
+  - payments
+  - payment_attempts
+  - webhook_events
+  api_or_interfaces:
+  - /v1/payments/toss/prepare
+  - /confirm
+  - /v1/webhooks/toss
+  events:
+  - payment.approved
+  - payment.failed
+  - payment.reconciled
+  depends_on:
+  - CORE-01
+  ui_routes:
+  - checkout embedded
+  acceptance: Success redirect alone never confirms a transaction; server confirmation and idempotent webhook reconciliation
+    do.
+- id: PAY-02
+  name: Refund Orchestrator
+  priority: P0
+  repo: jetpool-api
+  responsibility: Full/partial refund intents, provider execution, retries, reconciliation and audit.
+  owned_or_primary_tables:
+  - refunds
+  api_or_interfaces:
+  - /v1/payments/{id}/refunds
+  events:
+  - payment.refund_requested
+  - payment.refunded
+  depends_on:
+  - PAY-01
+  ui_routes:
+  - /admin/refunds
+  acceptance: Refund amount cannot exceed refundable balance; duplicate provider callbacks are harmless.
+- id: FIN-01
+  name: Double-entry Ledger
+  priority: P0
+  repo: jetpool-admin
+  responsibility: Immutable financial transaction journal for gross, fee, refund, tax adjustment, payable and payout.
+  owned_or_primary_tables:
+  - ledger_accounts
+  - ledger_transactions
+  - ledger_entries
+  api_or_interfaces:
+  - internal finance API
+  events:
+  - ledger.posted
+  depends_on:
+  - PAY-01
+  - PAY-02
+  ui_routes:
+  - /admin/ledger
+  acceptance: Every posted transaction balances debit/credit per currency; corrections are compensating entries, not edits.
+- id: FIN-02
+  name: Settlement & Payout
+  priority: P1
+  repo: jetpool-admin
+  responsibility: Settlement periods, payee statement, approval, payout execution/reconciliation and holds.
+  owned_or_primary_tables:
+  - settlements
+  - payouts
+  - payout_accounts
+  api_or_interfaces:
+  - /v1/provider/settlements
+  - /v1/admin/settlements/{id}/approve
+  events:
+  - settlement.ready
+  - payout.sent
+  - payout.reconciled
+  depends_on:
+  - FIN-01
+  - TRUST-01
+  ui_routes:
+  - /earnings
+  - /admin/settlements
+  acceptance: Settlement net derives from ledger; payout account changes require AAL2 and audit.
+- id: FIN-03
+  name: Fee / Tax / Evidence Rule Engine
+  priority: P1
+  repo: jetpool-admin
+  responsibility: Configurable fee and tax evidence rules by merchant/supplier type; no unverified hard-coded universal tax
+    rate.
+  owned_or_primary_tables:
+  - fee_rules
+  - tax_rules
+  - receipt_records
+  api_or_interfaces:
+  - /v1/finance/rules
+  - /v1/receipts
+  events:
+  - finance.rule.changed
+  depends_on:
+  - CORE-03
+  ui_routes:
+  - /admin/finance/rules
+  acceptance: Rules are effective-dated/versioned and changes do not retroactively mutate historical transactions.
+- id: COMMS-01
+  name: P2P Messaging
+  priority: P0
+  repo: jetpool-api
+  responsibility: Context-bound conversation, message persistence, realtime delivery, attachments, read state and abuse controls.
+  owned_or_primary_tables:
+  - conversations
+  - conversation_members
+  - messages
+  api_or_interfaces:
+  - /v1/conversations
+  - /v1/conversations/{id}/messages
+  events:
+  - message.created
+  - message.reported
+  depends_on:
+  - CORE-01
+  ui_routes:
+  - /messages
+  acceptance: RLS/API policy prevents non-members from reading/subscribing; admin access requires case-based audited elevation.
+- id: COMMS-02
+  name: Notification Orchestration
+  priority: P0
+  repo: jetpool-api
+  responsibility: Email/SMS/push/in-app preferences, templates, retries and event-driven delivery.
+  owned_or_primary_tables:
+  - notifications
+  - notification_preferences
+  - notification_deliveries
+  api_or_interfaces:
+  - /v1/notifications
+  - /v1/notification-preferences
+  events:
+  - notification.requested
+  - notification.delivered
+  depends_on:
+  - PLAT-03
+  ui_routes:
+  - /notifications
+  - /account/notifications
+  acceptance: Critical booking/payment notices ignore marketing opt-out but honor mandatory-channel policy and delivery audit.
+- id: OPS-01
+  name: Customer Support / Case Desk
+  priority: P0
+  repo: jetpool-admin
+  responsibility: Chatwoot-backed support intake linked to user/booking/exchange/dispute context.
+  owned_or_primary_tables:
+  - support_case_links
+  api_or_interfaces:
+  - /v1/support/cases
+  events:
+  - support.case.opened
+  depends_on:
+  - TRUST-03
+  - COMMS-01
+  ui_routes:
+  - /support
+  - /admin/support
+  acceptance: Support agent access is scoped and sensitive data is masked unless elevation is granted.
+- id: OPS-02
+  name: Admin / Backoffice
+  priority: P0
+  repo: jetpool-admin
+  responsibility: Operational console for users, listings, compliance, reservations, exchanges, guides, payments, refunds
+    and settlements.
+  owned_or_primary_tables:
+  - admin_saved_views
+  api_or_interfaces:
+  - /v1/admin/*
+  events:
+  - admin.action.performed
+  depends_on:
+  - CORE-03
+  ui_routes:
+  - /admin/*
+  acceptance: Every money/permission/compliance mutation is AAL2-gated and append-only audited.
+- id: OPS-03
+  name: CMS, Content & SEO
+  priority: P0
+  repo: jetpool-admin
+  responsibility: Destination/story/FAQ/promotion/legacy WONT content, redirects, metadata and structured content.
+  owned_or_primary_tables:
+  - cms_external_refs
+  - seo_redirects
+  api_or_interfaces:
+  - Payload API
+  - /v1/seo/redirects
+  events:
+  - content.published
+  depends_on: []
+  ui_routes:
+  - /discover
+  - /stories
+  - /admin/cms
+  acceptance: Legacy high-value URLs have 301 mappings and content publication is separated from transaction truth.
+- id: OPS-04
+  name: Analytics & Audit
+  priority: P0
+  repo: jetpool-admin
+  responsibility: GMV, conversion, cancellation, search, compliance, disputes, finance dashboards and immutable audit trail.
+  owned_or_primary_tables:
+  - audit_logs
+  - analytics_events
+  api_or_interfaces:
+  - /v1/admin/analytics/*
+  - /v1/admin/audit-logs
+  events:
+  - audit.recorded
+  depends_on:
+  - PLAT-03
+  ui_routes:
+  - /admin/analytics
+  - /admin/audit
+  acceptance: Operational metrics reconcile against source tables; audit logs exclude secrets while retaining actor/resource/effect.
+- id: PLAT-01
+  name: Search Projection Service
+  priority: P0
+  repo: jetpool-api
+  responsibility: Project PostgreSQL entities into Meilisearch; reindex, version, lag monitoring and recovery.
+  owned_or_primary_tables:
+  - search_projection_offsets
+  api_or_interfaces:
+  - internal /search-sync
+  events:
+  - search.projection.updated
+  depends_on:
+  - PLAT-03
+  ui_routes:
+  - internal
+  acceptance: Index can be rebuilt from PostgreSQL and never acts as final authority for sellable availability.
+- id: PLAT-02
+  name: Map / Geo Adapter
+  priority: P0
+  repo: jetpool-api
+  responsibility: MapLibre rendering support, geocoding abstraction, viewport search and provider cost controls.
+  owned_or_primary_tables:
+  - geo_cache
+  api_or_interfaces:
+  - /v1/geo/geocode
+  - /v1/geo/reverse
+  events:
+  - geo.cache.updated
+  depends_on: []
+  ui_routes:
+  - map components
+  acceptance: Provider is replaceable behind adapter; address precision exposure follows privacy policy.
+- id: PLAT-03
+  name: Transactional Outbox & Async Jobs
+  priority: P0
+  repo: jetpool-api
+  responsibility: Outbox in same transaction, durable queue, retries, dead-letter handling, event correlation and schema version.
+  owned_or_primary_tables:
+  - outbox_events
+  - job_runs
+  - dead_letters
+  api_or_interfaces:
+  - internal
+  events:
+  - '* domain events'
+  depends_on: []
+  ui_routes:
+  - internal
+  acceptance: No domain mutation emits only an in-memory event; retries are idempotent and observable.
+- id: PLAT-04
+  name: Observability / SRE
+  priority: P0
+  repo: jetpool-infra
+  responsibility: OpenTelemetry traces, metrics, logs, synthetic checks, SLOs, alerting and incident runbooks.
+  owned_or_primary_tables:
+  - none
+  api_or_interfaces:
+  - /health
+  - /ready
+  - /metrics
+  events:
+  - incident.opened
+  depends_on: []
+  ui_routes:
+  - /admin/ops
+  acceptance: Dashboards cover p95 latency, error rate, queue lag, payment reconciliation lag and booking collision errors.
+- id: PLAT-05
+  name: Security / Risk Controls
+  priority: P0
+  repo: jetpool-infra
+  responsibility: WAF/rate-limit, bot protection, secret management, SAST/SCA/SBOM, DAST, upload scanning and risk flags.
+  owned_or_primary_tables:
+  - risk_events
+  - security_incidents
+  api_or_interfaces:
+  - internal risk API
+  events:
+  - risk.detected
+  - security.incident
+  depends_on:
+  - CORE-01
+  ui_routes:
+  - /admin/security
+  acceptance: Release blocks on critical vulnerabilities, leaked secrets, failed permission-negative tests or missing SBOM.
+- id: PLAT-06
+  name: Configuration & Feature Flags
+  priority: P0
+  repo: jetpool-api
+  responsibility: Environment-safe feature flags, business rules, percentage rollout and kill switches.
+  owned_or_primary_tables:
+  - feature_flags
+  - config_versions
+  api_or_interfaces:
+  - /v1/admin/feature-flags
+  events:
+  - config.changed
+  depends_on:
+  - CORE-03
+  ui_routes:
+  - /admin/config
+  acceptance: Critical features such as paid charter flow can remain OFF independently of deployment.
+- id: MIG-01
+  name: Legacy WONT/Sixshop Migration
+  priority: P0
+  repo: jetpool-infra
+  responsibility: Inventory existing URLs/content/member/order assets, official export, ID mapping, media import, consent
+    audit, 301s and cutover reconciliation.
+  owned_or_primary_tables:
+  - migration_id_map
+  - migration_audit
+  - seo_redirects
+  api_or_interfaces:
+  - migration CLI
+  events:
+  - migration.batch.completed
+  depends_on:
+  - OPS-03
+  - CORE-01
+  ui_routes:
+  - internal migration dashboard
+  acceptance: Dry-run reconciliation proves row counts, amounts, media references and URL mappings before cutover.
+- id: AI-01
+  name: AI Travel Assistant
+  priority: P1
+  repo: jetpool-api
+  responsibility: Intent parsing, trip planning, explainable suggestions using live search/availability; never autonomously
+    commits paid transactions.
+  owned_or_primary_tables:
+  - ai_sessions
+  - ai_recommendations
+  api_or_interfaces:
+  - /v1/ai/travel-assistant
+  events:
+  - ai.recommendation.created
+  depends_on:
+  - STAY-04
+  - GUIDE-03
+  - TRAVEL-01
+  ui_routes:
+  - /assistant
+  acceptance: AI suggestions cite live availability snapshot and require explicit user confirmation before hold/payment.
+- id: AI-02
+  name: Recommendation & Personalization
+  priority: P1
+  repo: jetpool-api
+  responsibility: Behavioral/explicit preference ranking with cold-start rules, opt-out and non-authoritative recommendations.
+  owned_or_primary_tables:
+  - recommendation_features
+  - recommendation_impressions
+  api_or_interfaces:
+  - /v1/recommendations
+  events:
+  - recommendation.impression
+  depends_on:
+  - CORE-02
+  - OPS-04
+  ui_routes:
+  - home/discovery rails
+  acceptance: Opt-out removes behavioral personalization; ranking never bypasses legal/compliance/availability filters.
+- id: INT-01
+  name: PMS / Supplier Integrations
+  priority: P2
+  repo: jetpool-api
+  responsibility: External PMS/channel/supplier adapter framework, polling/webhooks, mapping and conflict handling.
+  owned_or_primary_tables:
+  - integration_accounts
+  - integration_mappings
+  - integration_events
+  api_or_interfaces:
+  - /v1/integrations/*
+  events:
+  - integration.sync.completed
+  depends_on:
+  - STAY-06
+  - PLAT-03
+  ui_routes:
+  - /host/integrations
+  acceptance: External state is reconciled into Jetpool authority rules with clear conflict policy and audit.
+release_gates:
+- id: G0
+  name: Spec integrity
+  criteria:
+  - All P0 modules have owner, API, data, event, UI and acceptance criteria
+  - No unresolved contract references
+- id: G1
+  name: Contracts
+  criteria:
+  - OpenAPI/AsyncAPI lint pass
+  - Generated client/types compile
+  - Breaking changes explicitly versioned
+- id: G2
+  name: Data
+  criteria:
+  - Migrations up/down or forward-fix tested
+  - Constraints/invariants enabled
+  - Seed data deterministic
+- id: G3
+  name: Domain
+  criteria:
+  - Unit/property/integration tests pass
+  - State transition negative tests pass
+  - Idempotency tests pass
+- id: G4
+  name: End-to-end
+  criteria:
+  - Stay paid flow passes
+  - Exchange bilateral flow passes
+  - Guide free/paid flow passes
+  - Travel order flow passes where enabled
+- id: G5
+  name: Security
+  criteria:
+  - SAST/SCA/secret scan pass
+  - Permission-negative tests pass
+  - AAL2 gates pass
+  - No PAN/CVC storage
+- id: G6
+  name: Performance
+  criteria:
+  - Search/read/write SLO targets meet load-test plan
+  - No oversell under concurrency test
+- id: G7
+  name: Migration
+  criteria:
+  - Dry-run reconciliation approved
+  - 301 URL map approved
+  - Consent/password migration strategy approved
+- id: G8
+  name: DR & Ops
+  criteria:
+  - Restore drill successful
+  - Runbooks and alert routes tested
+  - Payment reconciliation tested
+- id: G9
+  name: Legal/Business approval
+  criteria:
+  - Accommodation/guide/travel/charter gates signed off
+  - Merchant-of-record and settlement policy approved
+  - Terms/privacy/refund policies published
+- id: G10
+  name: Production approval
+  criteria:
+  - Immutable release artifact
+  - GitHub Environment manual approval
+  - Canary + smoke + rollback readiness
