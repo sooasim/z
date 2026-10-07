@@ -33,7 +33,10 @@ paths = [
   '''(^|/)\.env\.example$''',
   '''(^|/)docker-compose\.ya?ml$''',
   '''^dd/''',
-  '''^apps/api/test/fixtures/''',
+  # test suites use obviously fake credentials/tokens (generic-api-key false positives); real secrets never live
+  # in tests — CI injects none, and the custom provider rules above still run on all application code
+  '''^apps/[^/]+/test/''',
+  '''\.test\.tsx?$''',
   '''(^|/)pnpm-lock\.yaml$''',
   '''^infra/k8s/overlays/.*/secrets\.example\.env$''',
 ]

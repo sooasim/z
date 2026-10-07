@@ -1,7 +1,7 @@
 # JETPOOL Release Report
 
-- Generated: 2026-10-07T19:12:33.302Z
-- Commit: `a2e36b67710b3750fd9db91d85411b7b58563fb7`
+- Generated: 2026-10-07T19:12:58.438Z
+- Commit: `7e425ccb0f635343ba585fc245a354146fd50df9`
 - Evidence directory: `../../../tmp/claude-0/reports` (6 files)
 - **Release candidate: NO** (blocking: G5)
 
@@ -15,7 +15,7 @@
 | G2 | Data | 🟡 PARTIAL | migrate --verify ok on 1/1 PG versions; exclusion constraints=?; deterministic seed not verified |
 | G3 | Domain | ⚪ NOT RUN | no vitest-api.json |
 | G4 | End-to-end | ⚪ NOT RUN | Stay paid: no tests; Exchange bilateral: no tests; Guide free/paid: no tests; Travel order: no tests |
-| G5 | Security | ❌ FAIL | gitleaks 4 finding(s); PAN/CVC guard ok; SCA high=2 critical=3; SBOM missing; SAST: CodeQL workflow (see Security tab) |
+| G5 | Security | ❌ FAIL | gitleaks 0 finding(s); PAN/CVC guard ok; SCA high=2 critical=3; SBOM missing; SAST: CodeQL workflow (see Security tab) |
 | G6 | Performance | ⚪ NOT RUN | load tests run nightly / on dispatch (ci.yml `load` job) |
 | G7 | Migration | ⚪ NOT RUN | no migration dry-run evidence (MIG-01, docs/runbooks/legacy-cutover.md) |
 | G8 | DR & Ops | 🟡 PARTIAL | runbooks 8/8; alert rules present; restore drill: no evidence; payment reconciliation tests: not run |

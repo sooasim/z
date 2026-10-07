@@ -176,4 +176,4 @@ jobs:
         env:
           BASE_URL: ${{ vars.STAGING_API_URL || 'https://api.staging.jetpool.kr' }}
           K6_PROFILE: smoke
-        run: k6 run scripts/load/search.js
+        run: mkdir -p reports && k6 run scripts/load/search.js
