@@ -1,0 +1,10 @@
+export declare const ReservationStatus: readonly string[];
+export declare const ExchangeStatus: readonly string[];
+export declare const GuideBookingStatus: readonly string[];
+export declare const GuideType: readonly string[];
+export declare const PaymentStatus: readonly string[];
+export declare const RefundStatus: readonly string[];
+export declare const SettlementStatus: readonly string[];
+export declare const OrderStatus: readonly string[];
+export declare const Roles: readonly string[];
+export declare const FeatureFlags: readonly string[];
