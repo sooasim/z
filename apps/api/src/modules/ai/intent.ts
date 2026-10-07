@@ -164,7 +164,7 @@ export function parseNights(text: string): number | null {
 
 export function parseGuests(text: string): number | null {
   let total = 0;
-  const re = /(\d{1,2})\s*(?:명|인(?!당)|people|persons|guests|adults|kids|children|pax)\b?/gi;
+  const re = /(\d{1,2})\s*(?:명|인(?!당)|people|persons|guests|adults|kids|children|pax)/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
     // "1인당" (per person) is a budget qualifier, not a head count
