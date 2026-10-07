@@ -1,0 +1,64 @@
+# Prometheus scrape config (PLAT-04).
+#  - api:       /metrics on each API task/pod (prom-client registry, prefix jetpool_)
+#  - postgres:  postgres_exporter with JETPOOL business queries (postgres-exporter/queries.yaml) — reads the source of
+#               truth directly so outbox/hold/payment alerts work even if the app is unhealthy
+#  - otel:      OpenTelemetry collector self-metrics + spanmetrics
+# Local: docker compose -f docker-compose.yml -f infra/observability/docker-compose.observability.yml up
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    project: jetpool
+    env: ${JETPOOL_ENV}
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  # docker-compose / single host
+  - job_name: jetpool-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:4000"]
+        labels: { service: api }
+
+  # Kubernetes target (infra/k8s): pods annotated prometheus.io/scrape=true
+  - job_name: jetpool-api-k8s
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces: { names: [jetpool-staging, jetpool-prod] }
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: "true"
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_label_track]
+        target_label: track
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+
+  # ECS: use the ADOT/OTel collector sidecar (otel/collector.yaml prometheus receiver) and remote-write instead.
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+        labels: { service: postgres }
+
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["otel-collector:8888", "otel-collector:8889"]

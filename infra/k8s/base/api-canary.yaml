@@ -1,0 +1,36 @@
+# Canary: scaled 0 -> 1 by `deploy.sh production canary`, back to 0 on promote/rollback.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jetpool-api-canary
+  labels: { app.kubernetes.io/name: jetpool-api, track: canary }
+spec:
+  replicas: 0
+  selector:
+    matchLabels: { app.kubernetes.io/name: jetpool-api, track: canary }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: jetpool-api, track: canary, jetpool/role: api }
+    spec:
+      serviceAccountName: jetpool
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: api
+          image: ghcr.io/jetpool/jetpool-api:latest
+          args: ["api"]
+          ports: [{ name: http, containerPort: 4000 }]
+          envFrom:
+            - configMapRef: { name: jetpool-config }
+            - secretRef: { name: jetpool-app }
+          readinessProbe:
+            httpGet: { path: /ready, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 20
+          resources:
+            requests: { cpu: 250m, memory: 384Mi }
+            limits: { memory: 1Gi }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: {} }]

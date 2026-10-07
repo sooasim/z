@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jetpool-worker
+  labels: { app.kubernetes.io/name: jetpool-worker }
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels: { app.kubernetes.io/name: jetpool-worker }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: jetpool-worker, jetpool/role: worker }
+    spec:
+      serviceAccountName: jetpool
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: ghcr.io/jetpool/jetpool-api:latest
+          args: ["worker"]
+          envFrom:
+            - configMapRef: { name: jetpool-config }
+            - secretRef: { name: jetpool-app }
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 768Mi }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: {} }]

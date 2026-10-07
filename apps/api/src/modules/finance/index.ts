@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { getActor, requireAal2, requireAuth, requireRole } from '../../platform/auth.js';
 import { ctxFromRequest } from '../../platform/context.js';
 import { maybeOne, one, q, withTx } from '../../platform/db.js';
-import { badRequest, conflict, forbidden, notFound } from '../../platform/errors.js';
+import { conflict, forbidden, notFound } from '../../platform/errors.js';
 import { idempotencyKeyFrom, withIdempotency } from '../../platform/idempotency.js';
 import { emit } from '../../platform/outbox.js';
 import { audit } from '../../platform/audit.js';
@@ -476,5 +476,4 @@ export default async function financeModule(app: FastifyInstance) {
     };
   });
 
-  void badRequest;
 }

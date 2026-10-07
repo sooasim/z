@@ -1,0 +1,58 @@
+# postgres_exporter custom queries (--extend.query-path). Each query reads the transaction source of truth.
+# Use a read-only role:  CREATE ROLE jetpool_metrics LOGIN PASSWORD '...' IN ROLE pg_monitor;
+#                        GRANT SELECT ON outbox_events, job_runs, reservation_holds, inventory_blocks, payments,
+#                                         webhook_events, ledger_entries TO jetpool_metrics;
+# Metric names become jetpool_db_<name>_<column>; queries are cheap (partial indexes / bounded windows).
+jetpool_db_outbox:
+  query: |
+    SELECT count(*) FILTER (WHERE published_at IS NULL AND dead_lettered_at IS NULL) AS pending,
+           count(*) FILTER (WHERE dead_lettered_at IS NOT NULL AND dead_lettered_at > now() - interval '7 days') AS dead_letters,
+           coalesce(extract(epoch FROM now() - min(created_at) FILTER (WHERE published_at IS NULL AND dead_lettered_at IS NULL)), 0) AS oldest_pending_seconds
+      FROM outbox_events
+     WHERE published_at IS NULL OR dead_lettered_at > now() - interval '7 days'
+  metrics:
+    - pending: { usage: GAUGE, description: "Unpublished, non-dead-lettered outbox events" }
+    - dead_letters: { usage: GAUGE, description: "Dead-lettered events in the last 7 days" }
+    - oldest_pending_seconds: { usage: GAUGE, description: "Age of the oldest pending event" }
+jetpool_db_holds:
+  query: |
+    SELECT (SELECT count(*) FROM reservation_holds WHERE status = 'ACTIVE' AND expires_at < now() - interval '2 minutes') AS expired_unreleased,
+           (SELECT count(*) FROM reservation_holds WHERE status = 'ACTIVE') AS active,
+           (SELECT count(*) FROM inventory_blocks WHERE state = 'ACTIVE' AND expires_at IS NOT NULL AND expires_at < now() - interval '2 minutes') AS blocks_expired_active
+  metrics:
+    - expired_unreleased: { usage: GAUGE, description: "ACTIVE holds past expires_at (sweeper backlog)" }
+    - active: { usage: GAUGE, description: "ACTIVE holds" }
+    - blocks_expired_active: { usage: GAUGE, description: "ACTIVE inventory blocks past expiry" }
+jetpool_db_payments:
+  query: |
+    SELECT count(*) FILTER (WHERE status = 'FAILED' AND updated_at > now() - interval '15 minutes') AS failed_15m,
+           count(*) FILTER (WHERE status = 'APPROVED' AND approved_at > now() - interval '15 minutes') AS approved_15m,
+           count(*) FILTER (WHERE status = 'CONFIRMING' AND updated_at < now() - interval '5 minutes') AS stuck_confirming,
+           count(*) FILTER (WHERE status = 'CREATED' AND expires_at < now()) AS expired_created
+      FROM payments WHERE updated_at > now() - interval '1 day' OR status IN ('CREATED','CONFIRMING')
+  metrics:
+    - failed_15m: { usage: GAUGE, description: "Payments failed in the last 15m" }
+    - approved_15m: { usage: GAUGE, description: "Payments approved in the last 15m" }
+    - stuck_confirming: { usage: GAUGE, description: "Payments CONFIRMING for > 5m (needs reconciliation)" }
+    - expired_created: { usage: GAUGE, description: "CREATED payments past expiry not yet swept" }
+jetpool_db_webhooks:
+  query: |
+    SELECT count(*) FILTER (WHERE processed_at IS NULL AND created_at < now() - interval '5 minutes') AS unprocessed,
+           count(*) FILTER (WHERE NOT signature_valid AND created_at > now() - interval '1 hour') AS invalid_signature_1h
+      FROM webhook_events WHERE created_at > now() - interval '2 days'
+  metrics:
+    - unprocessed: { usage: GAUGE, description: "Webhooks not processed after 5m" }
+    - invalid_signature_1h: { usage: GAUGE, description: "Webhooks with invalid signature in 1h" }
+jetpool_db_job_runs:
+  query: |
+    SELECT count(*) FILTER (WHERE status = 'FAILED') AS failed_15m
+      FROM job_runs WHERE started_at > now() - interval '15 minutes'
+  metrics:
+    - failed_15m: { usage: GAUGE, description: "Failed job runs in the last 15 minutes" }
+jetpool_db_ledger:
+  query: |
+    SELECT currency, sum(debit_minor) - sum(credit_minor) AS trial_balance_minor
+      FROM ledger_entries GROUP BY currency
+  metrics:
+    - currency: { usage: LABEL, description: "ISO currency" }
+    - trial_balance_minor: { usage: GAUGE, description: "Total debits minus credits (must be 0)" }

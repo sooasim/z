@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jetpool
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 2m
+    # block internal endpoints at the edge
+    nginx.ingress.kubernetes.io/server-snippet: |
+      location ~ ^/(metrics|docs) { return 404; }
+    cert-manager.io/cluster-issuer: letsencrypt
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [jetpool.kr, api.jetpool.kr]
+      secretName: jetpool-tls
+  rules:
+    - host: api.jetpool.kr
+      http:
+        paths:
+          - { path: /, pathType: Prefix, backend: { service: { name: jetpool-api, port: { number: 80 } } } }
+    - host: jetpool.kr
+      http:
+        paths:
+          - { path: /, pathType: Prefix, backend: { service: { name: jetpool-web, port: { number: 80 } } } }

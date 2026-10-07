@@ -1,0 +1,19 @@
+# Alternative deployment target (DEPLOY_TARGET=k8s). Plain kustomize, no Helm.
+#   kubectl apply -k infra/k8s/overlays/staging
+# The migration Job (migrate-job.yaml) is applied per release by infra/scripts/deploy.sh, not by kustomize.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: jetpool
+    includeSelectors: false
+resources:
+  - serviceaccount.yaml
+  - configmap.yaml
+  - api.yaml
+  - api-canary.yaml
+  - worker.yaml
+  - web.yaml
+  - hpa.yaml
+  - pdb.yaml
+  - networkpolicy.yaml

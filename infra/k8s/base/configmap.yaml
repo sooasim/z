@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jetpool-config
+data:
+  NODE_ENV: staging
+  PORT: "4000"
+  PUBLIC_WEB_URL: https://staging.jetpool.kr
+  PUBLIC_API_URL: https://api.staging.jetpool.kr
+  CORS_ORIGINS: https://staging.jetpool.kr
+  PAYMENT_PROVIDER: TOSS
+  OAUTH_MOCK: "false"
+  S3_REGION: ap-northeast-2
+  S3_BUCKET_PRIVATE: jetpool-staging-private
+  S3_BUCKET_PUBLIC: jetpool-staging-public
+  CDN_BASE_URL: https://media.staging.jetpool.kr
+  DATABASE_POOL_MAX: "20"
+  LOG_LEVEL: info

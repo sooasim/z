@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: jetpool-prod
+resources:
+  - namespace.yaml
+  - ../../base
+  - ingress.yaml
+# Secret `jetpool-app` is created out-of-band (External Secrets Operator / Secrets Manager CSI / sealed-secrets).
+# Keys: see secrets.example.env. Never commit real values.
+images:
+  - name: ghcr.io/jetpool/jetpool-api
+    newName: ghcr.io/jetpool/jetpool-api
+  - name: ghcr.io/jetpool/jetpool-web
+    newName: ghcr.io/jetpool/jetpool-web
+patches:
+  - target: { kind: ConfigMap, name: jetpool-config }
+    patch: |-
+      - { op: replace, path: /data/NODE_ENV, value: production }
+      - { op: replace, path: /data/PUBLIC_WEB_URL, value: "https://jetpool.kr" }
+      - { op: replace, path: /data/PUBLIC_API_URL, value: "https://api.jetpool.kr" }
+      - { op: replace, path: /data/CORS_ORIGINS, value: "https://jetpool.kr" }
+      - { op: replace, path: /data/S3_BUCKET_PRIVATE, value: jetpool-prod-private }
+      - { op: replace, path: /data/S3_BUCKET_PUBLIC, value: jetpool-prod-public }
+      - { op: replace, path: /data/CDN_BASE_URL, value: "https://media.jetpool.kr" }
+  - target: { kind: HorizontalPodAutoscaler, name: jetpool-api }
+    patch: |-
+      - { op: replace, path: /spec/minReplicas, value: 3 }

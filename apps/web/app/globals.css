@@ -216,3 +216,4 @@ dl.kv dd { margin: 0; font-weight: 600; }
 .chip-group { display: flex; gap: 6px; flex-wrap: wrap; }
 .chip { border: 1px solid var(--c-border); background: #fff; border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 0.88rem; cursor: pointer; min-height: 36px; }
 .chip[aria-pressed='true'] { background: var(--c-primary); color: #fff; border-color: var(--c-primary); }
+@media (max-width: 899px) { .hide-mobile { display: none; } }

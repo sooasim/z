@@ -1,0 +1,23 @@
+# Only the web pods and the ingress controller may call the API; the worker accepts no inbound traffic.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: jetpool-api-ingress
+spec:
+  podSelector: { matchLabels: { jetpool/role: api } }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { jetpool/role: web } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: ingress-nginx } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: monitoring } }
+      ports: [{ port: 4000 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: jetpool-worker-deny-ingress
+spec:
+  podSelector: { matchLabels: { jetpool/role: worker } }
+  policyTypes: [Ingress]
+  ingress: []

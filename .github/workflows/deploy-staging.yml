@@ -90,6 +90,10 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     environment:
       name: staging
       url: ${{ vars.STAGING_WEB_URL || 'https://staging.jetpool.kr' }}
@@ -114,6 +118,23 @@ jobs:
           mkdir -p ~/.kube && echo "${{ secrets.KUBECONFIG_STAGING }}" | base64 -d > ~/.kube/config
       - uses: superfly/flyctl-actions/setup-flyctl@1.5
         if: env.DEPLOY_TARGET == 'fly'
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: ECR login
+        id: ecr
+        if: env.DEPLOY_TARGET == 'ecs'
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: mirror images to ECR (same digest)
+        if: env.DEPLOY_TARGET == 'ecs'
+        run: |
+          reg="${{ steps.ecr.outputs.registry }}"; sha="${{ needs.build.outputs.sha }}"
+          docker buildx imagetools create -t "$reg/jetpool-staging-api:$sha" "$API_IMAGE"
+          docker buildx imagetools create -t "$reg/jetpool-staging-web:$sha" "$WEB_IMAGE"
+          echo "API_IMAGE=$reg/jetpool-staging-api@${{ needs.build.outputs.api_digest }}" >> "$GITHUB_ENV"
+          echo "WEB_IMAGE=$reg/jetpool-staging-web@${{ needs.build.outputs.web_digest }}" >> "$GITHUB_ENV"
       - name: snapshot current release (for rollback)
         run: infra/scripts/deploy.sh staging snapshot || echo "no previous release"
       - name: migrate (one-shot job, forward-only)
@@ -125,15 +146,11 @@ jobs:
       - name: rollback on failure
         if: failure()
         run: infra/scripts/deploy.sh staging rollback
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
       - name: mark digests verified (eligible for production)
         run: |
-          docker buildx imagetools create -t "ghcr.io/${{ github.repository_owner }}/jetpool-api:verified-${{ needs.build.outputs.sha }}" "$API_IMAGE"
-          docker buildx imagetools create -t "ghcr.io/${{ github.repository_owner }}/jetpool-web:verified-${{ needs.build.outputs.sha }}" "$WEB_IMAGE"
+          o="ghcr.io/${{ github.repository_owner }}"; sha="${{ needs.build.outputs.sha }}"
+          docker buildx imagetools create -t "$o/jetpool-api:verified-$sha" "$o/jetpool-api@${{ needs.build.outputs.api_digest }}"
+          docker buildx imagetools create -t "$o/jetpool-web:verified-$sha" "$o/jetpool-web@${{ needs.build.outputs.web_digest }}"
       - name: release manifest
         run: |
           cat > release-manifest.json <<EOF

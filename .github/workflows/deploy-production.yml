@@ -106,6 +106,23 @@ jobs:
         run: mkdir -p ~/.kube && echo "${{ secrets.KUBECONFIG_PRODUCTION }}" | base64 -d > ~/.kube/config
       - uses: superfly/flyctl-actions/setup-flyctl@1.5
         if: env.DEPLOY_TARGET == 'fly'
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: ECR login
+        id: ecr
+        if: env.DEPLOY_TARGET == 'ecs'
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: mirror verified images to prod ECR (same digest)
+        if: env.DEPLOY_TARGET == 'ecs'
+        run: |
+          reg="${{ steps.ecr.outputs.registry }}"; sha="${{ inputs.release_sha }}"
+          docker buildx imagetools create -t "$reg/jetpool-prod-api:$sha" "$API_IMAGE"
+          docker buildx imagetools create -t "$reg/jetpool-prod-web:$sha" "$WEB_IMAGE"
+          echo "API_IMAGE=$reg/jetpool-prod-api@${{ inputs.api_digest }}" >> "$GITHUB_ENV"
+          echo "WEB_IMAGE=$reg/jetpool-prod-web@${{ inputs.web_digest }}" >> "$GITHUB_ENV"
 
       - name: snapshot current release (rollback point)
         id: snapshot

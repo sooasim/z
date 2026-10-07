@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jetpool-web
+  labels: { app.kubernetes.io/name: jetpool-web }
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels: { app.kubernetes.io/name: jetpool-web }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: jetpool-web, jetpool/role: web }
+    spec:
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
+      automountServiceAccountToken: false
+      containers:
+        - name: web
+          image: ghcr.io/jetpool/jetpool-web:latest
+          ports: [{ name: http, containerPort: 3000 }]
+          env:
+            - { name: PORT, value: "3000" }
+            - { name: API_INTERNAL_URL, value: http://jetpool-api }
+          readinessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /, port: http }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 200m, memory: 256Mi }
+            limits: { memory: 1Gi }
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jetpool-web
+spec:
+  selector: { app.kubernetes.io/name: jetpool-web }
+  ports: [{ name: http, port: 80, targetPort: http }]

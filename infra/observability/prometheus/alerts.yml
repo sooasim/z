@@ -1,0 +1,177 @@
+# JETPOOL alert rules (PLAT-04). Severity routing: page -> on-call phone; ticket -> Slack #jetpool-ops.
+# SLOs (docs/OPERATIONS.md): availability 99.9%, search p95 < 300ms, quote/hold p95 < 500ms.
+groups:
+  - name: jetpool-slo
+    rules:
+      - record: jetpool:http_requests:rate5m
+        expr: sum by (route, method) (rate(jetpool_http_request_duration_seconds_count[5m]))
+      - record: jetpool:http_5xx:ratio5m
+        expr: |
+          sum(rate(jetpool_http_request_duration_seconds_count{status=~"5.."}[5m]))
+          / clamp_min(sum(rate(jetpool_http_request_duration_seconds_count[5m])), 1e-9)
+      - record: jetpool:http_5xx:ratio1h
+        expr: |
+          sum(rate(jetpool_http_request_duration_seconds_count{status=~"5.."}[1h]))
+          / clamp_min(sum(rate(jetpool_http_request_duration_seconds_count[1h])), 1e-9)
+      - record: jetpool:http_p95:5m
+        expr: histogram_quantile(0.95, sum by (le, route) (rate(jetpool_http_request_duration_seconds_bucket[5m])))
+
+      # Multi-window burn rate for 99.9% availability (error budget 0.1%).
+      - alert: ApiErrorBudgetFastBurn
+        expr: jetpool:http_5xx:ratio5m > (14.4 * 0.001) and jetpool:http_5xx:ratio1h > (14.4 * 0.001)
+        for: 2m
+        labels: { severity: page, team: platform }
+        annotations:
+          summary: "API 5xx burn rate >14x budget (5m & 1h)"
+          runbook: docs/runbooks/incident-response.md
+      - alert: ApiHigh5xxRate
+        expr: jetpool:http_5xx:ratio5m > 0.01
+        for: 5m
+        labels: { severity: page, team: platform }
+        annotations:
+          summary: "API 5xx ratio {{ $value | humanizePercentage }} over 5m"
+          runbook: docs/runbooks/incident-response.md
+
+      - alert: SearchLatencySLO
+        expr: jetpool:http_p95:5m{route=~"/v1/search/.*"} > 0.3
+        for: 10m
+        labels: { severity: ticket, team: stay }
+        annotations:
+          summary: "Search p95 {{ $value | humanizeDuration }} > 300ms on {{ $labels.route }}"
+          runbook: docs/OPERATIONS.md#slos
+      - alert: QuoteHoldLatencySLO
+        expr: jetpool:http_p95:5m{route=~"/v1/booking/(quotes|holds)"} > 0.5
+        for: 10m
+        labels: { severity: page, team: booking }
+        annotations:
+          summary: "Quote/hold p95 {{ $value | humanizeDuration }} > 500ms on {{ $labels.route }}"
+          runbook: docs/runbooks/incident-response.md
+      - alert: BookingCollisionSpike
+        expr: sum(rate(jetpool_http_request_duration_seconds_count{route="/v1/booking/holds",status="409"}[10m])) > 1
+        for: 10m
+        labels: { severity: ticket, team: booking }
+        annotations:
+          summary: "Hold collisions (409) > 1/s — check search projection freshness / calendar sync"
+          runbook: docs/runbooks/hold-expiry-backlog.md
+      - alert: ApiDown
+        expr: up{job=~"jetpool-api.*"} == 0
+        for: 2m
+        labels: { severity: page, team: platform }
+        annotations:
+          summary: "API target {{ $labels.instance }} down"
+          runbook: docs/runbooks/incident-response.md
+
+  - name: jetpool-async
+    rules:
+      - alert: OutboxBacklog
+        expr: max(jetpool_outbox_pending) > 500 or max(jetpool_db_outbox_pending) > 500
+        for: 10m
+        labels: { severity: page, team: platform }
+        annotations:
+          summary: "Outbox pending {{ $value }} > 500 — worker stalled or a consumer failing"
+          runbook: docs/runbooks/outbox-dead-letters.md
+      - alert: OutboxOldestEventStale
+        expr: max(jetpool_db_outbox_oldest_pending_seconds) > 300
+        for: 5m
+        labels: { severity: page, team: platform }
+        annotations:
+          summary: "Oldest unpublished outbox event is {{ $value | humanizeDuration }} old"
+          runbook: docs/runbooks/outbox-dead-letters.md
+      - alert: OutboxDeadLetters
+        expr: max(jetpool_db_outbox_dead_letters) > 0
+        for: 1m
+        labels: { severity: ticket, team: platform }
+        annotations:
+          summary: "{{ $value }} outbox events dead-lettered"
+          runbook: docs/runbooks/outbox-dead-letters.md
+      - alert: HoldExpiryBacklog
+        expr: max(jetpool_db_holds_expired_unreleased) > 0
+        for: 10m
+        labels: { severity: page, team: booking }
+        annotations:
+          summary: "{{ $value }} holds past expiry still ACTIVE — inventory is blocked for real guests"
+          runbook: docs/runbooks/hold-expiry-backlog.md
+      - alert: WorkerJobsFailing
+        expr: max(jetpool_db_job_runs_failed_15m) > 3
+        for: 5m
+        labels: { severity: ticket, team: platform }
+        annotations:
+          summary: "{{ $value }} failed job runs in 15m"
+          runbook: docs/runbooks/outbox-dead-letters.md
+
+  - name: jetpool-payments
+    rules:
+      - alert: PaymentConfirmFailures
+        expr: |
+          max(jetpool_db_payments_failed_15m)
+            / clamp_min(max(jetpool_db_payments_failed_15m) + max(jetpool_db_payments_approved_15m), 1) > 0.1
+          and max(jetpool_db_payments_failed_15m) >= 5
+        for: 5m
+        labels: { severity: page, team: finance }
+        annotations:
+          summary: "Payment confirm failure ratio > 10% over 15m"
+          runbook: docs/runbooks/payment-reconciliation.md
+      - alert: PaymentsStuckConfirming
+        expr: max(jetpool_db_payments_stuck_confirming) > 0
+        for: 10m
+        labels: { severity: page, team: finance }
+        annotations:
+          summary: "{{ $value }} payments in CONFIRMING for > 5 min (provider timeout?) — reconcile"
+          runbook: docs/runbooks/payment-reconciliation.md
+      - alert: WebhooksUnprocessed
+        expr: max(jetpool_db_webhooks_unprocessed) > 0
+        for: 10m
+        labels: { severity: ticket, team: finance }
+        annotations:
+          summary: "{{ $value }} provider webhooks unprocessed > 5 min"
+          runbook: docs/runbooks/webhook-replay.md
+      - alert: WebhookSignatureFailures
+        expr: max(jetpool_db_webhooks_invalid_signature_1h) > 10
+        labels: { severity: ticket, team: security }
+        annotations:
+          summary: "{{ $value }} webhooks with invalid signature in 1h — possible spoofing"
+          runbook: docs/runbooks/incident-response.md
+      - alert: LedgerTrialBalanceNonZero
+        expr: max(abs(jetpool_db_ledger_trial_balance_minor)) != 0
+        for: 1m
+        labels: { severity: page, team: finance }
+        annotations:
+          summary: "Ledger debits != credits for {{ $labels.currency }} — invariant 11 violated"
+          runbook: docs/runbooks/payment-reconciliation.md
+
+  - name: jetpool-database
+    rules:
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 1m
+        labels: { severity: page, team: platform }
+        annotations: { summary: "PostgreSQL unreachable", runbook: docs/runbooks/db-restore-drill.md }
+      - alert: PostgresConnectionsHigh
+        expr: sum(pg_stat_activity_count) / max(pg_settings_max_connections) > 0.8
+        for: 5m
+        labels: { severity: page, team: platform }
+        annotations:
+          summary: "DB connections at {{ $value | humanizePercentage }} of max_connections"
+          runbook: docs/OPERATIONS.md#capacity
+      - alert: PostgresLongTransactions
+        expr: max(pg_stat_activity_max_tx_duration{state="active"}) > 120
+        for: 5m
+        labels: { severity: ticket, team: platform }
+        annotations: { summary: "Transaction running > 2 min (lock contention on inventory?)" }
+      - alert: PostgresDeadlocks
+        expr: sum(increase(pg_stat_database_deadlocks[10m])) > 0
+        labels: { severity: ticket, team: platform }
+        annotations: { summary: "Deadlocks detected in the last 10m" }
+
+  - name: jetpool-runtime
+    rules:
+      - alert: NodeEventLoopLag
+        expr: max(jetpool_nodejs_eventloop_lag_p99_seconds) > 0.5
+        for: 5m
+        labels: { severity: ticket, team: platform }
+        annotations: { summary: "Event loop p99 lag {{ $value }}s" }
+      - alert: NodeHeapHigh
+        expr: max(jetpool_nodejs_heap_size_used_bytes / jetpool_nodejs_heap_size_total_bytes) > 0.9
+        for: 10m
+        labels: { severity: ticket, team: platform }
+        annotations: { summary: "Heap usage > 90%" }

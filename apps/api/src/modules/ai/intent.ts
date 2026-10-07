@@ -183,7 +183,7 @@ export function parseBudget(text: string): TravelIntent['budget'] {
   let m: RegExpExecArray | null;
   if ((m = /(\d+(?:\.\d+)?)\s*만\s*원?/.exec(text))) amount = Math.round(Number(m[1]) * 10000);
   else if ((m = /(\d+(?:\.\d+)?)\s*천\s*원/.exec(text))) amount = Math.round(Number(m[1]) * 1000);
-  else if ((m = /₩\s*(\d[\d,]*)/.exec(text)) || (m = /(\d{1,3}(?:,\d{3})+|\d{4,})\s*(?:원|won|krw)\b?/i.exec(text))) amount = Number(m[1].replace(/,/g, ''));
+  else if ((m = /₩\s*(\d[\d,]*)/.exec(text)) || (m = /(\d{1,3}(?:,\d{3})+|\d{4,})\s*(?:원|won|krw)/i.exec(text))) amount = Number(m[1].replace(/,/g, ''));
   else if ((m = /\$\s*(\d[\d,]*(?:\.\d{1,2})?)/.exec(text)) || (m = /(\d[\d,]*(?:\.\d{1,2})?)\s*(?:usd|dollars?)\b/i.exec(text))) {
     currency = 'USD';
     amount = Math.round(Number(m[1].replace(/,/g, '')) * 100);

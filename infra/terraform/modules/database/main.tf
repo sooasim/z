@@ -70,38 +70,38 @@ resource "aws_db_parameter_group" "pg16" {
 }
 
 resource "aws_db_instance" "this" {
-  identifier                    = "${var.name}-pg"
-  engine                        = "postgres"
-  engine_version                = var.engine_version
-  instance_class                = var.instance_class
-  allocated_storage             = var.allocated_storage
-  max_allocated_storage         = var.max_allocated_storage
-  storage_type                  = "gp3"
-  storage_encrypted             = true
-  kms_key_id                    = aws_kms_key.db.arn
-  db_name                       = "jetpool"
-  username                      = "jetpool_admin"
-  manage_master_user_password   = true
-  multi_az                      = var.multi_az
-  db_subnet_group_name          = aws_db_subnet_group.this.name
-  vpc_security_group_ids        = [aws_security_group.db.id]
-  parameter_group_name          = aws_db_parameter_group.pg16.name
-  publicly_accessible           = false
-  backup_retention_period       = var.backup_retention_days
-  backup_window                 = "17:00-18:00" # 02:00–03:00 KST
-  maintenance_window            = "sun:18:30-sun:19:30"
-  copy_tags_to_snapshot         = true
-  deletion_protection           = var.deletion_protection
-  skip_final_snapshot           = !var.deletion_protection
-  final_snapshot_identifier     = var.deletion_protection ? "${var.name}-pg-final" : null
-  auto_minor_version_upgrade    = true
-  performance_insights_enabled  = true
-  performance_insights_kms_key_id = aws_kms_key.db.arn
-  monitoring_interval           = var.enhanced_monitoring ? 60 : 0
-  monitoring_role_arn           = var.enhanced_monitoring ? aws_iam_role.monitoring[0].arn : null
-  enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
+  identifier                          = "${var.name}-pg"
+  engine                              = "postgres"
+  engine_version                      = var.engine_version
+  instance_class                      = var.instance_class
+  allocated_storage                   = var.allocated_storage
+  max_allocated_storage               = var.max_allocated_storage
+  storage_type                        = "gp3"
+  storage_encrypted                   = true
+  kms_key_id                          = aws_kms_key.db.arn
+  db_name                             = "jetpool"
+  username                            = "jetpool_admin"
+  manage_master_user_password         = true
+  multi_az                            = var.multi_az
+  db_subnet_group_name                = aws_db_subnet_group.this.name
+  vpc_security_group_ids              = [aws_security_group.db.id]
+  parameter_group_name                = aws_db_parameter_group.pg16.name
+  publicly_accessible                 = false
+  backup_retention_period             = var.backup_retention_days
+  backup_window                       = "17:00-18:00" # 02:00–03:00 KST
+  maintenance_window                  = "sun:18:30-sun:19:30"
+  copy_tags_to_snapshot               = true
+  deletion_protection                 = var.deletion_protection
+  skip_final_snapshot                 = !var.deletion_protection
+  final_snapshot_identifier           = var.deletion_protection ? "${var.name}-pg-final" : null
+  auto_minor_version_upgrade          = true
+  performance_insights_enabled        = true
+  performance_insights_kms_key_id     = aws_kms_key.db.arn
+  monitoring_interval                 = var.enhanced_monitoring ? 60 : 0
+  monitoring_role_arn                 = var.enhanced_monitoring ? aws_iam_role.monitoring[0].arn : null
+  enabled_cloudwatch_logs_exports     = ["postgresql", "upgrade"]
   iam_database_authentication_enabled = true
-  tags                          = var.tags
+  tags                                = var.tags
 
   lifecycle {
     precondition {
