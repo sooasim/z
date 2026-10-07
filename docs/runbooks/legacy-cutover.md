@@ -2,7 +2,8 @@
 
 Source: whitepaper §15 (steps 1–9). This runbook covers the **cutover window** (step 8) and its prerequisites.
 Migration tooling and tables: `migration_batches`, `migration_id_map`, `migration_audit`, `seo_redirects`
-(packages/db/migrations 0001) and the MIG-01 CLI under `scripts/migration` / `packages/db/legacy`.
+(packages/db/migrations 0001) and the MIG-01 migration CLI (`scripts/migration`, owned by the Comms/Ops agent G;
+command names below are indicative — use the CLI's `--help`).
 
 ## Prerequisites (must be complete before scheduling — G7)
 - [ ] **Official exports** obtained (Sixshop admin export / API). No scraping of passwords or payment data.

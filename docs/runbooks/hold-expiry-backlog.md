@@ -37,12 +37,8 @@ safe (`FOR UPDATE SKIP LOCKED`).
 
 Only for holds with **no** payment in `CONFIRMING`/`APPROVED`. Use the service path, not raw SQL, so state
 transitions, outbox events (`reservation.hold_expired`, `availability.changed`) and the search projection stay
-consistent:
+consistent.
 
-```bash
-# from a worker task / pod (ECS exec or kubectl exec), runs the sweeper once
-node -e "import('./dist/platform/jobs.js').then(async j => { /* registered jobs need the app */ })"
-```
 Preferred: scale/restart the worker and let `booking.hold-expiry` run. If the job itself is broken, ship a
 forward-fix; do not `UPDATE inventory_blocks SET state='RELEASED'` by hand (it skips events and audit).
 
