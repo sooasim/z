@@ -5,7 +5,9 @@ import { useState, type ReactNode } from 'react';
 import { ApiError, errorMessage } from '@/lib/errors';
 import { useI18n } from '@/lib/i18n';
 import { useAuth } from '@/lib/auth';
-import { Spinner, ErrorText } from './ui';
+import { ErrorText } from './ui/base';
+import { Illustration, type IlloName } from './ui/illustrations';
+import { CardGridSkeleton, DetailSkeleton, ListSkeleton, TableSkeleton } from './ui/skeleton';
 
 export function LoginLink({ children }: { children?: ReactNode }) {
   const path = usePathname();
@@ -26,7 +28,8 @@ export function MfaPrompt({ onDone }: { onDone?: () => void }) {
   const [busy, setBusy] = useState(false);
   return (
     <div className="state" role="alert">
-      <h2>🔐 {L('MFA 인증 필요', 'MFA required')}</h2>
+      <Illustration name="lock" />
+      <h2>{L('MFA 인증 필요', 'MFA required')}</h2>
       <p>{t('state.mfa')}</p>
       {user?.mfaEnabled === false && (
         <p>
@@ -71,7 +74,9 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
   if (kind === 'unauthenticated')
     return (
       <div className="state" role="alert">
+        <Illustration name="lock" />
         <h2>{t('state.unauth')}</h2>
+        <p className="muted">{L('로그인하면 예약, 메시지, 저장 목록을 이용할 수 있어요.', 'Sign in to see trips, messages and saved places.')}</p>
         <LoginLink />
       </div>
     );
@@ -79,7 +84,8 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
   if (kind === 'forbidden')
     return (
       <div className="state" role="alert">
-        <h2>403 · {t('state.forbidden')}</h2>
+        <Illustration name="lock" />
+        <h2>{t('state.forbidden')}</h2>
         <p className="muted">{errorMessage(error, lang)}</p>
         <Link href="/">{L('홈으로', 'Go home')}</Link>
       </div>
@@ -87,6 +93,7 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
   if (kind === 'disabled')
     return (
       <div className="state" role="status">
+        <Illustration name="calendar" />
         <h2>{t('state.disabled')}</h2>
         <p className="muted">{L('법률·사업 검토(G9) 완료 후 순차적으로 오픈됩니다.', 'It will open after legal/business review (G9).')}</p>
       </div>
@@ -94,13 +101,15 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
   if (kind === 'not_found')
     return (
       <div className="state" role="alert">
-        <h2>404 · {t('state.notfound')}</h2>
+        <Illustration name="search" />
+        <h2>{t('state.notfound')}</h2>
         <Link href="/">{L('홈으로', 'Go home')}</Link>
       </div>
     );
   return (
     <div className="state" role="alert">
-      <h2>{t('state.error')}</h2>
+      <Illustration name={kind === 'network' ? 'offline' : 'error'} />
+      <h2>{kind === 'network' ? L('연결할 수 없습니다', 'Can’t connect') : t('state.error')}</h2>
       <p className="muted">{errorMessage(error, lang)}</p>
       {error instanceof ApiError && error.problem.correlationId && <p className="mono small">ref: {error.problem.correlationId}</p>}
       {onRetry && (
@@ -112,11 +121,13 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
   );
 }
 
-export function EmptyState({ title, children }: { title?: ReactNode; children?: ReactNode }) {
+export function EmptyState({ title, children, illo = 'generic', action }: { title?: ReactNode; children?: ReactNode; illo?: IlloName; action?: ReactNode }) {
   const { t } = useI18n();
   return (
     <div className="state" role="status">
+      <Illustration name={illo} />
       <h2>{title ?? t('state.empty')}</h2>
+      {action && <div style={{ marginTop: 12 }}>{action}</div>}
       {children}
     </div>
   );
@@ -130,15 +141,18 @@ export function StateView<T>({
   isEmpty,
   empty,
   children,
+  skeleton = 'list',
 }: {
   state: { data: T | undefined; error: unknown; loading: boolean; reload?: () => void };
   isEmpty?: (d: T) => boolean;
   empty?: ReactNode;
   children: (d: T) => ReactNode;
+  skeleton?: 'list' | 'cards' | 'detail' | 'table';
 }) {
-  if (state.loading && state.data === undefined) return <Spinner />;
+  const sk = skeleton === 'cards' ? <CardGridSkeleton /> : skeleton === 'detail' ? <DetailSkeleton /> : skeleton === 'table' ? <TableSkeleton /> : <ListSkeleton />;
+  if (state.loading && state.data === undefined) return sk;
   if (state.error) return <ErrorState error={state.error} onRetry={state.reload} />;
-  if (state.data === undefined) return <Spinner />;
+  if (state.data === undefined) return sk;
   if (isEmpty && isEmpty(state.data)) return <>{empty ?? <EmptyState />}</>;
   return <>{children(state.data)}</>;
 }

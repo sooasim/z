@@ -4,20 +4,22 @@ import { useId, type ReactNode, type InputHTMLAttributes, type SelectHTMLAttribu
 import { formatMoney, formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { errorMessage } from '@/lib/errors';
+import { StatusPill } from './status';
+import { Stepper } from './display';
 
 export function PageHeader({ title, subtitle, actions, back }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; back?: string }) {
   const { t } = useI18n();
   return (
-    <header className="stack" style={{ marginBottom: 20 }}>
+    <header className="page-head">
       {back && (
-        <Link href={back} className="small">
+        <Link href={back} className="btn ghost sm" style={{ marginLeft: -10, marginBottom: 8 }}>
           ← {t('common.back')}
         </Link>
       )}
-      <div className="row between">
-        <div>
-          <h1>{title}</h1>
-          {subtitle && <p className="muted">{subtitle}</p>}
+      <div className="row between" style={{ alignItems: 'flex-end' }}>
+        <div className="grow">
+          <h1 style={{ margin: 0 }}>{title}</h1>
+          {subtitle && <p className="sub">{subtitle}</p>}
         </div>
         {actions && <div className="row">{actions}</div>}
       </div>
@@ -28,7 +30,7 @@ export function PageHeader({ title, subtitle, actions, back }: { title: ReactNod
 export function Section({ title, children, actions, id }: { title?: ReactNode; children: ReactNode; actions?: ReactNode; id?: string }) {
   const hid = useId();
   return (
-    <section aria-labelledby={title ? hid : undefined} id={id} className="stack" style={{ marginTop: 28 }}>
+    <section aria-labelledby={title ? hid : undefined} id={id} className="stack section">
       {(title || actions) && (
         <div className="row between">
           {title && <h2 id={hid}>{title}</h2>}
@@ -112,21 +114,15 @@ export function DateText({ value, time }: { value: string | undefined | null; ti
   return <time dateTime={value || undefined}>{formatDate(value || null, lang, time)}</time>;
 }
 
-const STATUS_TONE: Record<string, string> = {
-  CONFIRMED: 'ok', APPROVED: 'ok', PAID: 'ok', COMPLETED: 'ok', PUBLISHED: 'ok', ACTIVE: 'ok', VERIFIED: 'ok', ACCEPTED: 'ok', PASS: 'ok', PASSED: 'ok', SETTLED: 'ok', DONE: 'ok', RESOLVED: 'ok', SIGNED: 'ok', ELIGIBLE: 'ok', CHECKED_IN: 'ok', PAID_OUT: 'ok', OPEN: 'info',
-  PENDING: 'warn', PAYMENT_PENDING: 'warn', HELD: 'warn', DRAFT: 'warn', IN_REVIEW: 'warn', SUBMITTED: 'warn', PROPOSED: 'warn', COUNTERED: 'warn', REQUESTED: 'warn', QUOTED: 'warn', READY: 'info', OFFERED: 'info', UNDER_REVIEW: 'warn', AGREEMENT_PENDING: 'warn', VERIFYING: 'warn', REVIEW: 'warn', NEEDS_INFO: 'warn', EXPIRING: 'warn', PROCESSING: 'warn',
-  CANCELLED: 'danger', CANCELED: 'danger', REJECTED: 'danger', FAILED: 'danger', EXPIRED: 'danger', DECLINED: 'danger', BLOCKED: 'danger', SUSPENDED: 'danger', REFUNDED: 'danger', NO_SHOW: 'danger', FAIL: 'danger', DISPUTED: 'danger', ABORTED: 'danger', INELIGIBLE: 'danger',
-};
 export function StatusBadge({ status }: { status: string | undefined | null }) {
-  if (!status) return <span className="badge">—</span>;
-  const s = String(status).toUpperCase();
-  return <span className={`badge ${STATUS_TONE[s] ?? ''}`}>{s.replace(/_/g, ' ')}</span>;
+  return <StatusPill status={status} />;
 }
 
 export function Alert({ tone = 'info', children, role }: { tone?: 'info' | 'ok' | 'warn' | 'error'; children: ReactNode; role?: string }) {
   return (
     <div className={`alert ${tone}`} role={role ?? (tone === 'error' ? 'alert' : 'status')}>
-      {children}
+      <span className="ico" aria-hidden="true">{tone === 'error' ? '⛔' : tone === 'warn' ? '⚠️' : tone === 'ok' ? '✅' : 'ℹ️'}</span>
+      <div className="grow">{children}</div>
     </div>
   );
 }
@@ -173,16 +169,7 @@ export function Kv({ rows }: { rows: Array<[ReactNode, ReactNode]> }) {
 }
 
 export function Steps({ steps, current }: { steps: string[]; current: number }) {
-  return (
-    <ol className="steps" aria-label="progress">
-      {steps.map((s, i) => (
-        <li key={s} className={i < current ? 'done' : ''} aria-current={i === current ? 'step' : undefined}>
-          {i < current ? '✓ ' : `${i + 1}. `}
-          {s}
-        </li>
-      ))}
-    </ol>
-  );
+  return <Stepper steps={steps} current={current} />;
 }
 
 export function ChipGroup<T extends string>({ value, onChange, options, label, multi }: { value: T[]; onChange: (v: T[]) => void; options: Array<{ value: T; label: string }>; label: string; multi?: boolean }) {

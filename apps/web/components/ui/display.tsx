@@ -1,0 +1,128 @@
+'use client';
+import type { ReactNode } from 'react';
+import { useI18n } from '@/lib/i18n';
+import { hashString } from '@/lib/art';
+import { formatMoney } from '@/lib/format';
+import { DateText } from './base';
+import { StatusPill } from './status';
+
+const AVATAR_BG = ['#1f4e7a', '#d94a33', '#2b6296', '#6d3fd6', '#15803d', '#b45309', '#0e2a47'];
+
+export function Avatar({ name, src, size = 40, verified }: { name: string; src?: string; size?: number; verified?: boolean }) {
+  const { L } = useI18n();
+  const bg = AVATAR_BG[hashString(name || '?') % AVATAR_BG.length];
+  return (
+    <span className="avatar" style={{ width: size, height: size, background: bg, fontSize: size * 0.42 }} aria-label={name}>
+      {src ? <img src={src} alt="" /> : (name || '?').trim().slice(0, 1).toUpperCase()}
+      {verified && (
+        <span className="verified" title={L('본인 확인됨', 'Verified')} aria-label={L('본인 확인됨', 'Verified')}>
+          <svg viewBox="0 0 24 24" width="70%" height="70%" fill="none" stroke="#fff" strokeWidth="4" aria-hidden="true">
+            <path d="M5 12.5 10 17 19 7" />
+          </svg>
+        </span>
+      )}
+    </span>
+  );
+}
+
+export function RatingStars({ value, count, compact }: { value?: number; count?: number; compact?: boolean }) {
+  const { L } = useI18n();
+  if (value === undefined || value === null || Number.isNaN(value)) return <span className="rating muted">{L('신규', 'New')}</span>;
+  const v = Math.max(0, Math.min(5, value));
+  const label = `${L('평점', 'Rating')} ${v.toFixed(2)} / 5${count ? ` (${count})` : ''}`;
+  if (compact)
+    return (
+      <span className="rating" aria-label={label}>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.8L12 3.5Z" fill="currentColor" />
+        </svg>
+        {v.toFixed(2)}
+        {count !== undefined && <span className="muted">({count})</span>}
+      </span>
+    );
+  return (
+    <span className="rating" aria-label={label}>
+      <span className="stars" aria-hidden="true">
+        {[0, 1, 2, 3, 4].map((i) => {
+          const fill = Math.max(0, Math.min(1, v - i));
+          return (
+            <svg key={i} viewBox="0 0 24 24">
+              <defs>
+                <linearGradient id={`rs${i}-${Math.round(v * 100)}`}>
+                  <stop offset={fill} stopColor="var(--accent)" />
+                  <stop offset={fill} stopColor="var(--surface-3)" />
+                </linearGradient>
+              </defs>
+              <path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.8L12 3.5Z" fill={`url(#rs${i}-${Math.round(v * 100)})`} />
+            </svg>
+          );
+        })}
+      </span>
+      {v.toFixed(1)}
+      {count !== undefined && <span className="muted">({count})</span>}
+    </span>
+  );
+}
+
+export function Stepper({ steps, current, label }: { steps: string[]; current: number; label?: string }) {
+  return (
+    <ol className="stepper" aria-label={label ?? 'progress'}>
+      {steps.map((s, i) => (
+        <li key={s} className={i < current ? 'done' : i === current ? 'current' : ''} aria-current={i === current ? 'step' : undefined}>
+          <span className="dot" aria-hidden="true">
+            {i < current ? '✓' : i + 1}
+          </span>
+          <span>{s}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+export interface TimelineEvent {
+  status?: string;
+  title?: ReactNode;
+  at?: string;
+  note?: ReactNode;
+}
+export function Timeline({ events }: { events: TimelineEvent[] }) {
+  return (
+    <ol className="timeline">
+      {events.map((e, i) => (
+        <li key={i}>
+          <div className="row" style={{ gap: 8 }}>
+            {e.status && <StatusPill status={e.status} />}
+            {e.title && <strong className="small">{e.title}</strong>}
+          </div>
+          <div className="t-meta">
+            {e.at && <DateText value={e.at} time />} {e.note && <> · {e.note}</>}
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+export interface PriceLine {
+  label: string;
+  amountMinor: number;
+  hint?: string;
+}
+export function PriceBreakdown({ lines, totalMinor, currency = 'KRW', totalLabel, footnote }: { lines: PriceLine[]; totalMinor: number; currency?: string; totalLabel?: string; footnote?: ReactNode }) {
+  const { L, lang } = useI18n();
+  return (
+    <div className="price-lines" aria-label={L('요금 상세', 'Price breakdown')}>
+      {lines.map((l, i) => (
+        <div key={i} className={`line ${l.amountMinor < 0 ? 'discount' : ''}`}>
+          <span title={l.hint}>{l.label}</span>
+          <span className="tnum">{formatMoney(l.amountMinor, currency, lang)}</span>
+        </div>
+      ))}
+      <div className="line total">
+        <span>{totalLabel ?? L('총액', 'Total')}</span>
+        <span className="tnum">{formatMoney(totalMinor, currency, lang)}</span>
+      </div>
+      {footnote && <p className="xs muted" style={{ margin: 0 }}>{footnote}</p>}
+    </div>
+  );
+}

@@ -3,25 +3,29 @@ import type { ReactNode } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
 import { LoginLink } from './states';
-import { Spinner } from './ui';
+import { ListSkeleton } from './ui/skeleton';
+import { Illustration } from './ui/illustrations';
 import Link from 'next/link';
 
 /** Client-side route gate (UX only — the API enforces authorization on every request). */
 export function RequireAuth({ roles, children, staff }: { roles?: string[]; staff?: boolean; children: ReactNode }) {
   const { ready, user, hasRole, isStaff } = useAuth();
   const { t, L } = useI18n();
-  if (!ready) return <Spinner />;
+  if (!ready) return <ListSkeleton rows={3} />;
   if (!user)
     return (
       <div className="state" role="alert">
-        <h2>401 · {t('state.unauth')}</h2>
+        <Illustration name="lock" />
+        <h2>{t('state.unauth')}</h2>
+        <p className="muted">{L('로그인하면 이 페이지를 이용할 수 있어요.', 'Sign in to continue.')}</p>
         <LoginLink />
       </div>
     );
   if ((staff && !isStaff) || (roles && roles.length && !hasRole(...roles, 'ADMIN')))
     return (
       <div className="state" role="alert">
-        <h2>403 · {t('state.forbidden')}</h2>
+        <Illustration name="lock" />
+        <h2>{t('state.forbidden')}</h2>
         <p className="muted">
           {L('필요 권한', 'Required role')}: {staff ? 'STAFF' : roles?.join(' / ')}
         </p>
