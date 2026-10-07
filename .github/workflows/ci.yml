@@ -36,14 +36,14 @@ jobs:
     name: G0 spec integrity
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with: { node-version: "${{ env.NODE_VERSION }}", cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - name: validate-spec (errors fail; implementation gaps are warnings)
         run: node scripts/validate-spec.mjs --json reports/g0-spec.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with: { name: report-spec, path: reports/, if-no-files-found: ignore }
 
@@ -65,9 +65,9 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 3s --health-retries 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with: { node-version: "${{ env.NODE_VERSION }}", cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - name: migrate --verify (clean apply + idempotent re-run on scratch DB)
@@ -97,7 +97,7 @@ jobs:
       - name: status
         if: always()
         run: echo '{"gate":"G2","pg":"${{ matrix.pg }}","status":"${{ job.status }}"}' > reports/g2-status-pg${{ matrix.pg }}.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with: { name: "report-db-pg${{ matrix.pg }}", path: reports/, if-no-files-found: ignore }
 
@@ -115,9 +115,9 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 3s --health-retries 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with: { node-version: "${{ env.NODE_VERSION }}", cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - name: typecheck
@@ -129,7 +129,7 @@ jobs:
         run: |
           mkdir -p ../../reports
           npx vitest run --reporter=default --reporter=json --outputFile.json=../../reports/vitest-api.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with: { name: report-api, path: reports/, if-no-files-found: ignore }
 
@@ -138,9 +138,9 @@ jobs:
     name: G1 contracts (OpenAPI export + lint)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with: { node-version: "${{ env.NODE_VERSION }}", cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - name: export OpenAPI from live route schemas
@@ -169,7 +169,7 @@ jobs:
             echo "no base contract on ${{ github.base_ref }}" | tee reports/g1-breaking.txt
           fi
       - run: cp packages/contracts/openapi.json packages/contracts/openapi-report.json reports/ 2>/dev/null || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with: { name: report-contracts, path: reports/, if-no-files-found: ignore }
 
@@ -178,9 +178,9 @@ jobs:
     name: web typecheck + build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with: { node-version: "${{ env.NODE_VERSION }}", cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @jetpool/web typecheck
@@ -191,7 +191,7 @@ jobs:
       - name: status
         if: always()
         run: mkdir -p reports && echo '{"check":"web-build","status":"${{ job.status }}"}' > reports/web-build.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with: { name: report-web, path: reports/, if-no-files-found: ignore }
 
@@ -202,10 +202,10 @@ jobs:
     env:
       GITLEAKS_VERSION: "8.21.2"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with: { node-version: "${{ env.NODE_VERSION }}", cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - name: secret scan (gitleaks, full history) — BLOCKING
@@ -230,7 +230,7 @@ jobs:
           format: spdx-json
           output-file: reports/sbom.spdx.json
           upload-artifact: false
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with: { name: report-security, path: reports/, if-no-files-found: ignore }
 
@@ -255,9 +255,9 @@ jobs:
       OAUTH_MOCK: "true"
       RATE_LIMIT_PER_MIN: "1000000"
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with: { node-version: "${{ env.NODE_VERSION }}", cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: node packages/db/migrate.mjs && pnpm --filter @jetpool/api build
@@ -274,7 +274,7 @@ jobs:
         run: bash scripts/load/run-all.sh reports
       - if: always()
         run: cp /tmp/api.log /tmp/worker.log reports/ 2>/dev/null || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with: { name: report-load, path: reports/, if-no-files-found: ignore }
 
@@ -285,19 +285,19 @@ jobs:
     needs: [spec, db, api, contracts, web, security, load]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with: { node-version: "${{ env.NODE_VERSION }}", cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with: { pattern: report-*, path: reports, merge-multiple: true }
       - name: render docs/RELEASE_REPORT.md
         env:
           JOB_RESULTS: ${{ toJSON(needs) }}
         run: node scripts/release-report.mjs --reports reports --out docs/RELEASE_REPORT.md
       - run: cat docs/RELEASE_REPORT.md >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: release-report
           path: |

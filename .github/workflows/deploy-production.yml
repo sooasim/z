@@ -52,7 +52,7 @@ jobs:
           [[ "${{ inputs.web_digest }}" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "web_digest must be sha256:<64 hex>"; exit 1; }
           [[ "${{ inputs.release_sha }}" =~ ^[0-9a-f]{40}$ ]] || { echo "release_sha must be a full 40-char SHA"; exit 1; }
           [[ "${{ github.ref }}" == "refs/heads/main" ]] || { echo "production deploys must be dispatched from main"; exit 1; }
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -66,7 +66,7 @@ jobs:
           }
           check "$API_REPO" "${{ inputs.api_digest }}"
           check "$WEB_REPO" "${{ inputs.web_digest }}"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { ref: "${{ inputs.release_sha }}" }
       - name: verify build provenance
         env:
@@ -93,20 +93,20 @@ jobs:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       EXPECT_PRODUCTION: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { ref: "${{ inputs.release_sha }}" }
       - name: AWS credentials (OIDC)
         if: env.DEPLOY_TARGET == 'ecs'
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
       - name: kubeconfig
         if: env.DEPLOY_TARGET == 'k8s'
         run: mkdir -p ~/.kube && echo "${{ secrets.KUBECONFIG_PRODUCTION }}" | base64 -d > ~/.kube/config
-      - uses: superfly/flyctl-actions/setup-flyctl@1.5
+      - uses: superfly/flyctl-actions/setup-flyctl@1.6
         if: env.DEPLOY_TARGET == 'fly'
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -127,7 +127,7 @@ jobs:
       - name: snapshot current release (rollback point)
         id: snapshot
         run: infra/scripts/deploy.sh production snapshot
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with: { name: prod-rollback-snapshot, path: .deploy-state-production.json }
 
       - name: migrate (forward-only, expand/contract — old code must keep working)
