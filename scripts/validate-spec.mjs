@@ -134,7 +134,8 @@ for (const f of walk(path.join(root, 'apps/api/src'), ['.ts', '.js'])) {
   const src = readFileSync(f, 'utf8');
   // constants such as `const TAG_PAY = 'PAY-01'` used as `tags: [TAG_PAY]`
   const consts = new Map([...src.matchAll(/\b([A-Za-z_$][\w$]*)\s*(?::\s*\w+\s*)?=\s*['"`]([A-Z]+-\d+)['"`]/g)].map((m) => [m[1], m[2]]));
-  let unresolved = false;
+  // `tags: TAG` where `const TAG = ['CORE-01']` (or any non-literal tags expression)
+  let unresolved = /tags:\s*(?!\[)[A-Za-z_$]/.test(src) || /[{,]\s*tags\s*[,}]/.test(src); // incl. shorthand `{ tags }`
   for (const m of src.matchAll(/tags:\s*\[([^\]]*)\]/g)) {
     for (const t of m[1].matchAll(/['"`]([A-Z]+-\d+)['"`]/g)) usedTags.add(t[1]);
     for (const id of m[1].matchAll(/(?:^|[\s,])([A-Za-z_$][\w$]*)(?=\s*(?:,|$))/g)) {

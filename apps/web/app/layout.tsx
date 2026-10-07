@@ -2,7 +2,8 @@ import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
 import { Providers } from '@/components/providers';
-import { Header, Footer, ServiceWorkerRegister } from '@/components/shell';
+import { Header, Footer, BottomNav, ServiceWorkerRegister } from '@/components/shell';
+import { THEME_SCRIPT } from '@/components/theme';
 import { SITE_URL } from '@/lib/env';
 
 export const metadata: Metadata = {
@@ -17,14 +18,22 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0b5cad',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#08121f' },
+  ],
+  viewportFit: 'cover',
   width: 'device-width',
   initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="ko-KR">
+    <html lang="ko-KR" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
+      </head>
       <body>
         <a href="#main" className="skip-link">
           본문 바로가기 / Skip to content
@@ -35,6 +44,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <div className="container">{children}</div>
           </main>
           <Footer />
+          <BottomNav />
           <ServiceWorkerRegister />
         </Providers>
       </body>
