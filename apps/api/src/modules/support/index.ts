@@ -107,7 +107,7 @@ export default async function supportModule(app: FastifyInstance) {
 
   r.get('/v1/admin/support/cases/:id', { schema: { tags: TAG, params: idParams }, preHandler: staff }, async (req) => ({ item: await svc.caseDetail(pool, ctxFromRequest(req), req.params.id) }));
 
-  r.post('/v1/admin/support/cases/:id/assign', { schema: { tags: TAG, params: idParams, body: z.object({ assigneeId: z.uuid().optional() }).optional() }, preHandler: staff }, async (req) => {
+  r.post('/v1/admin/support/cases/:id/assign', { schema: { tags: TAG, params: idParams, body: z.object({ assigneeId: z.uuid().optional() }).nullish() }, preHandler: staff }, async (req) => {
     const ctx = ctxFromRequest(req);
     return { item: svc.presentCase(await withTx(pool, (tx) => svc.assign(tx, ctx, req.params.id, req.body?.assigneeId ?? ctx.actor!.userId)), ctx) };
   });

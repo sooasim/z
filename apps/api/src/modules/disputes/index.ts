@@ -131,7 +131,7 @@ export default async function disputesModule(app: FastifyInstance) {
 
   r.get('/v1/admin/disputes/:id', { schema: { tags: TAG, params: idParams }, preHandler: staffRead }, async (req) => ({ item: await svc.disputeDetail(pool, ctxFromRequest(req), req.params.id) }));
 
-  r.post('/v1/admin/disputes/:id/assign', { schema: { tags: TAG, params: idParams, body: z.object({ assigneeId: z.uuid().optional() }).optional() }, preHandler: staffWrite }, async (req) => ({
+  r.post('/v1/admin/disputes/:id/assign', { schema: { tags: TAG, params: idParams, body: z.object({ assigneeId: z.uuid().optional() }).nullish() }, preHandler: staffWrite }, async (req) => ({
     item: await withTx(pool, (tx) => svc.assignDispute(tx, ctxFromRequest(req), req.params.id, req.body?.assigneeId ?? getActor(req).userId)),
   }));
 

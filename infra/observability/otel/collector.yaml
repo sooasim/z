@@ -1,0 +1,96 @@
+# OpenTelemetry Collector (PLAT-04): OTLP traces/metrics/logs in, Prometheus scrape of /metrics,
+# PII/secret scrubbing, export to the chosen backend (Grafana Cloud / Tempo / X-Ray / Datadog via OTLP).
+# Run as an ECS sidecar (ADOT image) or a k8s DaemonSet/Deployment. Configure exporter endpoints via env.
+receivers:
+  otlp:
+    protocols:
+      grpc: { endpoint: 0.0.0.0:4317 }
+      http: { endpoint: 0.0.0.0:4318 }
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: jetpool-api
+          scrape_interval: 15s
+          static_configs:
+            - targets: ["${env:JETPOOL_API_METRICS_TARGET}"]
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 20
+  batch: {}
+  resource:
+    attributes:
+      - { key: deployment.environment, value: "${env:JETPOOL_ENV}", action: upsert }
+      - { key: service.namespace, value: jetpool, action: upsert }
+  # Never ship secrets/PII in telemetry (AGENTS_MASTER: logs/metrics/traces avoid secrets and PII leakage).
+  attributes/scrub:
+    actions:
+      - { key: http.request.header.authorization, action: delete }
+      - { key: http.request.header.cookie, action: delete }
+      - { key: http.request.header.x-toss-signature, action: delete }
+      - { key: enduser.id, action: hash }
+      - { key: user.email, action: delete }
+      - { key: db.statement, action: delete }
+  redaction:
+    allow_all_keys: true
+    blocked_values:
+      - '\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b'            # card-like numbers
+      - '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'     # e-mail addresses
+      - '\b01[016789]-?\d{3,4}-?\d{4}\b'                     # KR mobile numbers
+      - '(live|test)_g?sk_[0-9A-Za-z]+'                      # Toss secret keys
+  filter/health:
+    error_mode: ignore
+    traces:
+      span:
+        - 'attributes["url.path"] == "/health"'
+        - 'attributes["url.path"] == "/ready"'
+        - 'attributes["url.path"] == "/metrics"'
+  tail_sampling:
+    decision_wait: 10s
+    policies:
+      - { name: errors, type: status_code, status_code: { status_codes: [ERROR] } }
+      - { name: slow, type: latency, latency: { threshold_ms: 500 } }
+      - { name: money-paths, type: string_attribute, string_attribute: { key: http.route, values: ["/v1/payments/.*", "/v1/booking/holds", "/v1/webhooks/.*"], enabled_regex_matching: true } }
+      - { name: baseline, type: probabilistic, probabilistic: { sampling_percentage: 10 } }
+
+connectors:
+  spanmetrics:
+    histogram:
+      explicit: { buckets: [10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2s, 5s] }
+    dimensions:
+      - name: http.route
+      - name: http.response.status_code
+
+exporters:
+  otlphttp:
+    endpoint: "${env:OTEL_EXPORTER_OTLP_ENDPOINT}"
+    headers:
+      authorization: "${env:OTEL_EXPORTER_OTLP_AUTH}"
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    namespace: jetpool_otel
+  debug:
+    verbosity: basic
+
+extensions:
+  health_check: { endpoint: 0.0.0.0:13133 }
+
+service:
+  extensions: [health_check]
+  telemetry:
+    metrics: { address: 0.0.0.0:8888 }
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, filter/health, attributes/scrub, redaction, resource, tail_sampling, batch]
+      exporters: [otlphttp, spanmetrics]
+    metrics:
+      receivers: [otlp, prometheus, spanmetrics]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlphttp, prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/scrub, redaction, resource, batch]
+      exporters: [otlphttp]

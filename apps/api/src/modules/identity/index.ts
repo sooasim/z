@@ -164,7 +164,7 @@ export default async function identityModule(app: FastifyInstance) {
       tags: TAG,
       summary: 'Start OAuth login/signup (authorization-code + PKCE). Consents may be supplied for first-time signup.',
       params: providerParams,
-      body: z.object({ consents: z.array(consentInput).max(20).optional(), returnTo: z.string().max(500).regex(/^\/[^/]/).optional() }).optional(),
+      body: z.object({ consents: z.array(consentInput).max(20).optional(), returnTo: z.string().max(500).regex(/^\/[^/]/).optional() }).nullish(),
     },
     config: authLimit,
   }, async (req) => svc.startOAuth(pool, ctxFromRequest(req), req.params.provider, { mode: 'login', ...(req.body ?? {}) }));

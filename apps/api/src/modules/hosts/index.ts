@@ -60,7 +60,7 @@ export default async function hostsModule(app: FastifyInstance) {
   });
 
   r.post('/v1/admin/host-applications/:id/approve', {
-    schema: { tags: TAG, params: idParams, body: z.object({ reason: z.string().max(1000).optional() }).optional() },
+    schema: { tags: TAG, params: idParams, body: z.object({ reason: z.string().max(1000).optional() }).nullish() },
     preHandler: staff,
   }, async (req) => ({ item: await withTx(pool, (tx) => svc.decide(tx, ctxFromRequest(req), req.params.id, { approve: true, reason: req.body?.reason })) }));
 

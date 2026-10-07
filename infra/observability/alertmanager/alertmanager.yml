@@ -1,0 +1,58 @@
+# On-call routing (docs/OPERATIONS.md §On-call). Secrets (webhook URLs, PagerDuty keys) come from files mounted
+# from the secret manager — never commit them.
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: slack-ops
+  group_by: [alertname, env]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers: [severity="page", env="prod"]
+      receiver: pagerduty-primary
+      continue: true
+    - matchers: [severity="page", team="finance", env="prod"]
+      receiver: slack-finance
+    - matchers: [team="security"]
+      receiver: slack-security
+    - matchers: [env="staging"]
+      receiver: slack-staging
+
+inhibit_rules:
+  # If the API is down, do not also page for latency/SLO symptoms.
+  - source_matchers: [alertname="ApiDown"]
+    target_matchers: [severity="page"]
+    equal: [env]
+  - source_matchers: [alertname="PostgresDown"]
+    target_matchers: [team=~"booking|finance|platform"]
+    equal: [env]
+
+receivers:
+  - name: pagerduty-primary
+    pagerduty_configs:
+      - routing_key_file: /etc/alertmanager/secrets/pagerduty_routing_key
+        severity: critical
+  - name: slack-ops
+    slack_configs:
+      - api_url_file: /etc/alertmanager/secrets/slack_ops_webhook
+        channel: "#jetpool-ops"
+        send_resolved: true
+        title: '{{ .CommonLabels.alertname }} ({{ .CommonLabels.env }})'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }} — runbook: {{ .Annotations.runbook }}{{ "\n" }}{{ end }}'
+  - name: slack-finance
+    slack_configs:
+      - api_url_file: /etc/alertmanager/secrets/slack_finance_webhook
+        channel: "#jetpool-finance-ops"
+        send_resolved: true
+  - name: slack-security
+    slack_configs:
+      - api_url_file: /etc/alertmanager/secrets/slack_security_webhook
+        channel: "#jetpool-security"
+        send_resolved: true
+  - name: slack-staging
+    slack_configs:
+      - api_url_file: /etc/alertmanager/secrets/slack_ops_webhook
+        channel: "#jetpool-staging"
+        send_resolved: true

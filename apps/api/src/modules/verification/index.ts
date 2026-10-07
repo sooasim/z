@@ -145,7 +145,7 @@ export default async function verificationModule(app: FastifyInstance) {
   }));
 
   r.post('/v1/admin/verifications/:id/approve', {
-    schema: { tags: TAG, params: idParams, body: z.object({ reason: z.string().max(1000).optional(), expiresAt: z.iso.datetime().optional() }).optional() },
+    schema: { tags: TAG, params: idParams, body: z.object({ reason: z.string().max(1000).optional(), expiresAt: z.iso.datetime().optional() }).nullish() },
     preHandler: staff,
   }, async (req) => ({
     item: await withTx(pool, (tx) => svc.decideCase(tx, ctxFromRequest(req), req.params.id, { approve: true, reason: req.body?.reason, expiresAt: req.body?.expiresAt })),
