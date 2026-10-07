@@ -57,12 +57,11 @@ export async function refreshRecommendationFeatures(db: Db, userId: string): Pro
 
 async function candidates(db: Db, userId: string | null): Promise<Candidate[]> {
   const subject = userId ? { userId } : undefined;
-  const [stayOn, exchangeOn, guidePaidOn, travelOn] = await Promise.all([
-    isEnabled(db, 'stay.paid_booking', subject),
-    isEnabled(db, 'exchange.enabled', subject),
-    isEnabled(db, 'guide.paid', subject),
-    isEnabled(db, 'travel.commerce', subject),
-  ]);
+  // sequential: `db` may be a single transaction client, which must not run concurrent queries (pg@9 removes queuing)
+  const stayOn = await isEnabled(db, 'stay.paid_booking', subject);
+  const exchangeOn = await isEnabled(db, 'exchange.enabled', subject);
+  const guidePaidOn = await isEnabled(db, 'guide.paid', subject);
+  const travelOn = await isEnabled(db, 'travel.commerce', subject);
   const out: Candidate[] = [];
   const props = await q(
     db,

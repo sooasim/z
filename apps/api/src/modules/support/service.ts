@@ -8,7 +8,8 @@ import { notify } from '../../platform/notify.js';
 import { hasRole } from '../../platform/auth.js';
 import { conflict, forbidden, notFound, unprocessable } from '../../platform/errors.js';
 import { resolveContextParties, type ContextType } from '../disputes/parties.js';
-import { maskEmail, shouldMask } from '../roles/service.js';
+import { maskEmail, maskPhone } from '../roles/service.js';
+import { supportDeskOf, type SupportDesk } from './desk.js';
 
 export type CaseStatus = 'OPEN' | 'PENDING_CUSTOMER' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
 export type Priority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
@@ -26,6 +27,20 @@ export const SLA_HOURS: Record<Priority, number> = { URGENT: 4, HIGH: 8, NORMAL:
 export const slaDue = (from: Date, p: Priority) => new Date(from.getTime() + SLA_HOURS[p] * 3600_000);
 
 export const CONTEXT_TYPES = ['RESERVATION', 'EXCHANGE', 'GUIDE_BOOKING', 'ORDER', 'DISPUTE', 'PAYMENT', 'ACCOUNT', 'OTHER'] as const;
+
+export const LINK_TYPES = ['RESERVATION', 'EXCHANGE', 'GUIDE_BOOKING', 'ORDER', 'DISPUTE', 'PAYMENT', 'USER', 'CONVERSATION'] as const;
+export type LinkType = (typeof LINK_TYPES)[number];
+/** Existence check table per link type (constant SQL identifiers selected by enum). */
+const LINK_TABLES: Record<LinkType, string> = {
+  RESERVATION: 'reservations',
+  EXCHANGE: 'exchange_requests',
+  GUIDE_BOOKING: 'guide_bookings',
+  ORDER: 'orders',
+  DISPUTE: 'disputes',
+  PAYMENT: 'payments',
+  USER: 'users',
+  CONVERSATION: 'conversations',
+};
 
 export const isSupportStaff = (ctx: Ctx) => !!ctx.actor && ctx.actor.aal === 'aal2' && hasRole(ctx.actor, 'SUPPORT', 'ADMIN');
 
@@ -46,7 +61,16 @@ async function assertContextAccess(db: Db, userId: string, contextType: string, 
     const pm = await maybeOne(db, `SELECT payer_id FROM payments WHERE id = $1`, [contextId]);
     if (!pm) throw notFound('Payment');
     if (pm.payer_id !== userId) throw forbidden('NOT_A_PARTY', 'You can only open cases about your own payments');
+  } else if (contextType === 'ACCOUNT') {
+    if (contextId !== userId) throw forbidden('NOT_A_PARTY', 'You can only open cases about your own account');
   }
+}
+
+/** The link auto-created from a requester's (already party-verified) context. OTHER has none. */
+function contextLink(userId: string, contextType?: string, contextId?: string): { type: LinkType; id: string } | null {
+  if (contextType === 'ACCOUNT') return { type: 'USER', id: userId };
+  if (!contextType || !contextId) return null;
+  return (LINK_TYPES as readonly string[]).includes(contextType) ? { type: contextType as LinkType, id: contextId } : null;
 }
 
 export async function openCase(
@@ -72,6 +96,10 @@ export async function openCase(
     `INSERT INTO state_transitions(aggregate_type, aggregate_id, from_state, to_state, actor_id, actor_type, correlation_id) VALUES ('support_case',$1,NULL,'OPEN',$2,'USER',$3)`,
     [c.id, userId, ctx.correlationId],
   );
+  const link = contextLink(userId, input.contextType, input.contextId);
+  if (link) {
+    await tx.query(`INSERT INTO support_case_links(case_id, link_type, link_id, created_by) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`, [c.id, link.type, link.id, userId]);
+  }
   await emit(tx, ctx, { aggregateType: 'support_case', aggregateId: c.id, eventType: 'support.case.opened', payload: { caseId: c.id, requesterId: userId, category: c.category, priority, contextType: c.context_type, contextId: c.context_id } });
   await audit(tx, ctx, { action: 'support.case.opened', resourceType: 'support_case', resourceId: c.id, after: { category: c.category, priority }, category: 'GENERAL' });
   return c;
@@ -87,8 +115,17 @@ export async function loadCase(db: Db, ctx: Ctx, id: string, lock = false) {
   return { c, requester, staff };
 }
 
-export function presentCase(c: any, viewer: Ctx) {
-  const mask = isSupportStaff(viewer) && shouldMask(viewer.actor);
+/**
+ * OPS-01 masking: support staff see requester contact data masked unless they hold the ADMIN role or an active,
+ * case-scoped elevated grant (detail view only). Requesters always see their own data.
+ */
+export function contactMasked(c: any, viewer: Ctx, opts: { elevated?: boolean } = {}) {
+  if (!isSupportStaff(viewer) || c.requester_id === viewer.actor?.userId) return false;
+  return !hasRole(viewer.actor, 'ADMIN') && !opts.elevated;
+}
+
+export function presentCase(c: any, viewer: Ctx, opts: { elevated?: boolean } = {}) {
+  const mask = contactMasked(c, viewer, opts);
   return {
     id: c.id,
     requesterId: c.requester_id,
@@ -101,6 +138,7 @@ export function presentCase(c: any, viewer: Ctx) {
     priority: c.priority,
     status: c.status,
     assigneeId: isSupportStaff(viewer) ? c.assignee_id : undefined,
+    externalRef: isSupportStaff(viewer) ? c.external_ref ?? null : undefined,
     slaDueAt: c.sla_due_at,
     slaBreached: !!c.sla_due_at && new Date(c.sla_due_at) < new Date() && !['RESOLVED', 'CLOSED'].includes(c.status),
     createdAt: c.created_at,
@@ -108,15 +146,116 @@ export function presentCase(c: any, viewer: Ctx) {
   };
 }
 
+/** Active (unexpired, unrevoked) elevated grant of `adminId` scoped to this support case (read-only check). */
+export async function activeCaseGrant(db: Db, adminId: string, caseId: string) {
+  return maybeOne<{ id: string; reason: string; expires_at: Date }>(
+    db,
+    `SELECT id, reason, expires_at FROM elevated_access_grants
+      WHERE admin_id = $1 AND case_type = 'SUPPORT_CASE' AND case_id = $2 AND revoked_at IS NULL AND expires_at > now()
+      ORDER BY expires_at DESC LIMIT 1`,
+    [adminId, caseId],
+  );
+}
+
 export async function caseDetail(db: Db, ctx: Ctx, id: string) {
-  const { c, staff } = await loadCase(db, ctx, id);
+  const { c, staff, requester } = await loadCase(db, ctx, id);
+  let elevated = false;
+  if (staff && !requester && !hasRole(ctx.actor, 'ADMIN')) {
+    const g = await activeCaseGrant(db, ctx.actor!.userId, id);
+    if (g) {
+      elevated = true;
+      // every elevated read of masked data is audited (invariant 10 / OPS-01)
+      await audit(db, ctx, { action: 'support.case.contact_viewed', resourceType: 'support_case', resourceId: id, after: { grantId: g.id }, reason: g.reason, category: 'ELEVATED_ACCESS' });
+    }
+  }
+  const mask = contactMasked(c, ctx, { elevated });
+  const phone = c.requester_id ? (await maybeOne<{ phone: string | null }>(db, `SELECT phone FROM users WHERE id = $1`, [c.requester_id]))?.phone ?? null : null;
   // Internal notes are never shown to the requester.
   const events = await q(
     db,
     `SELECT id, actor_id, event_type, body, created_at FROM support_case_events WHERE case_id = $1 AND ($2 OR event_type <> 'INTERNAL_NOTE') ORDER BY created_at, id`,
     [id, staff],
   );
-  return { ...presentCase(c, ctx), events };
+  return {
+    ...presentCase(c, ctx, { elevated }),
+    contactPhone: mask ? maskPhone(phone) : phone,
+    contactMasked: mask,
+    events,
+    // staff-added context links may reference other people's records: staff only
+    links: staff ? await listLinks(db, id, c.requester_id) : undefined,
+  };
+}
+
+// ---------------------------------------------------------------- context links (support_case_links)
+
+const toLinkDto = (r: any, requesterId: string | null) => ({
+  linkType: r.link_type,
+  linkId: r.link_id,
+  createdBy: r.created_by,
+  source: r.created_by && r.created_by === requesterId ? 'REQUESTER' : 'STAFF',
+  createdAt: r.created_at,
+});
+
+export async function listLinks(db: Db, caseId: string, requesterId: string | null) {
+  const rows = await q(db, `SELECT * FROM support_case_links WHERE case_id = $1 ORDER BY created_at, link_type, link_id`, [caseId]);
+  return rows.map((r) => toLinkDto(r, requesterId));
+}
+
+/** Staff links a context record to a case (idempotent). The target must exist. */
+export async function linkCase(tx: Tx, ctx: Ctx, caseId: string, link: { linkType: LinkType; linkId: string }) {
+  const { c } = await loadCase(tx, ctx, caseId, true);
+  if (!isSupportStaff(ctx)) throw forbidden();
+  if (c.status === 'CLOSED') throw conflict('CASE_CLOSED', 'Case is closed');
+  const target = await maybeOne(tx, `SELECT 1 FROM ${LINK_TABLES[link.linkType]} WHERE id = $1`, [link.linkId]);
+  if (!target) throw notFound(link.linkType.toLowerCase().replace('_', ' '));
+  const row = await maybeOne(
+    tx,
+    `INSERT INTO support_case_links(case_id, link_type, link_id, created_by) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING *`,
+    [caseId, link.linkType, link.linkId, ctx.actor!.userId],
+  );
+  if (!row) {
+    const existing = await one(tx, `SELECT * FROM support_case_links WHERE case_id = $1 AND link_type = $2 AND link_id = $3`, [caseId, link.linkType, link.linkId]);
+    return { created: false, item: toLinkDto(existing, c.requester_id) };
+  }
+  await tx.query(`UPDATE support_cases SET updated_at = now() WHERE id = $1`, [caseId]);
+  await audit(tx, ctx, { action: 'support.case.linked', resourceType: 'support_case', resourceId: caseId, after: { linkType: link.linkType, linkId: link.linkId } });
+  return { created: true, item: toLinkDto(row, c.requester_id) };
+}
+
+export async function unlinkCase(tx: Tx, ctx: Ctx, caseId: string, link: { linkType: LinkType; linkId: string }) {
+  const { c } = await loadCase(tx, ctx, caseId, true);
+  if (!isSupportStaff(ctx)) throw forbidden();
+  if (c.status === 'CLOSED') throw conflict('CASE_CLOSED', 'Case is closed');
+  const row = await maybeOne(tx, `DELETE FROM support_case_links WHERE case_id = $1 AND link_type = $2 AND link_id = $3 RETURNING *`, [caseId, link.linkType, link.linkId]);
+  if (!row) throw notFound('Case link');
+  await tx.query(`UPDATE support_cases SET updated_at = now() WHERE id = $1`, [caseId]);
+  await audit(tx, ctx, { action: 'support.case.unlinked', resourceType: 'support_case', resourceId: caseId, before: { linkType: row.link_type, linkId: row.link_id, createdBy: row.created_by } });
+  return toLinkDto(row, c.requester_id);
+}
+
+// ---------------------------------------------------------------- external desk (Chatwoot) sync
+
+/**
+ * Outbox consumer of `support.case.opened`: mirror the case into the support desk and store `external_ref`.
+ * Idempotent: a case that already has an external_ref is skipped; desk failures throw so the outbox retries.
+ */
+export async function syncCaseToDesk(tx: Tx, ctx: Ctx, caseId: string, desk: SupportDesk = supportDeskOf(ctx.app)) {
+  const c = await maybeOne(tx, `SELECT * FROM support_cases WHERE id = $1 FOR UPDATE`, [caseId]);
+  if (!c || c.external_ref) return { externalRef: c?.external_ref ?? null, skipped: true };
+  const res = await desk.createConversation({
+    id: c.id,
+    requesterId: c.requester_id,
+    category: c.category,
+    subject: c.subject,
+    description: c.description,
+    priority: c.priority,
+    contextType: c.context_type,
+    contextId: c.context_id,
+  });
+  if (!res) return { externalRef: null, skipped: true };
+  await tx.query(`UPDATE support_cases SET external_ref = $2 WHERE id = $1 AND external_ref IS NULL`, [caseId, res.externalRef]);
+  await audit(tx, ctx, { action: 'support.case.desk_linked', resourceType: 'support_case', resourceId: caseId, after: { desk: desk.name, externalRef: res.externalRef } });
+  return { externalRef: res.externalRef, skipped: false };
 }
 
 export async function comment(tx: Tx, ctx: Ctx, id: string, body: string) {

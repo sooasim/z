@@ -8,8 +8,10 @@
 //   - spec event not declared in the AsyncAPI seed, OpenAPI seed tag referencing an unknown module
 //   - release gates G0..G10 missing or diverging from dd/JETPOOL_RELEASE_GATES.yaml
 // Warnings (exit 0) = implementation gaps in the codebase:
-//   - module id never used as a route tag in apps/api/src (tags: ['<ID>'])
-//   - owned table not created by any migration in packages/db/migrations
+//   - module id never used as a route tag in apps/api/src (tags: ['<ID>']) nor in the generated contract
+//     packages/contracts/openapi.json (per-operation tags), when that file is present
+//   - owned table not created by any migration in packages/db/migrations and not satisfied by an entry in
+//     docs/SPEC_TABLE_MAPPING.md (fenced yaml `mapping:` of specName: {kind: view|table|column|in-memory, implementation})
 //
 // Usage: node scripts/validate-spec.mjs [--json <out.json>] [--strict]
 //   --strict  also fail on implementation-gap warnings (used for release candidates)
@@ -146,13 +148,30 @@ for (const f of walk(path.join(root, 'apps/api/src'), ['.ts', '.js'])) {
   // tags computed from a variable (e.g. a loop over [path, 'STAY-09']): count module-id literals in that file
   if (unresolved) for (const t of src.matchAll(/['"`]([A-Z]+-\d+)['"`]/g)) usedTags.add(t[1]);
 }
+const moduleTagCount = () => [...usedTags].filter((t) => ids.has(t)).length;
+const sourceTagCount = moduleTagCount();
+// The generated contract (apps/api `pnpm contracts:export` → packages/contracts/openapi.json) carries the
+// resolved tags of every registered operation, including tags the source scan cannot resolve statically.
+const contractPath = 'packages/contracts/openapi.json';
+if (existsSync(path.join(root, contractPath))) {
+  let contract = null;
+  try { contract = JSON.parse(read(contractPath)); } catch (e) { warn(`${contractPath}: not valid JSON (${e.message}); route tags taken from source scan only`); }
+  let ops = 0;
+  const HTTP_VERBS = new Set(['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace']);
+  for (const item of Object.values(contract?.paths ?? {})) for (const [verb, op] of Object.entries(item ?? {})) {
+    if (!HTTP_VERBS.has(verb) || !op || typeof op !== 'object') continue;
+    ops++;
+    for (const t of Array.isArray(op.tags) ? op.tags : []) if (typeof t === 'string' && ids.has(t)) usedTags.add(t);
+  }
+  if (contract) info.push(`route tags: ${sourceTagCount} module id(s) from apps/api/src scan, ${moduleTagCount()} after ${contractPath} (${ops} operations)`);
+}
 const NO_ROUTE_EXPECTED = (m) => (m.api_or_interfaces ?? []).every((a) => /internal|cli/i.test(a));
 const missingTags = [];
 for (const m of modules) {
   if (usedTags.has(m.id)) continue;
   if (NO_ROUTE_EXPECTED(m)) { info.push(`${m.id}: no route tag (internal/CLI interface only)`); continue; }
   missingTags.push(m.id);
-  warn(`${m.id} (${m.priority}): no route tagged '${m.id}' in apps/api/src`);
+  warn(`${m.id} (${m.priority}): no route tagged '${m.id}' in apps/api/src or ${contractPath}`);
 }
 
 const migDir = path.join(root, 'packages/db/migrations');
@@ -161,11 +180,60 @@ for (const f of walk(migDir, ['.sql'])) {
   const sql = readFileSync(f, 'utf8');
   for (const m of sql.matchAll(/CREATE\s+(?:OR\s+REPLACE\s+)?(?:MATERIALIZED\s+)?(?:TABLE|VIEW)\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:"?\w+"?\.)?"?(\w+)"?/gi)) created.add(m[1].toLowerCase());
 }
+// docs/SPEC_TABLE_MAPPING.md: spec table names implemented under another name / shape. A fenced ```yaml block
+// with a top-level `mapping:` of specName: { kind: view|table|column|in-memory, implementation, tables?, source? }.
+const MAPPING_DOC = 'docs/SPEC_TABLE_MAPPING.md';
+const MAPPING_KINDS = new Set(['view', 'table', 'column', 'in-memory']);
+const mapping = new Map(); // specName -> { kind, implementation, satisfied, problem }
+if (existsSync(path.join(root, MAPPING_DOC))) {
+  const md = read(MAPPING_DOC);
+  let block = null;
+  for (const f of md.matchAll(/^```ya?ml[^\n]*\n([\s\S]*?)^```/gm)) {
+    let doc;
+    try { doc = parseYaml(f[1]); } catch (e) { err(`${MAPPING_DOC}: invalid YAML block (${e.message})`); continue; }
+    if (doc && typeof doc === 'object' && 'mapping' in doc) { block = doc.mapping; break; }
+  }
+  if (!block || typeof block !== 'object' || Array.isArray(block)) err(`${MAPPING_DOC}: no fenced yaml block with a 'mapping:' object`);
+  const specTables = new Set(modules.flatMap((m) => (m.owned_or_primary_tables ?? []).map((t) => String(t).trim().toLowerCase())));
+  for (const [rawName, e] of Object.entries(block ?? {})) {
+    const name = rawName.toLowerCase();
+    if (!e || typeof e !== 'object' || !MAPPING_KINDS.has(e.kind) || typeof e.implementation !== 'string' || !e.implementation.trim()) {
+      err(`${MAPPING_DOC}: mapping '${rawName}' needs kind (${[...MAPPING_KINDS].join('|')}) and a non-empty implementation`);
+      continue;
+    }
+    // real tables backing the entry: explicit `tables`, else the leading identifier of `implementation`
+    const tables = Array.isArray(e.tables) ? e.tables.map((x) => String(x).toLowerCase()) : [e.implementation.trim().match(/^[a-z_][a-z0-9_]*/i)?.[0]?.toLowerCase()].filter(Boolean);
+    let problem = null;
+    if (e.kind === 'in-memory') {
+      if (!e.source || !existsSync(path.join(root, String(e.source)))) problem = `in-memory implementation source '${e.source ?? ''}' not found`;
+    } else {
+      const missing = tables.filter((x) => !created.has(x));
+      if (!tables.length) problem = 'no backing table named';
+      else if (missing.length) problem = `backing table(s) ${missing.join(', ')} not created by any migration`;
+      else if (e.kind === 'view' && !created.has(name)) problem = `mapped as a view but no migration creates view '${name}'`;
+      else if (e.migration && !existsSync(path.join(migDir, String(e.migration)))) problem = `migration ${e.migration} not found in packages/db/migrations`;
+    }
+    if (!specTables.has(name)) info.push(`${MAPPING_DOC}: '${name}' is not an owned table of any spec module (kept for reference)`);
+    // a broken entry for a name that is otherwise satisfied (or not a spec table) would never surface below
+    if (problem && (created.has(name) || !specTables.has(name))) warn(`${MAPPING_DOC}: mapping '${name}' is stale — ${problem}`);
+    mapping.set(name, { kind: e.kind, implementation: e.implementation, tables, satisfied: !problem, problem });
+  }
+}
+
 const missingTables = [];
+const mappedTables = [];
 for (const m of modules) for (const t of m.owned_or_primary_tables ?? []) {
   const name = String(t).trim().toLowerCase();
   if (!name || name === 'none') continue;
-  if (!created.has(name)) { missingTables.push(`${m.id}:${name}`); warn(`${m.id} (${m.priority}): table '${name}' not created by any migration`); }
+  const mapped = mapping.get(name);
+  if (mapped?.satisfied) {
+    mappedTables.push(`${m.id}:${name}`);
+    if (!created.has(name)) info.push(`${m.id}: table '${name}' ${mapped.kind === 'in-memory' ? 'implemented as in-process cache (non-authoritative)' : `implemented as ${mapped.kind} of ${mapped.tables.join(', ')}`} — see ${MAPPING_DOC}`);
+    continue;
+  }
+  if (created.has(name)) continue;
+  missingTables.push(`${m.id}:${name}`);
+  warn(`${m.id} (${m.priority}): table '${name}' not created by any migration${mapped ? ` (${MAPPING_DOC}: ${mapped.problem})` : ''}`);
 }
 
 // ---------- output ----------
@@ -177,6 +245,8 @@ const result = {
   migrationsTables: created.size,
   missingRouteTags: missingTags,
   missingTables,
+  mappedTables,
+  tableMapping: Object.fromEntries(mapping),
   errors, warnings, info,
   generatedAt: new Date().toISOString(),
 };

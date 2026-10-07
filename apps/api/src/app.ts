@@ -7,6 +7,7 @@ import swaggerUi from '@fastify/swagger-ui';
 import { randomUUID } from 'node:crypto';
 import { jsonSchemaTransform, serializerCompiler, validatorCompiler, hasZodFastifySchemaValidationErrors } from 'fastify-type-provider-zod';
 import pino from 'pino';
+import { z } from 'zod';
 import { loadConfig, type Config } from './platform/config.js';
 import { createPool } from './platform/db.js';
 import { AppError, fromPgError } from './platform/errors.js';
@@ -14,6 +15,7 @@ import { resolveActor } from './platform/auth.js';
 import { Realtime } from './platform/realtime.js';
 import type { AppContext } from './platform/context.js';
 import { httpDuration, registry, outboxLag } from './platform/metrics.js';
+import { redactSecretsInText, serializeRequest } from './platform/http.js';
 import { registerModules } from './modules/index.js';
 
 export const REDACT_PATHS = [
@@ -33,11 +35,45 @@ export const REDACT_PATHS = [
 export interface BuildOptions {
   config?: Partial<Config>;
   logger?: boolean;
+  /** Log destination (default stdout). Tests pass a capture stream to assert on redaction. */
+  logStream?: pino.DestinationStream;
+}
+
+/** Error serializer: pino's standard one, with secret query parameters scrubbed from message/stack (e.g. FST_ERR_* carry the URL). */
+function serializeError(err: any) {
+  const out: any = pino.stdSerializers.err(err);
+  if (out && typeof out === 'object') {
+    if (typeof out.message === 'string') out.message = redactSecretsInText(out.message);
+    if (typeof out.stack === 'string') out.stack = redactSecretsInText(out.stack);
+  }
+  return out;
+}
+
+/**
+ * Root logger. Secrets never reach the log sink: header/body paths are redacted (REDACT_PATHS), the request
+ * serializer strips token/code/state/access_token/refresh_token/paymentKey query values from URLs (SSE and iCal
+ * feeds authenticate with ?token=), and string messages are scrubbed the same way (Fastify's "Route GET:/x?token=… not found").
+ */
+export function createLogger(level: string, stream?: pino.DestinationStream) {
+  return pino(
+    {
+      level,
+      redact: { paths: REDACT_PATHS, censor: '[REDACTED]' },
+      serializers: { req: serializeRequest, err: serializeError },
+      hooks: {
+        logMethod(args: any[], method: (...a: any[]) => void) {
+          for (let i = 0; i < args.length; i++) if (typeof args[i] === 'string') args[i] = redactSecretsInText(args[i]);
+          return method.apply(this, args);
+        },
+      },
+    },
+    stream,
+  );
 }
 
 export async function buildApp(opts: BuildOptions = {}): Promise<FastifyInstance> {
   const config = loadConfig(opts.config as any);
-  const log = pino({ level: opts.logger === false ? 'silent' : config.LOG_LEVEL, redact: { paths: REDACT_PATHS, censor: '[REDACTED]' } });
+  const log = createLogger(opts.logger === false ? 'silent' : config.LOG_LEVEL, opts.logStream);
   const app = Fastify({
     loggerInstance: log as unknown as import("fastify").FastifyBaseLogger,
     trustProxy: true,
@@ -129,18 +165,32 @@ export async function buildApp(opts: BuildOptions = {}): Promise<FastifyInstance
       });
   });
 
-  app.get('/health', { schema: { hide: true } }, async () => ({ status: 'ok' }));
-  app.get('/ready', { schema: { hide: true } }, async (_req, reply) => {
+  // PLAT-04 observability endpoints. /health and /ready stay in the generated OpenAPI (hide would drop the tag);
+  // /metrics is hidden from the public contract but tagged for traceability.
+  app.get('/health', {
+    schema: { tags: ['PLAT-04'], summary: 'Liveness probe', security: [], response: { 200: z.object({ status: z.literal('ok') }) } },
+  }, async () => ({ status: 'ok' as const }));
+  app.get('/ready', {
+    schema: {
+      tags: ['PLAT-04'],
+      summary: 'Readiness probe (database reachable; reports unpublished outbox backlog)',
+      security: [],
+      response: {
+        200: z.object({ status: z.literal('ready'), outboxPending: z.number().int() }),
+        503: z.object({ status: z.literal('unavailable') }),
+      },
+    },
+  }, async (_req, reply) => {
     try {
       await pool.query('SELECT 1');
       const { rows } = await pool.query(`SELECT count(*)::int AS n FROM outbox_events WHERE published_at IS NULL AND dead_lettered_at IS NULL`);
       outboxLag.set(rows[0].n);
-      return { status: 'ready', outboxPending: rows[0].n };
+      return { status: 'ready' as const, outboxPending: rows[0].n as number };
     } catch {
-      return reply.status(503).send({ status: 'unavailable' });
+      return reply.status(503).send({ status: 'unavailable' as const });
     }
   });
-  app.get('/metrics', { schema: { hide: true } }, async (_req, reply) => {
+  app.get('/metrics', { schema: { hide: true, tags: ['PLAT-04'] } }, async (_req, reply) => {
     reply.type(registry.contentType);
     return registry.metrics();
   });

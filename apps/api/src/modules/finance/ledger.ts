@@ -91,14 +91,69 @@ export function incrementalAllocation(before: number, amount: number, weights: n
 }
 
 /**
- * Refund: compensating entries proportional to the original approval credits (allocate()).
- *  Dr each credited account of the approval (proportional share)   Cr PG_CLEARING refund amount
- * Cumulative allocation guarantees a sequence of partial refunds sums exactly to the full reversal.
+ * Shares of a component refund over the approval credits, taken from what is still unreversed per account (`open`).
+ * The approval's FEE_REVENUE credit holds two components: the payees' commission (part of their gross) and the buyer
+ * platform fee (amount − Σ gross − tax). The gross part of the refund is shared over [payee accounts…, commission],
+ * the fee part over [platform fee, TAX_PAYABLE]; a part larger than its component's remainder spills into the other,
+ * so the refund that completes the payment reverses exactly the remainder of every account.
+ */
+function componentShares(
+  credits: CreditLine[],
+  open: number[],
+  p: { amountMinor: number; feeRefundMinor: number; approvedMinor: number; grossMinor: number; currency: string },
+): number[] {
+  const iFee = credits.findIndex((c) => c.code === PlatformAccount.feeRevenue(p.currency).code);
+  const iTax = credits.findIndex((c) => c.code === PlatformAccount.taxPayable(p.currency).code);
+  const payees = credits.map((_, i) => i).filter((i) => i !== iFee && i !== iTax);
+  const feeCredit = iFee >= 0 ? credits[iFee].credit_minor : 0;
+  const taxCredit = iTax >= 0 ? credits[iTax].credit_minor : 0;
+  const platformFee = Math.min(feeCredit, Math.max(0, p.approvedMinor - p.grossMinor - taxCredit));
+  const commission = feeCredit - platformFee;
+  const openFee = iFee >= 0 ? open[iFee] : 0;
+  const netTotal = payees.reduce((a, i) => a + credits[i].credit_minor, 0);
+  const netOpen = payees.reduce((a, i) => a + open[i], 0);
+  // commission still unreversed moves in step with the payees' unreversed net (both are shares of the same gross)
+  const estimate = netTotal > 0 ? allocate(commission, [netOpen, netTotal - netOpen])[0] : commission;
+  const commissionOpen = Math.min(Math.max(estimate, openFee - platformFee, 0), commission, openFee);
+  const grossPool = [...payees.map((i) => ({ i, w: open[i] })), { i: iFee, w: commissionOpen }];
+  const feePool = [{ i: iFee, w: openFee - commissionOpen }, { i: iTax, w: iTax >= 0 ? open[iTax] : 0 }];
+  const cap = (pool: Array<{ w: number }>) => pool.reduce((a, x) => a + x.w, 0);
+  let fee = Math.min(p.feeRefundMinor, p.amountMinor);
+  let gross = p.amountMinor - fee;
+  if (gross > cap(grossPool)) [gross, fee] = [cap(grossPool), p.amountMinor - cap(grossPool)];
+  if (fee > cap(feePool)) [fee, gross] = [cap(feePool), p.amountMinor - cap(feePool)];
+  const parts = credits.map(() => 0);
+  for (const [pool, amount] of [[grossPool, gross], [feePool, fee]] as const) {
+    const shares = allocate(amount, pool.map((x) => x.w));
+    pool.forEach((x, k) => { if (x.i >= 0) parts[x.i] += shares[k]; });
+  }
+  return parts;
+}
+
+/**
+ * Refund: compensating entries against the credits of the original approval.
+ *  Dr credited accounts of the approval (shares below)   Cr PG_CLEARING refund amount
+ *
+ * Unspecified refund (`feeRefundMinor` null — staff, provider-console and full refunds): proportional to all approval
+ * credits (allocate()); cumulative allocation guarantees a sequence of partial refunds sums exactly to the full reversal.
+ *
+ * Component refund: the selling domain states which part of the refund returns the buyer-paid service fee + tax
+ * (`feeRefundMinor`, computed under its snapshotted cancellation terms); the rest returns the payees' gross. The gross
+ * part reverses the payee payable / pass-through and the commission (FEE_REVENUE) pro rata to the approval split; only
+ * the fee part reverses the buyer platform fee (FEE_REVENUE) and TAX_PAYABLE. A non-refundable service fee therefore
+ * keeps its fee revenue and output VAT, and the payee bears exactly its share of the refunded gross.
  */
 export async function postRefundReversal(
   db: Db,
   ctx: Pick<Ctx, 'correlationId'>,
-  r: { paymentId: string; refundId: string; amountMinor: number; refundedBeforeMinor: number },
+  r: {
+    paymentId: string;
+    refundId: string;
+    amountMinor: number;
+    refundedBeforeMinor: number;
+    feeRefundMinor?: number | null;
+    split?: PayableSnapshot['split'];
+  },
 ): Promise<{ transactionId: string; created: boolean }> {
   const approval = await maybeOne<{ id: string }>(db, `SELECT id FROM ledger_transactions WHERE idempotency_key = $1`, [approvalKey(r.paymentId)]);
   if (!approval) throw new Error(`no approval ledger transaction for payment ${r.paymentId}`);
@@ -117,14 +172,36 @@ export async function postRefundReversal(
   );
   if (!debitLine || credits.length === 0) throw new Error(`malformed approval transaction ${approval.id}`);
   const cur = debitLine.currency;
-  const parts = incrementalAllocation(r.refundedBeforeMinor, r.amountMinor, credits.map((c) => c.credit_minor));
+  const idempotencyKey = `refund:${r.refundId}`;
+  const weights = credits.map((c) => c.credit_minor);
+  // what earlier refunds of this payment already reversed, per account
+  const prior = await q<{ account_id: string; debit_minor: number }>(
+    db,
+    `SELECT e.account_id, sum(e.debit_minor)::bigint AS debit_minor
+       FROM ledger_entries e JOIN ledger_transactions t ON t.id = e.transaction_id
+      WHERE t.reverses_transaction_id = $1 AND t.transaction_type = 'REFUND' AND t.idempotency_key <> $2
+      GROUP BY e.account_id`,
+    [approval.id, idempotencyKey],
+  );
+  const done = credits.map((c) => prior.find((x) => x.account_id === c.account_id)?.debit_minor ?? 0);
+  const open = weights.map((w, i) => Math.max(0, w - done[i]));
+  const openTotal = open.reduce((a, b) => a + b, 0);
+  let parts: number[];
+  if (r.feeRefundMinor != null && r.amountMinor <= openTotal) {
+    const grossMinor = (r.split ?? []).reduce((a, s) => a + Math.trunc(s.grossMinor), 0);
+    parts = componentShares(credits, open, { amountMinor: r.amountMinor, feeRefundMinor: r.feeRefundMinor, approvedMinor: debitLine.debit_minor, grossMinor, currency: cur });
+  } else {
+    // pro rata: cumulative over the approval credits while every earlier reversal was pro rata, else over what is left
+    const proRataSoFar = allocate(r.refundedBeforeMinor, weights).every((x, i) => x === done[i]);
+    parts = proRataSoFar || r.amountMinor > openTotal ? incrementalAllocation(r.refundedBeforeMinor, r.amountMinor, weights) : allocate(r.amountMinor, open);
+  }
   const lines: LedgerLine[] = credits.map((c, i) => ({ account: specOf(c), debit: parts[i] }));
   lines.push({ account: PlatformAccount.cashClearing(cur), credit: r.amountMinor });
   return postLedger(db, ctx, {
     type: 'REFUND',
     sourceType: 'REFUND',
     sourceId: r.refundId,
-    idempotencyKey: `refund:${r.refundId}`,
+    idempotencyKey,
     reverses: approval.id,
     memo: `payment=${r.paymentId}`,
     lines,

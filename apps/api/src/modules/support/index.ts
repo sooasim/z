@@ -1,12 +1,14 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { getActor, requireAuth, requireRole } from '../../platform/auth.js';
-import { ctxFromRequest } from '../../platform/context.js';
-import { q, withTx } from '../../platform/db.js';
-import { conflict } from '../../platform/errors.js';
+import { ctxFromRequest, type Ctx } from '../../platform/context.js';
+import { q, withTx, type Tx } from '../../platform/db.js';
+import { badRequest, conflict } from '../../platform/errors.js';
+import { onEvent } from '../../platform/outbox.js';
 import { decodeCursor, idParams, page, pagination } from '../../platform/http.js';
 import { grantElevatedAccess } from '../disputes/service.js';
+import { recordAdminAction } from '../admin/actions.js';
 import * as svc from './service.js';
 
 const TAG = ['OPS-01'];
@@ -18,6 +20,22 @@ const PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const;
 export default async function supportModule(app: FastifyInstance) {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const pool = app.ctx.pool;
+
+  /** Staff console mutation: domain change + `admin.action.performed` in one transaction (OPS-02 contract). */
+  const staffTx = <T>(req: FastifyRequest, action: string, fn: (tx: Tx, ctx: Ctx) => Promise<T>, details?: (out: T) => Record<string, unknown>) => {
+    const ctx = ctxFromRequest(req);
+    const caseId = (req.params as { id: string }).id;
+    return withTx(pool, async (tx) => {
+      const out = await fn(tx, ctx);
+      await recordAdminAction(tx, ctx, { action, resourceType: 'support_case', resourceId: caseId, details: details?.(out) });
+      return out;
+    });
+  };
+
+  // ---- external desk mirror (Chatwoot when configured; no-op otherwise) -------------------------------------------
+  onEvent('support.case.opened', 'support.desk-sync', async (tx, ev, ctx) => {
+    if (ev.payload?.caseId) await svc.syncCaseToDesk(tx, ctx, ev.payload.caseId);
+  });
 
   // ---- requester -----------------------------------------------------------------------------------------------
   r.post('/v1/support/cases', {
@@ -86,6 +104,8 @@ export default async function supportModule(app: FastifyInstance) {
         assigneeId: z.uuid().optional(),
         mine: z.coerce.boolean().optional(),
         overdue: z.coerce.boolean().optional(),
+        linkType: z.enum(svc.LINK_TYPES).optional(),
+        linkId: z.uuid().optional(),
         limit: z.coerce.number().int().min(1).max(100).default(50),
       }),
     },
@@ -93,14 +113,17 @@ export default async function supportModule(app: FastifyInstance) {
   }, async (req) => {
     const ctx = ctxFromRequest(req);
     const f = req.query;
+    if (!!f.linkType !== !!f.linkId) throw badRequest('LINK_FILTER_INCOMPLETE', 'linkType and linkId must be provided together');
+    // a link filter ("all cases about this reservation") includes resolved/closed cases unless a status is given
     const rows = await q(
       pool,
-      `SELECT * FROM support_cases
-        WHERE (($1::text IS NULL AND status NOT IN ('RESOLVED','CLOSED')) OR status = $1)
+      `SELECT * FROM support_cases c
+        WHERE (($1::text IS NULL AND ($6::text IS NOT NULL OR status NOT IN ('RESOLVED','CLOSED'))) OR status = $1)
           AND ($2::text IS NULL OR priority = $2) AND ($3::uuid IS NULL OR assignee_id = $3)
           AND (NOT $4 OR sla_due_at < now())
+          AND ($6::text IS NULL OR EXISTS (SELECT 1 FROM support_case_links l WHERE l.case_id = c.id AND l.link_type = $6 AND l.link_id = $7::uuid))
         ORDER BY sla_due_at NULLS LAST, created_at LIMIT $5`,
-      [f.status ?? null, f.priority ?? null, f.mine ? getActor(req).userId : f.assigneeId ?? null, !!f.overdue, f.limit],
+      [f.status ?? null, f.priority ?? null, f.mine ? getActor(req).userId : f.assigneeId ?? null, !!f.overdue, f.limit, f.linkType ?? null, f.linkId ?? null],
     );
     return { items: rows.map((x) => svc.presentCase(x, ctx)) };
   });
@@ -109,37 +132,74 @@ export default async function supportModule(app: FastifyInstance) {
 
   r.post('/v1/admin/support/cases/:id/assign', { schema: { tags: TAG, params: idParams, body: z.object({ assigneeId: z.uuid().optional() }).nullish() }, preHandler: staff }, async (req) => {
     const ctx = ctxFromRequest(req);
-    return { item: svc.presentCase(await withTx(pool, (tx) => svc.assign(tx, ctx, req.params.id, req.body?.assigneeId ?? ctx.actor!.userId)), ctx) };
+    const assigneeId = req.body?.assigneeId ?? ctx.actor!.userId;
+    return { item: svc.presentCase(await staffTx(req, 'support.case.assigned', (tx) => svc.assign(tx, ctx, req.params.id, assigneeId), () => ({ assigneeId })), ctx) };
   });
 
   r.post('/v1/admin/support/cases/:id/notes', {
     schema: { tags: TAG, summary: 'Internal note (never visible to the requester)', params: idParams, body: z.object({ body: z.string().trim().min(1).max(10_000) }) },
     preHandler: staff,
-  }, async (req, reply) => reply.status(201).send({ item: await withTx(pool, (tx) => svc.internalNote(tx, ctxFromRequest(req), req.params.id, req.body.body)) }));
+  }, async (req, reply) => reply.status(201).send({ item: await staffTx(req, 'support.case.internal_note', (tx, ctx) => svc.internalNote(tx, ctx, req.params.id, req.body.body), (ev) => ({ eventId: ev.id })) }));
 
   r.post('/v1/admin/support/cases/:id/comments', {
     schema: { tags: TAG, params: idParams, body: z.object({ body: z.string().trim().min(1).max(10_000) }) },
     preHandler: staff,
-  }, async (req, reply) => reply.status(201).send({ item: await withTx(pool, (tx) => svc.comment(tx, ctxFromRequest(req), req.params.id, req.body.body)) }));
+  }, async (req, reply) => reply.status(201).send({ item: await staffTx(req, 'support.case.replied', (tx, ctx) => svc.comment(tx, ctx, req.params.id, req.body.body), (ev) => ({ eventId: ev.id })) }));
 
   r.post('/v1/admin/support/cases/:id/status', {
     schema: { tags: TAG, params: idParams, body: z.object({ to: z.enum(['IN_PROGRESS', 'PENDING_CUSTOMER', 'RESOLVED', 'CLOSED']), note: z.string().max(2000).optional() }) },
     preHandler: staff,
   }, async (req) => {
     const ctx = ctxFromRequest(req);
-    return { item: svc.presentCase(await withTx(pool, (tx) => svc.changeStatus(tx, ctx, req.params.id, req.body.to, req.body.note)), ctx) };
+    return { item: svc.presentCase(await staffTx(req, 'support.case.status_changed', (tx) => svc.changeStatus(tx, ctx, req.params.id, req.body.to, req.body.note), () => ({ to: req.body.to })), ctx) };
   });
 
   r.post('/v1/admin/support/cases/:id/priority', { schema: { tags: TAG, params: idParams, body: z.object({ priority: z.enum(PRIORITIES) }) }, preHandler: staff }, async (req) => {
     const ctx = ctxFromRequest(req);
-    return { item: svc.presentCase(await withTx(pool, (tx) => svc.setPriority(tx, ctx, req.params.id, req.body.priority)), ctx) };
+    return { item: svc.presentCase(await staffTx(req, 'support.case.priority_changed', (tx) => svc.setPriority(tx, ctx, req.params.id, req.body.priority), () => ({ priority: req.body.priority })), ctx) };
   });
 
   r.post('/v1/admin/support/cases/:id/elevated-access', {
     schema: { tags: TAG, params: idParams, body: z.object({ conversationId: z.uuid(), reason: z.string().trim().min(10).max(1000), durationMinutes: z.number().int().min(1).max(1440).optional() }) },
     preHandler: staff,
   }, async (req, reply) => {
-    const item = await withTx(pool, (tx) => grantElevatedAccess(tx, ctxFromRequest(req), { caseType: 'SUPPORT_CASE', caseId: req.params.id, ...req.body }));
+    const item = await staffTx(
+      req,
+      'support.case.elevated_access_granted',
+      (tx, ctx) => grantElevatedAccess(tx, ctx, { caseType: 'SUPPORT_CASE', caseId: req.params.id, ...req.body }),
+      (g) => ({ grantId: g.id, conversationId: req.body.conversationId, expiresAt: g.expires_at }),
+    );
     return reply.status(201).send({ item });
   });
+
+  // ---- context links (support_case_links) ---------------------------------------------------------------------
+  const linkBody = z.object({ linkType: z.enum(svc.LINK_TYPES), linkId: z.uuid() });
+
+  r.get('/v1/admin/support/cases/:id/links', { schema: { tags: TAG, params: idParams }, preHandler: staff }, async (req) => {
+    const { c } = await svc.loadCase(pool, ctxFromRequest(req), req.params.id);
+    return { items: await svc.listLinks(pool, req.params.id, c.requester_id) };
+  });
+
+  r.post('/v1/admin/support/cases/:id/links', {
+    schema: { tags: TAG, summary: 'Link a reservation/exchange/booking/order/dispute/payment/user/conversation to the case (idempotent)', params: idParams, body: linkBody },
+    preHandler: staff,
+  }, async (req, reply) => {
+    const ctx = ctxFromRequest(req);
+    const res = await withTx(pool, async (tx) => {
+      const out = await svc.linkCase(tx, ctx, req.params.id, req.body);
+      if (out.created) await recordAdminAction(tx, ctx, { action: 'support.case.linked', resourceType: 'support_case', resourceId: req.params.id, details: { linkType: req.body.linkType, linkId: req.body.linkId } });
+      return out;
+    });
+    return reply.status(res.created ? 201 : 200).send({ item: res.item });
+  });
+
+  r.delete('/v1/admin/support/cases/:id/links/:linkType/:linkId', {
+    schema: { tags: TAG, params: z.object({ id: z.uuid(), linkType: z.enum(svc.LINK_TYPES), linkId: z.uuid() }) },
+    preHandler: staff,
+  }, async (req) => ({
+    item: await staffTx(req, 'support.case.unlinked', (tx, ctx) => svc.unlinkCase(tx, ctx, req.params.id, { linkType: req.params.linkType, linkId: req.params.linkId }), () => ({
+      linkType: req.params.linkType,
+      linkId: req.params.linkId,
+    })),
+  }));
 }

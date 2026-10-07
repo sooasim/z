@@ -211,6 +211,35 @@ describe('TRAVEL-04 orders', () => {
     expect(b.body.item.status).toBe('CANCELLED');
     expect(b.body.item.refundedMinor).toBe(b.body.item.totalMinor);
   });
+
+  it('order DTO hides the settlement split from buyers; each supplier sees only its own pricing entry', async () => {
+    const otherUser = await createUser(t);
+    const s2 = (await call(t, otherUser, 'POST', '/v1/suppliers', { name: 'Busan Boats', supplierType: 'TOUR_OPERATOR' })).body.item.id;
+    expect((await call(t, admin, 'POST', `/v1/admin/suppliers/${s2}/approve`, { merchantOfRecord: 'JETPOOL', commissionBps: 1000 })).status).toBe(200);
+    const p2 = (await call(t, otherUser, 'POST', '/v1/supplier/products', { type: 'TOUR', title: 'Harbour Cruise', city: 'Busan', basePriceMinor: 30_000, currency: 'KRW' })).body.item.id;
+    await call(t, otherUser, 'POST', `/v1/supplier/products/${p2}/submit`);
+    expect((await call(t, admin, 'POST', `/v1/admin/travel-products/${p2}/publish`, {})).status).toBe(200);
+    const dep2 = await call(t, otherUser, 'POST', `/v1/travel-products/${p2}/departures`, { startsAt: hoursFromNow(24 * 10), capacity: 5 });
+    expect(dep2.status).toBe(201);
+    const dep1 = await newDeparture(5);
+    const o = await call(t, buyer, 'POST', '/v1/orders', { items: [{ departureId: dep1, qty: 1 }, { departureId: dep2.body.item.id, qty: 1 }] }, idem());
+    expect(o.status).toBe(201);
+
+    for (const view of [o.body.item, (await call(t, buyer, 'GET', `/v1/orders/${o.body.item.id}`)).body.item]) {
+      expect(view.pricing).toMatchObject({ subtotalMinor: 80_000, totalMinor: view.totalMinor });
+      expect(view.pricing.suppliers).toBeUndefined();
+      expect(JSON.stringify(view)).not.toContain(supplierUser.id);
+      expect(JSON.stringify(view)).not.toContain(otherUser.id);
+      expect(JSON.stringify(view)).not.toContain('commission');
+    }
+
+    const s1 = (await call(t, supplierUser, 'GET', '/v1/suppliers/me')).body.item.id;
+    for (const [user, sid, gross] of [[supplierUser, s1, 50_000], [otherUser, s2, 30_000]] as const) {
+      const so = (await call(t, user, 'GET', '/v1/supplier/orders')).body.items.find((x: any) => x.id === o.body.item.id);
+      expect(so.items.every((i: any) => i.supplierId === sid)).toBe(true);
+      expect(so.pricing.suppliers).toEqual([expect.objectContaining({ supplierId: sid, grossMinor: gross })]);
+    }
+  });
 });
 
 describe('TRAVEL-03 itinerary', () => {

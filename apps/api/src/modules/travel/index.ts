@@ -768,7 +768,9 @@ export default async function travelModule(app: FastifyInstance) {
       const ctx = ctxFromRequest(req);
       const key = idempotencyKeyFrom(req);
       const staff = hasRole(actor, 'ADMIN', 'SUPPORT') && actor.aal === 'aal2';
-      const res = await withIdempotency(pool, `orders.cancel:${req.params.id}`, key, req.body, async (tx) => {
+      // scope per actor (like booking/guide cancel): a replay returns the stored response WITHOUT re-running fn, so an
+      // order-scoped record would hand the buyer's cancellation to anyone presenting the same key, skipping requireBuyer
+      const res = await withIdempotency(pool, `orders.cancel:${actor.userId}`, key, { id: req.params.id, ...req.body }, async (tx) => {
         const out = await cancelOrder(tx, ctx, { orderId: req.params.id, reason: req.body.reason, requireBuyer: staff ? null : actor.userId });
         if (staff) await audit(tx, ctx, { action: 'order.cancel.staff', resourceType: 'order', resourceId: req.params.id, category: 'MONEY', reason: req.body.reason });
         return { body: { item: out.order, refund: out.refund } };
@@ -793,8 +795,8 @@ export default async function travelModule(app: FastifyInstance) {
     const ids = pg.items.map((o: any) => o.id);
     const items = ids.length ? await q(pool, `SELECT * FROM order_items WHERE order_id = ANY($1::uuid[]) AND supplier_id = $2`, [ids, s.id]) : [];
     return {
-      // buyer identity limited to id; supplier sees only its own lines
-      items: pg.items.map((o: any) => orderDto(o, items.filter((i: any) => i.order_id === o.id))),
+      // buyer identity limited to id; supplier sees only its own lines (and only its own pricing.suppliers[] entry)
+      items: pg.items.map((o: any) => orderDto(o, items.filter((i: any) => i.order_id === o.id), [], { supplierId: s.id })),
       nextCursor: pg.nextCursor,
     };
   });

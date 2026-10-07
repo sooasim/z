@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { Db } from '../../platform/db.js';
 import { maybeOne, one, q } from '../../platform/db.js';
 import type { Ctx } from '../../platform/context.js';
@@ -36,6 +37,99 @@ export function parseEntryType(raw: string): EntryType {
   const v = (alias[t] ?? t) as EntryType;
   if (!(ENTRY_TYPES as readonly string[]).includes(v)) throw notFound('Content type');
   return v;
+}
+
+// ---------------------------------------------------------------- structured SEO + JSON-LD
+
+const sitePathOrUrl = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .refine((v) => (v.startsWith('/') && !v.startsWith('//') && !v.startsWith('/\\') && !/[\r\n]/.test(v)) || /^https?:\/\/[^\s]+$/i.test(v), 'site-relative path or absolute http(s) URL');
+
+/** cms_entries.seo: {title, description, canonical, noindex, keywords, og:{title, description, image, imageAlt, type}} */
+export const seoSchema = z.object({
+  title: z.string().max(200).optional(),
+  description: z.string().max(500).optional(),
+  canonical: sitePathOrUrl(500).optional(),
+  noindex: z.boolean().optional(),
+  keywords: z.array(z.string().trim().min(1).max(60)).max(20).optional(),
+  og: z
+    .object({
+      title: z.string().max(200).optional(),
+      description: z.string().max(500).optional(),
+      image: sitePathOrUrl(1000).optional(),
+      imageAlt: z.string().max(300).optional(),
+      type: z.enum(['website', 'article', 'place']).optional(),
+    })
+    .strict()
+    .optional(),
+});
+export type Seo = z.infer<typeof seoSchema>;
+
+const absUrl = (baseUrl: string, pathOrUrl: string | undefined | null) =>
+  !pathOrUrl ? undefined : /^https?:\/\//i.test(pathOrUrl) ? pathOrUrl : `${baseUrl.replace(/\/$/, '')}${pathOrUrl}`;
+
+const str = (v: unknown, max = 5000) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined);
+const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)) ? Number(v) : undefined);
+
+/** FAQ items from data.faqs | data.questions | data.items ([{question|q, answer|a}]); falls back to title/summary. */
+function faqItems(r: any): Array<{ question: string; answer: string }> {
+  const d = r.data ?? {};
+  const raw = [d.faqs, d.questions, d.items].find((x) => Array.isArray(x)) as any[] | undefined;
+  const items = (raw ?? [])
+    .map((x) => ({ question: str(x?.question ?? x?.q, 500), answer: str(x?.answer ?? x?.a) }))
+    .filter((x): x is { question: string; answer: string } => !!x.question && !!x.answer)
+    .slice(0, 100);
+  if (items.length) return items;
+  const answer = str(r.summary) ?? str(r.body_md);
+  return answer ? [{ question: String(r.title).slice(0, 500), answer }] : [];
+}
+
+/**
+ * schema.org JSON-LD hints for the web app (`data.jsonLd`): TouristDestination for DESTINATION, FAQPage for FAQ.
+ * Always computed from the entry (never echoed from editor input) so the <script type="application/ld+json"> stays well-formed.
+ */
+export function jsonLdFor(r: any, baseUrl: string): Record<string, unknown> | null {
+  const type = r.entry_type as EntryType;
+  if (type !== 'DESTINATION' && type !== 'FAQ') return null;
+  const seo = r.seo ?? {};
+  const d = r.data ?? {};
+  const url = absUrl(baseUrl, str(seo.canonical, 500) ?? ENTRY_PATHS[type]?.(r.slug));
+  if (type === 'DESTINATION') {
+    const lat = num(d.lat ?? d.latitude);
+    const lng = num(d.lng ?? d.longitude);
+    const touristType = Array.isArray(d.touristType) ? d.touristType.map((x: unknown) => str(x, 100)).filter(Boolean).slice(0, 20) : undefined;
+    return {
+      '@context': 'https://schema.org',
+      '@type': 'TouristDestination',
+      name: r.title,
+      description: str(seo.description, 500) ?? str(r.summary, 500),
+      url,
+      inLanguage: r.locale,
+      image: absUrl(baseUrl, str(seo.og?.image, 1000)),
+      ...(lat !== undefined && lng !== undefined && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { geo: { '@type': 'GeoCoordinates', latitude: lat, longitude: lng } } : {}),
+      ...(touristType?.length ? { touristType } : {}),
+      ...(str(d.region, 200) ? { containedInPlace: { '@type': 'Place', name: str(d.region, 200) } } : {}),
+    };
+  }
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    name: r.title,
+    url,
+    inLanguage: r.locale,
+    mainEntity: faqItems(r).map((x) => ({ '@type': 'Question', name: x.question, acceptedAnswer: { '@type': 'Answer', text: x.answer } })),
+  };
+}
+
+/** Public content DTO: entry + computed `data.jsonLd` (DESTINATION/FAQ); editor-supplied `data.jsonLd` is never echoed. */
+export function toPublicEntryDto(r: any, baseUrl: string) {
+  const dto = toEntryDto(r);
+  const { jsonLd: _editorJsonLd, ...data } = (r.data ?? {}) as Record<string, unknown>;
+  const jsonLd = jsonLdFor(r, baseUrl);
+  return { ...dto, data: jsonLd ? { ...data, jsonLd } : data };
 }
 
 export const toEntryDto = (r: any) => ({

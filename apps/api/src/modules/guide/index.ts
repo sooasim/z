@@ -35,7 +35,8 @@ export async function runQualificationExpiry(app: AppContext): Promise<number> {
   );
   const guides = await q<{ user_id: string }>(
     app.pool,
-    `SELECT user_id FROM guide_profiles WHERE status = 'PUBLISHED' AND guide_type IN ('PAID','PROFESSIONAL') AND paid_enabled LIMIT 1000`,
+    // every PUBLISHED paid-type profile, not only paid_enabled ones: one left published with paid selling off must be hidden too
+    `SELECT user_id FROM guide_profiles WHERE status = 'PUBLISHED' AND guide_type IN ('PAID','PROFESSIONAL') LIMIT 1000`,
   );
   let disabled = 0;
   for (const g of guides) {

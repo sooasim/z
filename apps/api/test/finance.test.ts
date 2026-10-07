@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestApp, createUser, call, idem, enableFlags, type TestApp, type TestUser } from './helpers.js';
 import { quoteFees } from '../src/modules/finance/rules.js';
-import { incrementalAllocation } from '../src/modules/finance/ledger.js';
+import { randomUUID } from 'node:crypto';
+import { withTx } from '../src/platform/db.js';
+import { incrementalAllocation, postPaymentApproval, postRefundReversal } from '../src/modules/finance/ledger.js';
 import { runDepartureLifecycle } from '../src/modules/travel/service.js';
 
 let t: TestApp;
@@ -103,6 +105,67 @@ describe('FIN-01 ledger', () => {
     const sum = w.map((_, i) => a[i] + b[i] + c[i]);
     expect(sum).toEqual(w);
     for (const part of [...a, ...b, ...c]) expect(part).toBeGreaterThanOrEqual(0);
+  });
+
+  it('component refunds reverse only what was refunded; mixed sequences still sum exactly to the full reversal', async () => {
+    const ctx = { correlationId: 'fin-01-component-refunds' };
+    const FEE = 'PLATFORM:FEE_REVENUE:KRW';
+    const TAX = 'PLATFORM:TAX_PAYABLE:KRW';
+    // 2 suppliers: gross 140,000 / 70,000, commission 15 % → net 119,000 / 59,500; buyer fee 10,500 + VAT 1,050
+    const p1 = randomUUID();
+    const p2 = randomUUID();
+    const split = [
+      { payeeId: p1, payeeType: 'SUPPLIER' as const, grossMinor: 140_000, feeMinor: 21_000, taxMinor: 700 },
+      { payeeId: p2, payeeType: 'SUPPLIER' as const, grossMinor: 70_000, feeMinor: 10_500, taxMinor: 350 },
+    ];
+    const total = 210_000 + 10_500 + 1_050;
+    const credit = { [`PAYEE:${p1}:PAYABLE:KRW`]: 119_000, [`PAYEE:${p2}:PAYABLE:KRW`]: 59_500, [FEE]: 42_000, [TAX]: 1_050 };
+    const approve = async () => {
+      const paymentId = randomUUID();
+      const a = await withTx(t.pool, (tx) => postPaymentApproval(tx, ctx, { paymentId, amountMinor: total, currency: 'KRW', snapshot: { split, merchantOfRecord: 'JETPOOL' } }));
+      let before = 0;
+      const refund = async (amountMinor: number, feeRefundMinor: number | null) => {
+        const refundId = randomUUID();
+        await withTx(t.pool, (tx) => postRefundReversal(tx, ctx, { paymentId, refundId, amountMinor, refundedBeforeMinor: before, feeRefundMinor, split }));
+        before += amountMinor;
+        const rows = await t.pool.query(
+          `SELECT a.code, e.debit_minor, e.credit_minor FROM ledger_transactions x JOIN ledger_entries e ON e.transaction_id = x.id
+             JOIN ledger_accounts a ON a.id = e.account_id WHERE x.source_type = 'REFUND' AND x.source_id = $1`,
+          [refundId],
+        );
+        expect(rows.rows.find((r) => r.code === 'PLATFORM:PG_CLEARING:KRW')?.credit_minor).toBe(amountMinor);
+        return Object.fromEntries(rows.rows.filter((r) => r.debit_minor > 0).map((r) => [r.code, r.debit_minor])) as Record<string, number>;
+      };
+      const reversed = async () => {
+        const rows = await t.pool.query(
+          `SELECT a.code, sum(e.debit_minor)::bigint AS d FROM ledger_transactions x JOIN ledger_entries e ON e.transaction_id = x.id
+             JOIN ledger_accounts a ON a.id = e.account_id WHERE x.reverses_transaction_id = $1 AND e.debit_minor > 0 GROUP BY a.code`,
+          [a.transactionId],
+        );
+        return Object.fromEntries(rows.rows.map((r) => [r.code, r.d])) as Record<string, number>;
+      };
+      return { refund, reversed };
+    };
+
+    // 50 % of the subtotal, service fee non-refundable: VAT and the buyer fee stay; payees + commission pro rata
+    const a = await approve();
+    expect(await a.refund(105_000, 0)).toEqual({ [`PAYEE:${p1}:PAYABLE:KRW`]: 59_500, [`PAYEE:${p2}:PAYABLE:KRW`]: 29_750, [FEE]: 15_750 });
+    // the rest, unspecified (staff / full refund): exactly the remainder of every account
+    await a.refund(total - 105_000, null);
+    expect(await a.reversed()).toEqual(credit);
+
+    // fee refundable: the fee part reverses the buyer fee and VAT pro rata; nothing more than the fee is taken from FEE_REVENUE
+    const b = await approve();
+    expect(await b.refund(105_000 + 5_775, 5_775)).toEqual({ [`PAYEE:${p1}:PAYABLE:KRW`]: 59_500, [`PAYEE:${p2}:PAYABLE:KRW`]: 29_750, [FEE]: 15_750 + 5_250, [TAX]: 525 });
+
+    // staff partial refund (pro rata) first, then component refunds: never above a credit, exact at the end
+    const c = await approve();
+    await c.refund(33_333, null);
+    await c.refund(100_000, 0);
+    const mid = await c.reversed();
+    for (const [code, amount] of Object.entries(mid)) expect(amount, code).toBeLessThanOrEqual(credit[code]);
+    await c.refund(total - 133_333, 11_550 - (mid[TAX] ?? 0));
+    expect(await c.reversed()).toEqual(credit);
   });
 
   it('SUPPLIER merchant of record posts PASS_THROUGH + commission; trial balance is zero-sum; ledger is append-only', async () => {

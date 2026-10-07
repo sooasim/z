@@ -1,11 +1,16 @@
+import { z } from 'zod';
 import type { Db } from '../../platform/db.js';
 import { maybeOne, one, q } from '../../platform/db.js';
 import type { Ctx } from '../../platform/context.js';
 import { audit } from '../../platform/audit.js';
 import { emit } from '../../platform/outbox.js';
 import { isEnabled } from '../../platform/flags.js';
+import { ROLES } from '../../platform/auth.js';
 import { badRequest, conflict, forbidden, notFound } from '../../platform/errors.js';
 import { gmv } from '../analytics/service.js';
+import { recordAdminAction } from './actions.js';
+
+export { recordAdminAction } from './actions.js';
 
 /** OPS-02 backoffice + PLAT-06 flags/config. */
 
@@ -54,6 +59,40 @@ export async function overview(db: Db) {
 
 // ---------------------------------------------------------------- feature flags
 
+/** Transaction-local reason picked up by the config version-history triggers (no-op outside a transaction). */
+async function setChangeReason(db: Db, reason: string) {
+  await db.query(`SELECT set_config('jetpool.change_reason', $1, true)`, [reason.slice(0, 500)]);
+}
+
+/**
+ * PLAT-06 flag rules (validated + stored here; evaluated by platform/flags.ts):
+ * - kill_switch: force OFF regardless of enabled/allowlists
+ * - rollout_pct: deterministic percentage rollout (0..100) of subjects
+ * - allow_user_ids / allow_roles: allowlists that enable the flag for specific subjects while globally OFF
+ */
+export const flagRulesSchema = z
+  .object({
+    rollout_pct: z.number().int().min(0).max(100).optional(),
+    kill_switch: z.boolean().optional(),
+    allow_user_ids: z.array(z.uuid()).max(1000).optional(),
+    allow_roles: z.array(z.enum(ROLES)).max(ROLES.length).optional(),
+  })
+  .strict();
+export type FlagRules = z.infer<typeof flagRulesSchema>;
+
+/** Validate and normalize (dedupe allowlists, drop undefined keys). Throws 400 INVALID_FLAG_RULES. */
+export function normalizeFlagRules(raw: unknown): FlagRules {
+  const parsed = flagRulesSchema.safeParse(raw);
+  if (!parsed.success) throw badRequest('INVALID_FLAG_RULES', 'Feature flag rules are invalid', parsed.error.issues);
+  const r = parsed.data;
+  const out: FlagRules = {};
+  if (r.kill_switch !== undefined) out.kill_switch = r.kill_switch;
+  if (r.rollout_pct !== undefined) out.rollout_pct = r.rollout_pct;
+  if (r.allow_user_ids) out.allow_user_ids = Array.from(new Set(r.allow_user_ids.map((u) => u.toLowerCase())));
+  if (r.allow_roles) out.allow_roles = Array.from(new Set(r.allow_roles));
+  return out;
+}
+
 export async function listFlags(db: Db) {
   return q(db, `SELECT flag_key, description, enabled, rules, updated_by, updated_at FROM feature_flags ORDER BY flag_key`);
 }
@@ -63,6 +102,8 @@ export async function updateFlag(
   ctx: Ctx,
   args: { flagKey: string; enabled?: boolean; rules?: Record<string, unknown>; description?: string; reason: string; create?: boolean },
 ) {
+  const rules = args.rules === undefined ? undefined : normalizeFlagRules(args.rules);
+  await setChangeReason(db, args.reason);
   const before = await maybeOne(db, `SELECT flag_key, enabled, rules, description FROM feature_flags WHERE flag_key = $1 FOR UPDATE`, [args.flagKey]);
   if (!before && !args.create) throw notFound('Feature flag');
   const row = await one(
@@ -71,14 +112,29 @@ export async function updateFlag(
      ON CONFLICT (flag_key) DO UPDATE SET enabled = coalesce($3, feature_flags.enabled), rules = coalesce($4, feature_flags.rules),
        description = coalesce($2, feature_flags.description), updated_by = $5, updated_at = now()
      RETURNING flag_key, description, enabled, rules, updated_by, updated_at`,
-    [args.flagKey, args.description ?? null, args.enabled ?? null, args.rules ? JSON.stringify(args.rules) : null, ctx.actor?.userId ?? null],
+    [args.flagKey, args.description ?? null, args.enabled ?? null, rules ? JSON.stringify(rules) : null, ctx.actor?.userId ?? null],
   );
   await audit(db, ctx, { action: 'feature_flag.updated', resourceType: 'feature_flag', resourceId: args.flagKey, before, after: row, reason: args.reason, category: 'PERMISSION' });
   await emit(db, ctx, {
     aggregateType: 'config',
     aggregateId: args.flagKey,
     eventType: 'config.changed',
-    payload: { kind: 'feature_flag', key: args.flagKey, enabled: row.enabled, previous: before?.enabled ?? null, actorId: ctx.actor?.userId ?? null },
+    payload: {
+      kind: 'feature_flag',
+      key: args.flagKey,
+      enabled: row.enabled,
+      previous: before?.enabled ?? null,
+      killSwitch: row.rules?.kill_switch === true,
+      rolloutPct: typeof row.rules?.rollout_pct === 'number' ? row.rules.rollout_pct : null,
+      actorId: ctx.actor?.userId ?? null,
+    },
+  });
+  await recordAdminAction(db, ctx, {
+    action: before ? 'feature_flag.updated' : 'feature_flag.created',
+    resourceType: 'feature_flag',
+    resourceId: args.flagKey,
+    reason: args.reason,
+    details: { enabled: row.enabled, rulesChanged: rules !== undefined },
   });
   return row;
 }
@@ -149,6 +205,7 @@ export async function proposeConfig(
   );
   if (!row) throw conflict('CONFIG_VERSION_EXISTS', 'A version with this effectiveFrom already exists');
   await audit(db, ctx, { action: 'config.proposed', resourceType: 'config_value', resourceId: args.key, after: row, category: 'GENERAL' });
+  await recordAdminAction(db, ctx, { action: 'config.proposed', resourceType: 'config_value', resourceId: args.key, details: { effectiveFrom: row.effective_from } });
   return row;
 }
 
@@ -162,6 +219,7 @@ export async function approveConfig(db: Db, ctx: Ctx, args: { key: string; effec
   if (!row) throw notFound('Config version');
   if (row.approved_by) throw conflict('ALREADY_APPROVED', 'This config version is already approved');
   if (row.proposed_by && row.proposed_by === ctx.actor?.userId) throw forbidden('FOUR_EYES_REQUIRED', 'A different administrator must approve this change');
+  await setChangeReason(db, args.reason);
   const updated = await one(
     db,
     `UPDATE config_values SET approved_by = $3, approved_at = now() WHERE config_key = $1 AND effective_from = $2 RETURNING *`,
@@ -174,6 +232,7 @@ export async function approveConfig(db: Db, ctx: Ctx, args: { key: string; effec
     eventType: 'config.changed',
     payload: { kind: 'config_value', key: args.key, effectiveFrom: updated.effective_from, effectiveUntil: updated.effective_until, approvedBy: ctx.actor?.userId ?? null },
   });
+  await recordAdminAction(db, ctx, { action: 'config.approved', resourceType: 'config_value', resourceId: args.key, reason: args.reason, details: { effectiveFrom: updated.effective_from } });
   return updated;
 }
 
@@ -199,6 +258,6 @@ export async function retryDeadLetter(db: Db, ctx: Ctx, id: string, reason: stri
     [id],
   );
   await audit(db, ctx, { action: 'outbox.dead_letter.retried', resourceType: 'outbox_event', resourceId: id, before, after: row, reason, category: 'GENERAL' });
-  await emit(db, ctx, { aggregateType: 'admin', aggregateId: id, eventType: 'admin.action.performed', payload: { action: 'outbox.retry', eventId: id, actorId: ctx.actor?.userId ?? null } });
+  await recordAdminAction(db, ctx, { action: 'outbox.retry', resourceType: 'outbox_event', resourceId: id, reason, details: { eventId: id } });
   return row;
 }

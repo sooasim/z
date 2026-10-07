@@ -143,6 +143,18 @@ export async function publishProfile(db: Db, ctx: Ctx, actor: Actor): Promise<{ 
   const e = await evaluateGuideEligibility(db, actor.userId, cur.guide_type);
   await recordDecision(db, actor.userId, e, `USER:${actor.userId}`);
   if (!e.publishable) {
+    if (isPaidType(cur.guide_type) && cur.status === 'PUBLISHED') {
+      // same safe state as continuous enforcement (reevaluatePaidGuide): paid selling off AND hidden until
+      // republished — a PAID/PROFESSIONAL guide must never stay PUBLISHED as free (it cannot sell anything)
+      const row = await one<GuideProfileRow>(db, `UPDATE guide_profiles SET paid_enabled = false, status = 'HIDDEN' WHERE user_id = $1 RETURNING *`, [actor.userId]);
+      await audit(db, ctx, {
+        action: 'guide.paid_disabled', resourceType: 'guide_profile', resourceId: actor.userId,
+        before: { status: cur.status, paidEnabled: cur.paid_enabled }, after: { status: row.status, paidEnabled: row.paid_enabled, reasons: e.reasons },
+        category: 'COMPLIANCE',
+      });
+      await profileEvents(db, ctx, row, 'PAID_GATE_LAPSED');
+      return { published: false, profile: row, eligibility: e };
+    }
     if (cur.paid_enabled) await db.query(`UPDATE guide_profiles SET paid_enabled = false WHERE user_id = $1`, [actor.userId]);
     return { published: false, profile: { ...cur, paid_enabled: false }, eligibility: e };
   }

@@ -62,7 +62,26 @@ const UNPAID: OrderStatus[] = ['PENDING', 'PAYMENT_PENDING', 'PAYMENT_FAILED'];
 
 export const voucherCode = () => `TV${randomBytes(8).toString('hex').toUpperCase().slice(0, 12)}`;
 
-export function orderDto(o: any, items: any[] = [], vouchers: any[] = []) {
+/**
+ * Buyer-safe view of pricing_snapshot. The snapshot's suppliers[] (payeeId = supplier owner's user id, gross,
+ * commissionBps/commissionMinor) is internal settlement data for payable(); it is never shown to buyers, and a
+ * supplier view (opts.supplierId) sees only its own entry.
+ */
+export function pricingDto(p: any, opts: { supplierId?: string } = {}) {
+  if (!p) return null;
+  return {
+    subtotalMinor: p.subtotalMinor,
+    platformFeeMinor: p.platformFeeMinor,
+    taxMinor: p.taxMinor,
+    totalMinor: p.totalMinor,
+    rulesVersion: p.rulesVersion,
+    cancellationTerms: p.cancellationTerms,
+    quotedAt: p.quotedAt,
+    ...(opts.supplierId ? { suppliers: (p.suppliers ?? []).filter((s: any) => s.supplierId === opts.supplierId) } : {}),
+  };
+}
+
+export function orderDto(o: any, items: any[] = [], vouchers: any[] = [], opts: { supplierId?: string } = {}) {
   return {
     id: o.id,
     code: o.code,
@@ -74,7 +93,7 @@ export function orderDto(o: any, items: any[] = [], vouchers: any[] = []) {
     totalMinor: o.total_minor,
     refundedMinor: o.refunded_minor,
     merchantOfRecord: o.merchant_of_record,
-    pricing: o.pricing_snapshot,
+    pricing: pricingDto(o.pricing_snapshot, opts),
     expiresAt: o.expires_at,
     fulfilledAt: o.fulfilled_at,
     cancelledAt: o.cancelled_at,
@@ -236,6 +255,14 @@ export function refundPct(terms: any, hoursBefore: number): number {
 
 /** Amount refundable now under each product's cancellation terms (server-side; capped by what is left). */
 export async function cancellationRefund(db: Db, order: any): Promise<number> {
+  return (await cancellationRefundBreakdown(db, order)).amountMinor;
+}
+
+/**
+ * The cancellation refund and the part of it that returns the buyer service fee + tax (feeRefundMinor; 0 unless
+ * every product's terms mark the fee refundable). Passed to PAY-02 so the ledger reverses only refunded components.
+ */
+export async function cancellationRefundBreakdown(db: Db, order: any): Promise<{ amountMinor: number; feeRefundMinor: number }> {
   const lines = await q(
     db,
     `SELECT i.*, d.starts_at, d.product_id FROM order_items i
@@ -258,7 +285,8 @@ export async function cancellationRefund(db: Db, order: any): Promise<number> {
   }
   const fee = order.total_minor - order.subtotal_minor;
   const feeRefund = allFeeRefundable && order.subtotal_minor > 0 ? Math.floor((fee * refundSub) / order.subtotal_minor) : 0;
-  return Math.max(0, Math.min(order.total_minor - order.refunded_minor, refundSub + feeRefund));
+  const amountMinor = Math.max(0, Math.min(order.total_minor - order.refunded_minor, refundSub + feeRefund));
+  return { amountMinor, feeRefundMinor: Math.min(feeRefund, amountMinor) };
 }
 
 export async function cancelOrder(tx: Tx, ctx: Ctx, args: { orderId: string; reason: string; full?: boolean; requireBuyer?: string | null }) {
@@ -270,7 +298,10 @@ export async function cancelOrder(tx: Tx, ctx: Ctx, args: { orderId: string; rea
     await OrderFSM.transition(tx, ctx, { table: 'orders', id: order.id, to: 'CANCELLED', reason: args.reason, versioned: true, set: { cancelled_at: new Date(), cancel_reason: args.reason.slice(0, 300) } });
     await releaseCapacity(tx, ctx, order.id);
   } else if (order.status === 'PAID' || order.status === 'PARTIALLY_REFUNDED') {
-    const amount = args.full ? order.total_minor - order.refunded_minor : await cancellationRefund(tx, order);
+    // a full refund returns every remaining component (pro rata reversal); a policy refund states its fee part
+    const { amountMinor: amount, feeRefundMinor } = args.full
+      ? { amountMinor: order.total_minor - order.refunded_minor, feeRefundMinor: null }
+      : await cancellationRefundBreakdown(tx, order);
     await OrderFSM.transition(tx, ctx, { table: 'orders', id: order.id, to: 'CANCELLED', reason: args.reason, versioned: true, set: { cancelled_at: new Date(), cancel_reason: args.reason.slice(0, 300) } });
     await releaseCapacity(tx, ctx, order.id);
     if (amount > 0) {
@@ -278,6 +309,7 @@ export async function cancelOrder(tx: Tx, ctx: Ctx, args: { orderId: string; rea
         subjectType: 'ORDER',
         subjectId: order.id,
         amountMinor: amount,
+        feeRefundMinor,
         reason: `ORDER_CANCELLED: ${args.reason}`.slice(0, 300),
         idempotencyKey: `order-cancel:${order.id}`,
       });
@@ -302,6 +334,23 @@ export async function cancelOrder(tx: Tx, ctx: Ctx, args: { orderId: string; rea
 // ORDER payment subject (contract with PAY-01/02)
 // ------------------------------------------------------------------------------------------------
 
+/**
+ * An unpaid order may only be paid while every active departure line can still be delivered:
+ * not started yet (same gate as createOrder) and not CANCELLED/DEPARTED. The seats are already held,
+ * so a departure merely CLOSED for new sales does not block paying an existing hold.
+ */
+async function assertDeparturesPayable(tx: Tx, orderId: string) {
+  const closed = await maybeOne(
+    tx,
+    `SELECT d.id FROM order_items i JOIN travel_departures d ON d.id = i.sellable_id
+      WHERE i.order_id = $1 AND i.status = 'ACTIVE' AND i.sellable_type = 'TRAVEL_DEPARTURE'
+        AND (d.starts_at <= $2 OR d.status IN ('CANCELLED','DEPARTED'))
+      LIMIT 1`,
+    [orderId, new Date()],
+  );
+  if (closed) throw conflict('DEPARTURE_CLOSED', 'A departure in this order has already started or is no longer running');
+}
+
 export function registerOrderPaymentSubject() {
   registerPaymentSubject('ORDER', {
     async payable(tx, _ctx, orderId): Promise<PayableSnapshot> {
@@ -309,6 +358,7 @@ export function registerOrderPaymentSubject() {
       if (!o) throw notFound('Order');
       if (!UNPAID.includes(o.status)) throw conflict('ORDER_NOT_PAYABLE', `Order is ${o.status}`);
       if (o.expires_at && new Date(o.expires_at).getTime() <= Date.now()) throw conflict('ORDER_EXPIRED', 'This order has expired');
+      await assertDeparturesPayable(tx, orderId);
       const items = await q(tx, `SELECT title FROM order_items WHERE order_id = $1 AND status = 'ACTIVE' AND sellable_type = 'TRAVEL_DEPARTURE' ORDER BY id`, [orderId]);
       const sup: any[] = o.pricing_snapshot?.suppliers ?? [];
       const tax = Number(o.pricing_snapshot?.taxMinor ?? 0);
@@ -333,6 +383,8 @@ export function registerOrderPaymentSubject() {
       if (!o) throw notFound('Order');
       if (!UNPAID.includes(o.status)) throw conflict('ORDER_NOT_PAYABLE', `Order is ${o.status}`);
       if (payment.amountMinor !== o.total_minor || payment.currency !== o.currency) throw conflict('AMOUNT_MISMATCH', 'Payment does not match order total');
+      // prepared before departure but captured after it started → rejected here; approvePayment auto-refunds
+      await assertDeparturesPayable(tx, orderId);
       await OrderFSM.transition(tx, ctx, { table: 'orders', id: orderId, to: 'PAID', reason: `PAYMENT ${payment.id}`, actorType: 'PROVIDER', versioned: true, set: { expires_at: null } });
       const lines = await q(tx, `SELECT * FROM order_items WHERE order_id = $1 AND status = 'ACTIVE' AND sellable_type = 'TRAVEL_DEPARTURE'`, [orderId]);
       for (const l of lines) {

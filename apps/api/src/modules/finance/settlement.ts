@@ -1,7 +1,8 @@
 /**
  * FIN-02 settlement & payout. Settlement amounts are derived from the ledger:
- *  - base items (completed reservations / guide bookings / fulfilled orders): fee = gross − payee credit
- *    of the approval transaction;
+ *  - base items (completed reservations / guide bookings / fulfilled orders, plus NO_SHOW / CANCELLED /
+ *    PARTIALLY_REFUNDED stays once their check-out date has passed): fee = gross − payee credit of the
+ *    approval transaction (a fully REFUNDED stay nets to 0 and is not listed);
  *  - refund items (LEDGER_REFUND): each refund ledger transaction debiting the payee's account, settled
  *    once (so refunds after a payout become negative adjustments on the next statement).
  * FSM: DRAFT → READY → APPROVAL_PENDING → APPROVED → PAYOUT_PENDING → PAID → RECONCILED | HELD.
@@ -108,6 +109,12 @@ async function candidateItems(db: Db, periodStart: string, periodEnd: string): P
     `SELECT c.* FROM (
         SELECT 'RESERVATION' AS source_type, r.id AS source_id, r.host_id AS payee_id, 'HOST' AS payee_type
           FROM reservations r WHERE r.status = 'COMPLETED' AND r.completed_at >= $1::date AND r.completed_at < ($2::date + 1)
+        UNION ALL
+        -- terminal stays that never complete but keep (part of) the proceeds: no-show, 0 % cancellation, partial refund.
+        -- Payable once the booked stay is over (check-out on or before the period end, never in the future). No lower
+        -- bound, so a no-show reported after its period was generated is picked up by the next run (settled once).
+        SELECT 'RESERVATION', r.id, r.host_id, 'HOST'
+          FROM reservations r WHERE r.status IN ('NO_SHOW','CANCELLED','PARTIALLY_REFUNDED') AND r.check_out <= least($2::date, current_date)
         UNION ALL
         SELECT 'GUIDE_BOOKING', g.id, g.guide_id, 'GUIDE'
           FROM guide_bookings g WHERE g.status IN ('COMPLETED','REVIEWED') AND g.end_at >= $1::date AND g.end_at < ($2::date + 1)

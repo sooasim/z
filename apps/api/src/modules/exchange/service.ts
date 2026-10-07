@@ -21,6 +21,7 @@ import { AppError, conflict, forbidden, notFound, unauthorized, unprocessable } 
 import { isStaff } from '../../platform/auth.js';
 import { decodeCursor, encodeCursor } from '../../platform/http.js';
 import { ensureConversation } from '../messaging/service.js';
+import { openDispute } from '../disputes/service.js';
 
 export const EXCHANGE_FLAG = 'exchange.enabled';
 /** A recipient has this long to respond to the latest offer before the request EXPIRES. */
@@ -713,6 +714,15 @@ export async function signAgreement(db: Tx, ctx: Ctx, id: string, input: { terms
     [a.id, JSON.stringify(evidence), status],
   );
   if (upd.rowCount !== 1) throw conflict('ALREADY_SIGNED', 'You have already signed this agreement');
+  // legal e-consent is a compliance mutation: append-only audit row in the same tx (actor, correlation id, ip, UA)
+  await audit(db, ctx, {
+    action: 'exchange.agreement.signed',
+    resourceType: 'exchange_agreement',
+    resourceId: a.id,
+    before: { status: a.status },
+    after: { status, party: party === 'A' ? 'REQUESTER' : 'RESPONDER', exchangeId: ex.id, termsHash: a.terms_hash, termsVersion: a.terms_version, offerVersion: a.offer_version },
+    category: 'COMPLIANCE',
+  });
   await emitEx(db, ctx, ex, 'exchange.agreement.signed', { agreementId: a.id, by: actor.userId, termsHash: a.terms_hash, termsVersion: a.terms_version, fullySigned: otherSigned });
   let autoConfirm: { confirmed: boolean; error?: string } | undefined;
   if (otherSigned) {
@@ -878,15 +888,28 @@ export async function disputeExchange(db: Tx, ctx: Ctx, id: string, input: { rea
   const actor = requireActor(ctx);
   const { ex, party } = await lockForParty(db, ctx, id);
   assertStatus(ex, ['CONFIRMED', 'IN_PROGRESS'], 'DISPUTED');
-  const d = await one<{ id: string }>(
-    db,
-    `INSERT INTO disputes(opened_by, context_type, context_id, counterparty_id, severity, reason, description)
-     VALUES ($1,'EXCHANGE',$2,$3,$4,$5,$6) RETURNING id`,
-    [actor.userId, id, otherUser(ex, party!), input.severity ?? 'NORMAL', input.reason, input.description ?? null],
-  );
+  // TRUST-03 owns the dispute record (party check, duplicate guard, severity policy, evidence, dispute.opened event,
+  // audit, counterparty notification). Exchange only drives its own FSM inside the same transaction.
+  let d: { id: string };
+  try {
+    d = await openDispute(db, ctx, {
+      contextType: 'EXCHANGE',
+      contextId: id,
+      reason: input.reason,
+      description: input.description ?? undefined,
+      severity: input.severity,
+      counterpartyId: otherUser(ex, party!),
+    });
+  } catch (err) {
+    // The party already has an open TRUST-03 dispute for this exchange (opened via /v1/disputes, which does not
+    // touch the exchange): freeze the exchange against that dispute instead of failing or duplicating it.
+    // The guard throws before any write, so the transaction is still usable.
+    const existing = err instanceof AppError && err.code === 'DISPUTE_ALREADY_OPEN' ? (err.details as { disputeId?: string } | undefined)?.disputeId : undefined;
+    if (!existing) throw err;
+    d = { id: existing };
+  }
   await exchangeFsm.transition(db, ctx, { table: 'exchange_requests', id, from: ['CONFIRMED', 'IN_PROGRESS'], to: 'DISPUTED', reason: input.reason, versioned: true, metadata: { disputeId: d.id } });
   await emitEx(db, ctx, ex, 'exchange.disputed', { disputeId: d.id, by: actor.userId, fromStatus: ex.status });
-  await emit(db, ctx, { aggregateType: 'dispute', aggregateId: d.id, eventType: 'dispute.opened', payload: { disputeId: d.id, contextType: 'EXCHANGE', contextId: id, openedBy: actor.userId } });
   await notify(db, ctx, { userId: otherUser(ex, party!), templateKey: 'exchange.disputed', title: '익스체인지 분쟁 접수', body: '상대방이 분쟁을 접수했습니다.', data: { exchangeId: id, disputeId: d.id }, dedupeKey: `exchange.disputed:${id}` });
   return { ...(await getExchange(db, ctx, id)), disputeId: d.id };
 }

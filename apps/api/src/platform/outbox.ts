@@ -3,6 +3,7 @@ import type { Db, Tx } from './db.js';
 import { q, withTx } from './db.js';
 import type { Ctx, AppContext } from './context.js';
 import { systemCtx } from './context.js';
+import { outboxDeadLettered, outboxDispatched, outboxFailed } from './metrics.js';
 
 export interface DomainEvent<P = any> {
   id: string;
@@ -52,7 +53,10 @@ const MAX_ATTEMPTS = 8;
 /** Process one batch of pending outbox events. Safe to run concurrently (SKIP LOCKED). Returns processed count. */
 export async function dispatchOutbox(app: AppContext, limit = 50): Promise<number> {
   const pool: pg.Pool = app.pool;
-  return withTx(pool, async (tx) => {
+  // metrics are counted only once the dispatch tx has committed (withTx may retry fn)
+  let stats = { dispatched: [] as string[], failed: [] as string[], deadLettered: 0 };
+  const processed = await withTx(pool, async (tx) => {
+    stats = { dispatched: [], failed: [], deadLettered: 0 };
     const events = await q<DomainEvent & { attempts: number }>(
       tx,
       `SELECT * FROM outbox_events
@@ -75,25 +79,32 @@ export async function dispatchOutbox(app: AppContext, limit = 50): Promise<numbe
         } catch (err: any) {
           await tx.query('ROLLBACK TO SAVEPOINT h');
           failed = `${h.consumer}: ${err?.message ?? err}`;
+          stats.failed.push(h.consumer);
           app.log.error({ err, event: ev.event_type, consumer: h.consumer }, 'outbox handler failed');
         }
       }
       if (failed) {
         const attempts = ev.attempts + 1;
         await tx.query(
-          `UPDATE outbox_events SET attempts = $2, last_error = $3,
-              available_at = now() + make_interval(secs => $4),
-              dead_lettered_at = CASE WHEN $2 >= $5 THEN now() END
+          `UPDATE outbox_events SET attempts = $2::int, last_error = $3,
+              available_at = now() + make_interval(secs => $4::double precision),
+              dead_lettered_at = CASE WHEN $2::int >= $5::int THEN now() END
             WHERE id = $1`,
           [ev.id, attempts, failed, Math.min(2 ** attempts, 3600), MAX_ATTEMPTS],
         );
+        if (attempts >= MAX_ATTEMPTS) stats.deadLettered++;
       } else {
         await tx.query(`UPDATE outbox_events SET published_at = now() WHERE id = $1`, [ev.id]);
+        stats.dispatched.push(ev.event_type);
       }
       app.realtime.publish(`events:${ev.event_type}`, ev);
     }
     return events.length;
   });
+  for (const t of stats.dispatched) outboxDispatched.inc({ event_type: t });
+  for (const c of stats.failed) outboxFailed.inc({ consumer: c });
+  if (stats.deadLettered) outboxDeadLettered.inc(stats.deadLettered);
+  return processed;
 }
 
 /** Drain the outbox until empty (tests / one-shot jobs). */

@@ -89,6 +89,8 @@ export interface RefundRow {
   attempts: number;
   next_attempt_at: Date | null;
   source: 'PLATFORM' | 'PROVIDER_SYNC';
+  /** part of the refund returning the buyer service fee + tax (null = not specified → pro rata ledger reversal) */
+  fee_refund_minor: number | null;
   created_at: Date;
   completed_at: Date | null;
 }
@@ -614,13 +616,20 @@ export async function refundableRemaining(db: Db, payment: Pick<PaymentRow, 'id'
  * PAY-02 contract (consumed by booking, guide, travel). Records a refund intent in the caller's tx;
  * the provider cancel runs asynchronously (outbox consumer + retry job). Idempotent by `idempotencyKey`.
  * Returns refundId null when the subject has no approved payment or the amount is 0.
+ * `feeRefundMinor` (optional): the part of `amountMinor` that returns the buyer-paid service fee + tax under the
+ * subject's cancellation terms; the rest returns the payees' gross. The ledger reversal then debits only the
+ * components actually refunded (finance/ledger.ts postRefundReversal). Omitted → pro rata over all approval credits.
  */
 export async function requestRefund(
   db: Tx,
   ctx: Ctx,
-  args: { subjectType: 'RESERVATION' | 'GUIDE_BOOKING' | 'ORDER'; subjectId: string; amountMinor: number; reason: string; idempotencyKey: string; requestedBy?: string | null },
+  args: { subjectType: 'RESERVATION' | 'GUIDE_BOOKING' | 'ORDER'; subjectId: string; amountMinor: number; feeRefundMinor?: number | null; reason: string; idempotencyKey: string; requestedBy?: string | null },
 ): Promise<{ refundId: string | null; status: string }> {
   if (!Number.isInteger(args.amountMinor) || args.amountMinor < 0) throw badRequest('INVALID_AMOUNT', 'Refund amount must be a non-negative integer (minor units)');
+  const feeRefundMinor = args.feeRefundMinor ?? null;
+  if (feeRefundMinor !== null && (!Number.isInteger(feeRefundMinor) || feeRefundMinor < 0 || feeRefundMinor > args.amountMinor)) {
+    throw badRequest('INVALID_AMOUNT', 'Refunded fee part must be an integer between 0 and the refund amount (minor units)');
+  }
   if (!args.idempotencyKey || args.idempotencyKey.length > 200) throw badRequest('IDEMPOTENCY_KEY_INVALID', 'Refund idempotency key is required');
   const existing = await maybeOne<{ id: string; status: string }>(db, `SELECT id, status FROM refunds WHERE idempotency_key = $1`, [args.idempotencyKey]);
   if (existing) return { refundId: existing.id, status: existing.status };
@@ -638,9 +647,9 @@ export async function requestRefund(
   const requestedBy = args.requestedBy !== undefined ? args.requestedBy : ctx.actor?.userId ?? null;
   const ins = await q<RefundRow>(
     db,
-    `INSERT INTO refunds(payment_id, amount_minor, currency, reason, requested_by, status, idempotency_key)
-     VALUES ($1,$2,$3,$4,$5,'REQUESTED',$6) ON CONFLICT (idempotency_key) DO NOTHING RETURNING *`,
-    [payment.id, args.amountMinor, payment.currency, args.reason.slice(0, 500), requestedBy, args.idempotencyKey],
+    `INSERT INTO refunds(payment_id, amount_minor, currency, reason, requested_by, status, idempotency_key, fee_refund_minor)
+     VALUES ($1,$2,$3,$4,$5,'REQUESTED',$6,$7) ON CONFLICT (idempotency_key) DO NOTHING RETURNING *`,
+    [payment.id, args.amountMinor, payment.currency, args.reason.slice(0, 500), requestedBy, args.idempotencyKey, feeRefundMinor],
   );
   const refund = ins[0];
   if (!refund) {
@@ -763,7 +772,14 @@ export async function completeRefund(tx: Tx, ctx: Ctx, refund: RefundRow, paymen
     actorType: 'PROVIDER',
     set: { provider_ref: providerRef, completed_at: new Date(), failure_message: null, next_attempt_at: null },
   });
-  await postRefundReversal(tx, ctx, { paymentId: payment.id, refundId: refund.id, amountMinor: refund.amount_minor, refundedBeforeMinor: before });
+  await postRefundReversal(tx, ctx, {
+    paymentId: payment.id,
+    refundId: refund.id,
+    amountMinor: refund.amount_minor,
+    refundedBeforeMinor: before,
+    feeRefundMinor: refund.fee_refund_minor ?? null,
+    split: payment.payable_snapshot?.split,
+  });
   await paymentSubject(payment.subject_type).onRefunded?.(tx, ctx, payment.subject_id, {
     paymentId: payment.id,
     refundId: refund.id,

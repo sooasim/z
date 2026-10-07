@@ -28,13 +28,14 @@ import cms from './cms/index.js';
 import analytics from './analytics/index.js';
 import ai from './ai/index.js';
 import integrations from './integrations/index.js';
+import risk from './risk/index.js';
 
 /**
  * Module registry. Order matters only for adapter registration (payments before domains that
  * consume it is NOT required: cross-module calls go through exported service functions and the
  * payment-subject / outbox contracts in src/platform).
  */
-export const MODULES = { identity, profile, roles, privacy, verification, reviews, disputes, hosts, support, properties, media, compliance, search, favorites, geo, booking, exchange, guide, travel, charter, payments, finance, messaging, notifications, admin, cms, analytics, ai, integrations };
+export const MODULES = { identity, profile, roles, privacy, verification, reviews, disputes, hosts, support, properties, media, compliance, search, favorites, geo, booking, exchange, guide, travel, charter, payments, finance, messaging, notifications, admin, cms, analytics, ai, integrations, risk };
 
 export async function registerModules(app: FastifyInstance) {
   for (const [name, plugin] of Object.entries(MODULES)) {

@@ -65,6 +65,13 @@ export async function createTestApp(config: Record<string, unknown> = {}): Promi
       await app.close();
       const a = new pg.Client({ connectionString: `${base()}/postgres` });
       await a.connect();
+      // pg-pool's end() resolves before its sockets are closed; let those backends exit first so the forced
+      // drop does not terminate a still-attached pool client (a spurious "pg pool error" 57P01 on stderr)
+      for (let i = 0; i < 50; i++) {
+        const { rows } = await a.query(`SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = $1`, [dbName]);
+        if (rows[0].n === 0) break;
+        await new Promise((r) => setTimeout(r, 20));
+      }
       await a.query(`DROP DATABASE IF EXISTS ${dbName} WITH (FORCE)`).catch(() => {});
       await a.end();
     },
