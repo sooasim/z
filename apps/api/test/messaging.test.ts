@@ -142,7 +142,7 @@ describe('COMMS-01 messaging', () => {
       const r = await call(t, admin, 'GET', `/v1/admin/conversations/${convId}/messages`);
       expect(r.status).toBe(403);
       expect(r.body.code).toBe('ELEVATED_ACCESS_REQUIRED');
-      const a = await t.pool.query(`SELECT * FROM audit_logs WHERE action = 'conversation.read.denied' AND resource_id = $1`, [convId]);
+      const a = await t.pool.query(`SELECT * FROM audit_logs WHERE action = 'elevated_access.denied' AND resource_id = $1`, [convId]);
       expect(a.rows[0].category).toBe('ELEVATED_ACCESS');
       const aal1 = await createUser(t, { roles: ['ADMIN'], aal: 'aal1' });
       expect((await call(t, aal1, 'GET', `/v1/admin/conversations/${convId}/messages`)).body.code).toBe('AAL2_REQUIRED');
@@ -181,7 +181,7 @@ describe('COMMS-01 messaging', () => {
       expect(r.body.items.length).toBeGreaterThan(0);
       expect(r.body.grant.caseId).toBe(disputeId);
       await call(t, admin, 'GET', `/v1/admin/conversations/${convId}/messages`);
-      const a = await t.pool.query(`SELECT * FROM audit_logs WHERE action = 'conversation.read' AND resource_id = $1`, [convId]);
+      const a = await t.pool.query(`SELECT * FROM audit_logs WHERE action = 'conversation.read_elevated' AND resource_id = $1`, [convId]);
       expect(a.rows).toHaveLength(2);
       expect(a.rows[0].category).toBe('ELEVATED_ACCESS');
       expect(a.rows[0].actor_id).toBe(admin.id);

@@ -2,9 +2,8 @@ import type { Db } from '../../platform/db.js';
 import { maybeOne, one, q } from '../../platform/db.js';
 import type { AppContext, Ctx } from '../../platform/context.js';
 import { emit } from '../../platform/outbox.js';
-import { audit } from '../../platform/audit.js';
-import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../platform/errors.js';
-import { isStaff } from '../../platform/auth.js';
+import { badRequest, conflict, notFound, unprocessable } from '../../platform/errors.js';
+import { assertElevatedAccess } from '../disputes/service.js';
 import { decodeCursor, encodeCursor } from '../../platform/http.js';
 
 /** COMMS-01: context-bound P2P messaging. Postgres is the source of truth; realtime is a delivery aid (invariant 1). */
@@ -391,52 +390,17 @@ export async function createInquiry(
 
 // ---------------------------------------------------------------- staff elevation (invariant 10)
 
-export interface ElevationGrant { id: string; case_type: string; case_id: string; reason: string; expires_at: string }
-
 /**
- * Staff may read a private conversation only with a live (non-revoked, non-expired) elevated_access_grants row
- * scoped to that conversation and issued to that staff member. Every attempt — granted or denied — is audited
- * with category ELEVATED_ACCESS. (Local implementation of the disputes-owned contract.)
+ * Staff may read a private conversation only via the disputes-owned contract `assertElevatedAccess`
+ * (live, non-revoked, non-expired, case-scoped grant on an AAL2 session). It audits every attempt
+ * (granted → conversation.read_elevated, denied → elevated_access.denied) with category ELEVATED_ACCESS.
  */
-export async function assertConversationElevation(db: Db, ctx: Ctx, conversationId: string): Promise<ElevationGrant> {
-  const actor = ctx.actor;
-  if (!actor || !isStaff(actor)) throw forbidden('ROLE_REQUIRED', 'Staff role required');
-  if (actor.aal !== 'aal2') throw forbidden('AAL2_REQUIRED', 'Multi-factor authentication is required for this action');
-  const grant = await maybeOne<ElevationGrant>(
-    db,
-    `SELECT id, case_type, case_id, reason, expires_at FROM elevated_access_grants
-      WHERE admin_id = $1 AND resource_type = 'CONVERSATION' AND resource_id = $2
-        AND revoked_at IS NULL AND expires_at > now()
-      ORDER BY expires_at DESC LIMIT 1`,
-    [actor.userId, conversationId],
-  );
-  if (!grant) {
-    await audit(db, ctx, {
-      action: 'conversation.read.denied',
-      resourceType: 'conversation',
-      resourceId: conversationId,
-      category: 'ELEVATED_ACCESS',
-      reason: 'no active elevated access grant',
-    });
-    throw forbidden('ELEVATED_ACCESS_REQUIRED', 'A case-scoped, time-limited elevated access grant is required to read this conversation');
-  }
-  return grant;
-}
-
 export async function readAsStaff(db: Db, ctx: Ctx, conversationId: string, opts: { limit: number; cursor?: string }) {
-  const conv = await maybeOne(db, `SELECT id, context_type, context_id FROM conversations WHERE id = $1`, [conversationId]);
-  const grant = await assertConversationElevation(db, ctx, conversationId);
+  const grant = await assertElevatedAccess(db, ctx, conversationId);
+  const conv = await maybeOne(db, `SELECT id FROM conversations WHERE id = $1`, [conversationId]);
   if (!conv) throw notFound('Conversation');
   const pageResult = await pageMessages(db, conversationId, opts);
-  await audit(db, ctx, {
-    action: 'conversation.read',
-    resourceType: 'conversation',
-    resourceId: conversationId,
-    category: 'ELEVATED_ACCESS',
-    reason: grant.reason,
-    after: { grantId: grant.id, caseType: grant.case_type, caseId: grant.case_id, messageCount: pageResult.items.length, cursor: opts.cursor ?? null },
-  });
-  return { ...pageResult, grant: { id: grant.id, caseType: grant.case_type, caseId: grant.case_id, expiresAt: grant.expires_at } };
+  return { ...pageResult, grant: { id: grant.grantId, caseType: grant.caseType, caseId: grant.caseId, expiresAt: grant.expiresAt } };
 }
 
 // ---------------------------------------------------------------- realtime delivery
