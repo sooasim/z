@@ -1,88 +1,72 @@
 'use client';
 import Link from 'next/link';
-import { useState } from 'react';
 import { useI18n } from '@/lib/i18n';
-import { useAuth } from '@/lib/auth';
-import { api } from '@/lib/api';
 import { GUIDE_TYPE_LABEL, guideView, productView, propertyView } from '@/lib/domain';
-import { Money } from './ui';
+import { postcardFor, postcardSet, flagFor, langName } from '@/lib/art';
+import { f, str } from '@/lib/shape';
+import { HeartButton } from './favorites';
+import { ListingCard, type CardBadge } from './ui/listing-card';
+import { Avatar, RatingStars } from './ui/display';
+import { Money } from './ui/base';
+
+const COMPLIANT = ['PASS', 'PASSED', 'COMPLIANT', 'APPROVED', 'VERIFIED', 'ELIGIBLE', 'OK'];
+
+export function isCompliant(status: string) {
+  return COMPLIANT.includes((status || '').toUpperCase());
+}
 
 export function ComplianceBadge({ status }: { status: string }) {
   const { L } = useI18n();
   if (!status) return null;
   const s = status.toUpperCase();
-  if (['PASS', 'PASSED', 'COMPLIANT', 'APPROVED', 'VERIFIED', 'ELIGIBLE', 'OK'].includes(s))
+  if (COMPLIANT.includes(s))
     return (
       <span className="badge ok" title={L('필수 인허가 확인 완료', 'Required permits verified')}>
-        ✓ {L('인허가 확인', 'Permit verified')}
+        ✓ {L('인허가 확인', 'Compliance OK')}
       </span>
     );
   if (['PENDING', 'IN_REVIEW', 'REVIEW', 'SUBMITTED'].includes(s)) return <span className="badge warn">{L('인허가 검토중', 'Permit in review')}</span>;
   return <span className="badge danger">{L('예약 불가(준수 미충족)', 'Not bookable (compliance)')}</span>;
 }
 
+/** Kept for existing call sites — optimistic heart. */
 export function FavoriteButton({ targetType, targetId }: { targetType: 'PROPERTY' | 'GUIDE' | 'TRAVEL_PRODUCT'; targetId: string }) {
-  const { user } = useAuth();
-  const { L } = useI18n();
-  const [on, setOn] = useState(false);
-  const [busy, setBusy] = useState(false);
-  if (!user || !targetId) return null;
+  if (!targetId) return null;
   return (
-    <button
-      type="button"
-      className="btn sm"
-      aria-pressed={on}
-      disabled={busy}
-      onClick={async (e) => {
-        e.preventDefault();
-        setBusy(true);
-        try {
-          if (on) await api(`/v1/favorites`, { method: 'DELETE', query: { targetType, targetId } });
-          else await api('/v1/favorites', { method: 'POST', body: { targetType, targetId } });
-          setOn(!on);
-        } catch {
-          /* non-critical */
-        } finally {
-          setBusy(false);
-        }
-      }}
-    >
-      {on ? '♥' : '♡'} <span className="sr-only">{L('저장', 'Save')}</span>
-    </button>
+    <span style={{ display: 'inline-grid', background: 'var(--surface-3)', borderRadius: 999 }}>
+      <HeartButton targetType={targetType} targetId={targetId} />
+    </span>
   );
 }
 
-export function PropertyCard({ p, href, query }: { p: any; href?: string; query?: string }) {
+export function PropertyCard({ p, href, query, active, onHover, priceNote }: { p: any; href?: string; query?: string; active?: boolean; onHover?: (on: boolean) => void; priceNote?: React.ReactNode }) {
   const v = propertyView(p);
   const { L } = useI18n();
+  const images = v.media.length ? v.media.slice(0, 6) : v.cover ? [v.cover] : postcardSet(v.city || v.title, v.id || v.slug);
+  const hostVerified = Boolean(f(p, 'hostVerified', 'host.verified', 'host.identityVerified')) || str(p, 'host.verificationStatus') === 'VERIFIED';
+  const badges: CardBadge[] = [];
+  if (isCompliant(v.compliance)) badges.push({ label: L('인허가 확인', 'Compliance OK'), tone: 'ok' });
+  if (v.exchangeEnabled) badges.push({ label: L('맞교환', 'Exchange'), tone: 'exchange' });
+  if (hostVerified) badges.push({ label: L('인증 호스트', 'Verified host'), tone: 'ok' });
+  const nights = Number(f(p, 'nights')) || 0;
+  const total = Number(f(p, 'totalMinor', 'quote.totalMinor')) || undefined;
   return (
-    <article className="card listing-card">
-      <Link href={href ?? `/stay/${encodeURIComponent(v.slug)}${query ? '?' + query : ''}`} className="card link flat" style={{ border: 0, padding: 0 }}>
-        <div className="media">{v.cover ? <img src={v.cover} alt="" loading="lazy" /> : <span aria-hidden="true">JETPOOL</span>}</div>
-        <div className="body">
-          <h3>{v.title}</h3>
-          <p className="muted small" style={{ margin: 0 }}>
-            {[v.city, v.country].filter(Boolean).join(', ') || L('위치 비공개', 'Location hidden')}
-            {v.rating ? ` · ★ ${v.rating.toFixed(1)} (${v.reviewCount})` : ''}
-          </p>
-          <div className="row between" style={{ marginTop: 6 }}>
-            <span>
-              {v.priceMinor !== undefined ? (
-                <>
-                  <strong>
-                    <Money minor={v.priceMinor} currency={v.currency} />
-                  </strong>{' '}
-                  <span className="muted small">/ {L('박', 'night')}</span>
-                </>
-              ) : v.exchangeEnabled ? (
-                <span className="badge exchange">{L('맞교환 가능', 'Exchange')}</span>
-              ) : null}
-            </span>
-            <ComplianceBadge status={v.compliance} />
-          </div>
-        </div>
-      </Link>
-    </article>
+    <ListingCard
+      href={href ?? `/stay/${encodeURIComponent(v.slug)}${query ? '?' + query : ''}`}
+      images={images}
+      title={v.title}
+      meta={[[v.city, v.country].filter(Boolean).join(', ') || L('위치 비공개', 'Location on request'), v.maxGuests ? `${L('최대', 'Up to')} ${v.maxGuests}${L('명', ' guests')}` : '', v.bedrooms !== undefined ? `${L('침실', 'Bedrooms')} ${v.bedrooms}` : ''].filter(Boolean).join(' · ')}
+      rating={v.rating}
+      reviewCount={v.reviewCount}
+      priceMinor={total ?? v.priceMinor}
+      currency={v.currency}
+      priceSuffix={total && nights ? `${L('총액', 'total')} · ${nights}${L('박', ' nights')}` : L('/ 박', '/ night')}
+      priceNote={priceNote ?? (v.exchangeEnabled ? <span className="badge exchange">⇄ {L('맞교환 가능', 'Open to exchange')}</span> : undefined)}
+      badges={badges}
+      fav={v.id ? <HeartButton targetType="PROPERTY" targetId={v.id} /> : undefined}
+      active={active}
+      onHover={onHover}
+    />
   );
 }
 
@@ -91,34 +75,51 @@ export function GuideCard({ g }: { g: any }) {
   const { lang, L } = useI18n();
   const tl = GUIDE_TYPE_LABEL[v.type] ?? { ko: v.type, en: v.type, paid: false };
   return (
-    <article className="card">
-      <Link href={`/guides/${v.id}`} className="card link flat" style={{ border: 0, padding: 0 }}>
-        <div className="row">
-          <div aria-hidden="true" style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--c-primary-soft)', display: 'grid', placeItems: 'center', fontWeight: 800, color: 'var(--c-primary)' }}>
-            {v.name.slice(0, 1)}
-          </div>
-          <div>
-            <h3 style={{ margin: 0 }}>{v.name}</h3>
-            <p className="muted small" style={{ margin: 0 }}>
-              {v.city} {v.languages.length ? '· ' + v.languages.join(', ') : ''}
-            </p>
-          </div>
-        </div>
-        <div className="row" style={{ marginTop: 8, gap: 6 }}>
-          <span className={`badge ${tl.paid ? 'info' : 'ok'}`}>{lang === 'ko' ? tl.ko : tl.en}</span>
-          {v.verified && <span className="badge ok">✓ {L('본인확인', 'Verified')}</span>}
-          {v.rateMinor !== undefined && tl.paid && (
-            <span className="small">
-              <Money minor={v.rateMinor} currency={v.currency} /> / {L('시간', 'hr')}
-            </span>
-          )}
-        </div>
-        {v.bio && (
-          <p className="small muted" style={{ marginTop: 8 }}>
-            {v.bio.slice(0, 120)}
+    <article className="gcard">
+      <div className="cover" style={{ backgroundImage: `url(${postcardFor(v.city, v.id)})` }} aria-hidden="true" />
+      <div className="fav" style={{ position: 'absolute', top: 6, right: 6 }}>
+        {v.id && <HeartButton targetType="GUIDE" targetId={v.id} />}
+      </div>
+      <div className="who">
+        <Avatar name={v.name} src={v.avatar || undefined} size={64} verified={v.verified} />
+        <div className="grow">
+          <h3>
+            <Link href={`/guides/${v.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+              {v.name}
+              <span style={{ position: 'absolute', inset: 0 }} aria-hidden="true" />
+            </Link>
+          </h3>
+          <p className="xs muted" style={{ margin: 0 }}>
+            {v.city || L('지역 미정', 'Area TBD')}
           </p>
+        </div>
+      </div>
+      <div className="row" style={{ gap: 6 }}>
+        <span className={`badge ${tl.paid ? 'info' : 'ok'}`}>{lang === 'ko' ? tl.ko : tl.en}</span>
+        {v.verified && <span className="badge ok">✓ {L('본인확인', 'Verified')}</span>}
+        <RatingStars value={v.rating} compact />
+      </div>
+      {v.languages.length > 0 && (
+        <div className="row" style={{ gap: 6 }} aria-label={L('사용 언어', 'Languages')}>
+          {v.languages.slice(0, 4).map((l) => (
+            <span key={l} className="lang-chip">
+              <span className="flag" aria-hidden="true">{flagFor(l)}</span>
+              {langName(l, lang)}
+            </span>
+          ))}
+        </div>
+      )}
+      {v.bio && <p className="small muted" style={{ margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{v.bio}</p>}
+      <div className="row between small">
+        {tl.paid && v.rateMinor !== undefined ? (
+          <span>
+            <strong><Money minor={v.rateMinor} currency={v.currency} /></strong> <span className="muted">/ {L('시간', 'hr')}</span>
+          </span>
+        ) : (
+          <span className="muted">{L('무료 교류', 'Free meetup')}</span>
         )}
-      </Link>
+        <span aria-hidden="true" style={{ color: 'var(--link)', fontWeight: 700 }}>{L('프로필 보기', 'View')} →</span>
+      </div>
     </article>
   );
 }
@@ -126,26 +127,19 @@ export function GuideCard({ g }: { g: any }) {
 export function ProductCard({ p }: { p: any }) {
   const v = productView(p);
   const { L } = useI18n();
+  const KIND: Record<string, [string, string]> = { TOUR: ['투어', 'Tour'], TICKET: ['티켓', 'Ticket'], PACKAGE: ['패키지', 'Package'], ACTIVITY: ['액티비티', 'Activity'], TRANSFER: ['교통', 'Transfer'] };
+  const k = KIND[v.kind.toUpperCase()];
   return (
-    <article className="card listing-card">
-      <Link href={`/travel/${v.id}`} className="card link flat" style={{ border: 0, padding: 0 }}>
-        <div className="media">{v.cover ? <img src={v.cover} alt="" loading="lazy" /> : <span aria-hidden="true">{v.kind}</span>}</div>
-        <div className="body">
-          <span className="badge info">{v.kind}</span>
-          <h3 style={{ marginTop: 6 }}>{v.title}</h3>
-          <p className="muted small" style={{ margin: 0 }}>
-            {v.city} {v.supplier && `· ${L('공급사', 'Supplier')}: ${v.supplier}`}
-          </p>
-          {v.priceMinor !== undefined && (
-            <p style={{ margin: '6px 0 0' }}>
-              <strong>
-                <Money minor={v.priceMinor} currency={v.currency} />
-              </strong>{' '}
-              <span className="muted small">{L('부터', 'from')}</span>
-            </p>
-          )}
-        </div>
-      </Link>
-    </article>
+    <ListingCard
+      href={`/travel/${v.id}`}
+      images={v.cover ? [v.cover] : postcardSet(v.city || v.title, v.id, 2)}
+      title={v.title}
+      meta={[v.city, v.durationDays ? `${v.durationDays}${L('일', ' days')}` : '', v.supplier && `${L('공급', 'by')} ${v.supplier}`].filter(Boolean).join(' · ')}
+      priceMinor={v.priceMinor}
+      currency={v.currency}
+      priceSuffix={L('부터', 'from')}
+      badges={[{ label: k ? L(k[0], k[1]) : v.kind, tone: 'info' }, ...(v.cancellation && /free|무료/i.test(v.cancellation) ? [{ label: L('무료 취소', 'Free cancel'), tone: 'ok' as const }] : [])]}
+      fav={v.id ? <HeartButton targetType="TRAVEL_PRODUCT" targetId={v.id} /> : undefined}
+    />
   );
 }
