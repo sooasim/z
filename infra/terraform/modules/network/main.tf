@@ -159,27 +159,23 @@ resource "aws_iam_role_policy" "flow" {
 # ---- shared security groups (created here to avoid module cycles between app and data tiers)
 resource "aws_security_group" "alb" {
   name        = "${var.name}-alb"
-  description = "Public ALB (HTTPS from CloudFront/Internet)"
+  description = "ALB (HTTPS from CloudFront only)"
   vpc_id      = aws_vpc.this.id
   tags        = merge(var.tags, { Name = "${var.name}-alb" })
 }
 
+# Only CloudFront origin-facing IPs may reach the ALB (plus the x-origin-verify header check on the listener).
+data "aws_ec2_managed_prefix_list" "cloudfront" {
+  name = "com.amazonaws.global.cloudfront.origin-facing"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "alb_https" {
   security_group_id = aws_security_group.alb.id
-  cidr_ipv4         = "0.0.0.0/0"
+  prefix_list_id    = data.aws_ec2_managed_prefix_list.cloudfront.id
   ip_protocol       = "tcp"
   from_port         = 443
   to_port           = 443
-  description       = "HTTPS"
-}
-
-resource "aws_vpc_security_group_ingress_rule" "alb_http" {
-  security_group_id = aws_security_group.alb.id
-  cidr_ipv4         = "0.0.0.0/0"
-  ip_protocol       = "tcp"
-  from_port         = 80
-  to_port           = 80
-  description       = "HTTP (redirected to HTTPS)"
+  description       = "HTTPS from CloudFront"
 }
 
 resource "aws_vpc_security_group_egress_rule" "alb_to_tasks" {

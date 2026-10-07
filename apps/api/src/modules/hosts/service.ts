@@ -5,7 +5,7 @@ import { StateMachine } from '../../platform/fsm.js';
 import { emit } from '../../platform/outbox.js';
 import { audit } from '../../platform/audit.js';
 import { notify } from '../../platform/notify.js';
-import { conflict, forbidden, notFound, unprocessable } from '../../platform/errors.js';
+import { AppError, conflict, forbidden, notFound, unprocessable } from '../../platform/errors.js';
 import { grantRole } from '../roles/service.js';
 import { isVerified } from '../verification/service.js';
 import { hasActiveSanction } from '../disputes/sanctions.js';
@@ -146,9 +146,7 @@ export async function hostPublishBlockers(db: Db, userId: string): Promise<strin
 export async function assertHostCanPublish(db: Db, userId: string): Promise<void> {
   const reasons = await hostPublishBlockers(db, userId);
   if (reasons.length) {
-    const err = forbidden('HOST_NOT_ELIGIBLE', `Host cannot publish paid inventory: ${reasons.join(', ')}`);
-    (err as any).details = { reasons };
-    throw Object.assign(err, { details: { reasons } });
+    throw new AppError(403, 'HOST_NOT_ELIGIBLE', `Host cannot publish paid inventory: ${reasons.join(', ')}`, { reasons });
   }
 }
 
