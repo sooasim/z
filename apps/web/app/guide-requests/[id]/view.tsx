@@ -6,7 +6,7 @@ import { useI18n } from '@/lib/i18n';
 import { useAuth } from '@/lib/auth';
 import { useApi } from '@/lib/hooks';
 import { post } from '@/lib/api';
-import { arr, item, items, str, num, f } from '@/lib/shape';
+import { arr, item, str, num, f } from '@/lib/shape';
 import { toMinor } from '@/lib/format';
 import { RequireAuth } from '@/components/gate';
 import { StateView } from '@/components/states';
@@ -18,7 +18,6 @@ export default function GuideRequestView() {
   const { user } = useAuth();
   const router = useRouter();
   const st = useApi<any>(`/v1/guide-requests/${id}`, { auth: true });
-  const offers = useApi<any>(`/v1/guide-requests/${id}/offers`, { auth: true });
   const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [counterFor, setCounterFor] = useState<string | null>(null);
@@ -30,9 +29,9 @@ export default function GuideRequestView() {
         {(d) => {
           const r = item(d);
           const status = str(r, 'status', 'state').toUpperCase();
-          const isTraveler = str(r, 'travelerId', 'requesterId', 'userId') === user?.id;
-          const rows = items(offers.data).length ? items(offers.data) : arr(r, 'offers');
-          const paid = ['PAID', 'PROFESSIONAL'].includes(str(r, 'guideType').toUpperCase());
+          const isTraveler = str(r, 'travelerId', 'requesterId') === user?.id;
+          const rows = arr<any>(r, 'offers');
+          const bk = f<any>(r, 'booking');
           return (
             <>
               <PageHeader title={L('가이드 요청', 'Guide request')} back="/trips?tab=guides" actions={<StatusBadge status={status} />} />
@@ -40,10 +39,10 @@ export default function GuideRequestView() {
                 <Kv
                   rows={[
                     [L('가이드', 'Guide'), str(r, 'guideName', 'guide.displayName') || str(r, 'guideId').slice(0, 8) || L('공개 요청', 'Open request')],
-                    [L('일시', 'When'), <DateText key="d" value={str(r, 'startsAt', 'date')} time />],
-                    [L('시간', 'Duration'), `${num(r, 'durationHours') ?? '—'}h`],
+                    [L('시작', 'Starts'), <DateText key="d" value={str(r, 'startAt', 'startsAt')} time />],
+                    [L('종료', 'Ends'), <DateText key="e" value={str(r, 'endAt', 'endsAt')} time />],
                     [L('인원', 'Party'), num(r, 'partySize') ?? '—'],
-                    [L('유형', 'Type'), paid ? L('유료', 'Paid') : L('무료 교류', 'Free')],
+                    [L('도시', 'City'), str(r, 'city') || '—'],
                     [L('메시지', 'Message'), str(r, 'message') || '—'],
                   ]}
                 />
@@ -56,7 +55,7 @@ export default function GuideRequestView() {
                     {rows.map((o: any) => {
                       const oid = str(o, 'id');
                       const ostatus = str(o, 'status', 'state').toUpperCase();
-                      const price = num(o, 'priceMinor', 'amountMinor', 'totalMinor');
+                      const price = f(o, 'paid') === false ? 0 : num(o, 'priceMinor', 'amountMinor', 'totalMinor');
                       const ver = num(o, 'version') ?? 1;
                       return (
                         <li key={oid} className="card stack">
@@ -65,10 +64,10 @@ export default function GuideRequestView() {
                             <StatusBadge status={ostatus} />
                           </div>
                           <p style={{ margin: 0 }}>
-                            <DateText value={str(o, 'startsAt')} time /> · {num(o, 'durationHours') ?? '—'}h · {price ? <Money minor={price} currency={str(o, 'currency') || 'KRW'} /> : L('무료', 'Free')} · v{ver}
+                            <DateText value={str(o, 'startAt', 'startsAt')} time /> → <DateText value={str(o, 'endAt', 'endsAt')} time /> · {price ? <Money minor={price} currency={str(o, 'currency') || 'KRW'} /> : L('무료', 'Free')} · v{ver}
                           </p>
-                          {str(o, 'message') && <p className="muted" style={{ margin: 0 }}>{str(o, 'message')}</p>}
-                          {isTraveler && ['OFFERED', 'PENDING', 'COUNTERED', 'OPEN'].includes(ostatus) && (
+                          {str(o, 'itinerary', 'message') && <p className="muted" style={{ margin: 0, whiteSpace: 'pre-line' }}>{str(o, 'itinerary', 'message')}</p>}
+                          {isTraveler && ['OFFERED', 'COUNTERED'].includes(status) && ver === num(rows[rows.length - 1], 'version') && !bk && (
                             <div className="row">
                               <button
                                 className="btn primary"
@@ -77,9 +76,9 @@ export default function GuideRequestView() {
                                   setBusy(true);
                                   setErr(null);
                                   try {
-                                    const res = await post(`/v1/guide-requests/${id}/accept`, { offerId: oid, version: ver }, { idempotencyKey: `gaccept-${oid}-v${ver}` });
-                                    const booking = f<any>(item(res), 'booking') ?? item(res);
-                                    const bid = str(booking, 'bookingId', 'id');
+                                    const res = await post(`/v1/guide-requests/${id}/accept`, { offerVersion: ver }, { idempotencyKey: `gaccept-${id}-v${ver}` });
+                                    const booking = f<any>(res, 'booking') ?? f<any>(item(res), 'booking') ?? {};
+                                    const bid = str(booking, 'id', 'bookingId');
                                     const bstatus = str(booking, 'status').toUpperCase();
                                     if (price && price > 0 && (bstatus === 'PAYMENT_PENDING' || !bstatus || bstatus === 'PENDING')) router.push(`/checkout?type=GUIDE_BOOKING&id=${bid}`);
                                     else router.push(`/guide-bookings/${bid}`);
@@ -102,9 +101,9 @@ export default function GuideRequestView() {
                                 e.preventDefault();
                                 setErr(null);
                                 try {
-                                  await post(`/v1/guide-requests/${id}/counter`, { offerId: oid, version: ver, priceMinor: counterPrice ? toMinor(counterPrice) : undefined, message: counterMsg });
+                                  await post(`/v1/guide-requests/${id}/counter`, { startAt: str(o, 'startAt'), endAt: str(o, 'endAt'), priceMinor: counterPrice ? toMinor(counterPrice) : price ?? 0, itinerary: counterMsg || undefined });
                                   setCounterFor(null);
-                                  offers.reload();
+                                  st.reload();
                                 } catch (x) {
                                   setErr(x);
                                 }
@@ -122,7 +121,10 @@ export default function GuideRequestView() {
                 )}
                 <ErrorText error={err} />
               </Section>
-              {str(r, 'conversationId') && <Link className="btn" href={`/messages?c=${str(r, 'conversationId')}`}>{L('메시지', 'Messages')}</Link>}
+              <div className="row">
+                {bk && <Link className="btn primary" href={`/guide-bookings/${str(bk, 'id')}`}>{L('예약 보기', 'View booking')}</Link>}
+                {isTraveler && ['REQUESTED', 'OFFERED', 'COUNTERED'].includes(status) && <button className="btn ghost" onClick={async () => { setErr(null); try { await post(`/v1/guide-requests/${id}/cancel`, {}); st.reload(); } catch (e) { setErr(e); } }}>{L('요청 취소', 'Cancel request')}</button>}
+              </div>
             </>
           );
         }}

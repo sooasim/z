@@ -20,7 +20,7 @@ export default function SavedView() {
     <RequireAuth>
       <PageHeader title={L('저장 목록', 'Saved')} />
       <Section title={L('찜한 항목', 'Favorites')}>
-        <StateView state={favs} isEmpty={(d) => items(d).length === 0} empty={<EmptyState title={L('아직 저장한 항목이 없어요.', 'Nothing saved yet.')}><p className="muted">{L('숙소·가이드·상품의 ♡ 버튼을 눌러 저장하세요.', 'Tap ♡ on stays, guides or products.')}</p></EmptyState>}>
+        <StateView state={favs} skeleton="cards" isEmpty={(d) => items(d).length === 0} empty={<EmptyState illo="saved" title={L('아직 저장한 항목이 없어요.', 'Nothing saved yet.')}><p className="muted">{L('숙소·가이드·상품의 ♡ 버튼을 눌러 저장하세요.', 'Tap ♡ on stays, guides or products.')}</p></EmptyState>}>
           {(d) => (
             <div className="grid">
               {items(d).map((fv: any, i) => {
@@ -33,7 +33,7 @@ export default function SavedView() {
                       className="btn sm"
                       onClick={async () => {
                         try {
-                          await api('/v1/favorites', { method: 'DELETE', query: { targetType: t, targetId: str(fv, 'targetId') } });
+                          await api(`/v1/favorites/${t}/${str(fv, 'targetId')}`, { method: 'DELETE' });
                           favs.reload();
                         } catch (e) {
                           setErr(e);

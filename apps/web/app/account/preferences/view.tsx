@@ -18,14 +18,14 @@ export default function PreferencesView() {
       </div>
       <ResourceForm
         path="/v1/me/preferences"
-        method="PUT"
+        method="PATCH"
         cols={2}
         fields={[
-          { name: 'locale', label: L('언어', 'Locale'), type: 'select', options: [{ value: 'ko-KR', label: '한국어' }, { value: 'en-US', label: 'English' }] },
           { name: 'currency', label: L('표시 통화', 'Currency'), type: 'select', options: ['KRW', 'USD', 'JPY', 'EUR'].map((c) => ({ value: c, label: c })) },
-          { name: 'timezone', label: L('시간대', 'Time zone'), placeholder: 'Asia/Seoul' },
-          { name: 'travelStyle', label: L('여행 스타일', 'Travel style'), type: 'select', options: [{ value: 'MONTH_STAY', label: L('한달살기', 'Month stay') }, { value: 'SHORT', label: L('단기 여행', 'Short trip') }, { value: 'WORKATION', label: L('워케이션', 'Workation') }] },
-          { name: 'personalizationOptIn', label: L('맞춤 추천 사용 (개인화)', 'Personalised recommendations'), type: 'checkbox' },
+          { name: 'travelStyles', label: L('여행 스타일 (쉼표 구분)', 'Travel styles (comma separated)'), type: 'list', placeholder: L('한달살기, 워케이션', 'month-stay, workation') },
+          { name: 'interests', label: L('관심사 (쉼표 구분)', 'Interests'), type: 'list', placeholder: L('카페, 바다, 등산', 'cafes, sea, hiking') },
+          { name: 'personalizationOptOut', label: L('맞춤 추천 끄기 (개인화 거부)', 'Opt out of personalisation'), type: 'checkbox' },
+          { name: 'marketingOptIn', label: L('혜택·마케팅 수신', 'Marketing messages'), type: 'checkbox' },
         ]}
       />
     </RequireAuth>

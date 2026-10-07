@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { API_INTERNAL_URL, SITE_URL } from '@/lib/env';
+import { API_INTERNAL_URL } from '@/lib/env';
 import { REFRESH_COOKIE, cookieOptions, splitAuthPayload } from '@/lib/bff';
 
 /**
@@ -10,7 +10,7 @@ import { REFRESH_COOKIE, cookieOptions, splitAuthPayload } from '@/lib/bff';
  */
 export const dynamic = 'force-dynamic';
 
-const ALLOWED = /^(signup|login|refresh|logout|otp\/[a-z-]+|oauth\/[a-z]+\/(start|callback)|mfa\/[a-z-]+|password\/[a-z-]+|link\/[a-z-]+|recovery\/[a-z-]+|verify-email)$/;
+const ALLOWED = /^(signup|login|refresh|logout|logout-all|otp\/(request|verify)|oauth\/(google|kakao|naver)\/(start|callback|link\/start)|mfa\/(challenge|recovery-codes|totp\/(enroll|verify))|password\/(change|reset\/request|reset\/confirm)|email\/verify\/(request|confirm))$/;
 
 function secureFor(req: NextRequest) {
   return process.env.NODE_ENV === 'production' || req.nextUrl.protocol === 'https:';
@@ -50,15 +50,18 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   const m = /^oauth\/([a-z]+)\/start$/.exec(p);
   if (!m) return problem(404, 'NOT_FOUND', 'Unknown auth route');
   const provider = m[1];
-  const redirectUri = `${SITE_URL}/auth/callback/${provider}`;
-  const qs = new URLSearchParams({ redirectUri, redirect_uri: redirectUri });
-  const res = await upstream(`oauth/${provider}/start?${qs}`, { method: 'GET', headers: forwardHeaders(req) });
+  const returnTo = req.nextUrl.searchParams.get('returnTo');
+  const res = await upstream(`oauth/${provider}/start`, {
+    method: 'POST',
+    headers: { ...forwardHeaders(req), 'content-type': 'application/json' },
+    body: JSON.stringify(returnTo && /^\/[^/]/.test(returnTo) ? { returnTo } : {}),
+  });
   if (!res) return NextResponse.redirect(new URL(`/login?error=OAUTH_UNAVAILABLE`, req.url));
   const loc = res.headers.get('location');
   if (res.status >= 300 && res.status < 400 && loc) return NextResponse.redirect(loc);
   if (res.ok) {
     const j: any = await res.json().catch(() => ({}));
-    const url = j.url ?? j.authorizeUrl ?? j.authorizationUrl ?? j.item?.url;
+    const url = j.authorizationUrl ?? j.url ?? j.authorizeUrl ?? j.item?.url;
     if (url) {
       const out = NextResponse.redirect(url);
       // Persist state server-side (httpOnly) so the callback can be bound to this browser.
@@ -83,13 +86,12 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   }
   const rt = req.cookies.get(REFRESH_COOKIE)?.value;
   if (p === 'refresh') {
-    if (!rt) return problem(401, 'UNAUTHENTICATED', 'No session');
+    // Anonymous visitors: answer quietly (no console 401 noise); the client treats null as signed-out.
+    if (!rt) return NextResponse.json({ accessToken: null, authenticated: false }, { status: 200, headers: { 'cache-control': 'no-store' } });
     body = { refreshToken: rt };
   }
   if (p === 'logout' && rt) body = { ...body, refreshToken: rt };
   if (p.startsWith('oauth/') && p.endsWith('/callback')) {
-    const provider = p.split('/')[1];
-    body = { redirectUri: `${SITE_URL}/auth/callback/${provider}`, ...body };
     const stateCookie = req.cookies.get('jp_oauth_state')?.value;
     if (stateCookie && body.state && stateCookie !== body.state) return problem(400, 'OAUTH_STATE_MISMATCH', 'OAuth state mismatch');
   }
@@ -113,10 +115,12 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   }
 
   const { publicBody, refreshToken, refreshMaxAge } = splitAuthPayload(json ?? {});
-  const out = NextResponse.json(publicBody, { status: res.status === 204 ? 200 : res.status });
+  const out = NextResponse.json(publicBody ?? {}, { status: res.status === 204 ? 200 : res.status });
+  // OAuth start / link start: bind the state to this browser with an httpOnly cookie (checked on callback).
+  if (/^oauth\/[a-z]+\/(start|link\/start)$/.test(p) && json?.state) out.cookies.set('jp_oauth_state', String(json.state), { ...cookieOptions(secure), maxAge: 600 });
   if (refreshToken) out.cookies.set(REFRESH_COOKIE, refreshToken, { ...cookieOptions(secure), maxAge: refreshMaxAge });
   if (p === 'logout') out.cookies.set(REFRESH_COOKIE, '', { ...cookieOptions(secure), maxAge: 0 });
-  if (p.startsWith('oauth/')) out.cookies.set('jp_oauth_state', '', { ...cookieOptions(secure), maxAge: 0 });
+  if (p.startsWith('oauth/') && p.endsWith('/callback')) out.cookies.set('jp_oauth_state', '', { ...cookieOptions(secure), maxAge: 0 });
   out.headers.set('cache-control', 'no-store');
   return out;
 }

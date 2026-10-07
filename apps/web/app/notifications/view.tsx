@@ -26,7 +26,7 @@ export default function NotificationsView() {
           </>
         }
       />
-      <StateView state={st} isEmpty={(d) => items(d).length === 0} empty={<EmptyState title={L('새 알림이 없습니다.', 'No notifications.')} />}>
+      <StateView state={st} isEmpty={(d) => items(d).length === 0} empty={<EmptyState illo="messages" title={L('새 알림이 없습니다.', 'No notifications.')} />}>
         {(d) => (
           <ul className="stack" style={{ listStyle: 'none', padding: 0 }}>
             {items(d).map((n: any) => {

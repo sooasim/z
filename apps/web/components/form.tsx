@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/hooks';
 import { f, item } from '@/lib/shape';
@@ -122,8 +122,10 @@ export function FormCard({
   const [err, setErr] = useState<unknown>(null);
   const [ok, setOk] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Re-seed from server data when it arrives/changes, but never clobber what the user is typing.
+  const dirty = useRef(false);
   useEffect(() => {
-    setValues(init());
+    if (!dirty.current) setValues(init());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(initial ?? {})]);
   return (
@@ -148,6 +150,7 @@ export function FormCard({
           }
           await submit(body);
           setOk(true);
+          dirty.current = false; // saved: later server refreshes may re-seed the form again
           if (resetOnSuccess) setValues(Object.fromEntries(fields.map((fs) => [fs.name, toFormValue({}, fs)])));
         } catch (x) {
           setErr(x);
@@ -158,7 +161,7 @@ export function FormCard({
     >
       {title && <h2>{title}</h2>}
       <div className={`form-grid ${cols === 2 ? 'cols-2' : ''}`}>
-        <Fields fields={fields} values={values} onChange={(n, v) => setValues((s) => ({ ...s, [n]: v }))} />
+        <Fields fields={fields} values={values} onChange={(n, v) => { dirty.current = true; setValues((s) => ({ ...s, [n]: v })); }} />
       </div>
       <div className="row">
         <button className="btn primary" disabled={busy}>

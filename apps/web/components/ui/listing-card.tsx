@@ -5,6 +5,8 @@ import { useI18n } from '@/lib/i18n';
 import { formatMoney } from '@/lib/format';
 import { RatingStars } from './display';
 
+const FALLBACK_ART = ['/art/postcards/coast.svg', '/art/postcards/mountain.svg', '/art/postcards/city.svg'];
+
 export interface CardBadge {
   label: string;
   tone?: 'ok' | 'warn' | 'danger' | 'info' | 'accent' | 'exchange' | 'solid';
@@ -35,7 +37,7 @@ export function Carousel({ images, alt }: { images: string[]; alt: string }) {
         }}
       >
         {images.map((src, k) => (
-          <img key={k} src={src} alt={k === i ? alt : ''} loading={k === 0 ? 'lazy' : 'lazy'} draggable={false} />
+          <img key={k} src={src} alt={k === i ? alt : ''} loading="lazy" draggable={false} onError={(e) => { const el = e.currentTarget; if (!el.dataset.fallback) { el.dataset.fallback = '1'; el.src = FALLBACK_ART[k % FALLBACK_ART.length]; } }} />
         ))}
       </div>
       {n > 1 && (
@@ -102,7 +104,7 @@ export function ListingCard({
         <Link href={href} tabIndex={-1} aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 1 }} />
         {badges.length > 0 && (
           <div className="badges">
-            {badges.slice(0, 3).map((b) => (
+            {badges.slice(0, 2).map((b) => (
               <span key={b.label} className="badge solid">
                 {b.tone === 'exchange' ? '⇄ ' : b.tone === 'ok' ? '✓ ' : ''}
                 {b.label}

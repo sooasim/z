@@ -6,19 +6,17 @@ import { useI18n } from '@/lib/i18n';
 import { useAuth } from '@/lib/auth';
 import { useApi } from '@/lib/hooks';
 import { post } from '@/lib/api';
-import { arr, f, item, str } from '@/lib/shape';
+import { str } from '@/lib/shape';
 import { RequireAuth } from '@/components/gate';
 import { StateView } from '@/components/states';
-import { Alert, ErrorText, Section } from '@/components/ui';
+import { Alert, ErrorText, Section, StatusPill, Button } from '@/components/ui';
 import { ExchangeHeader, exchangeView } from '../../shared';
 
-const DEFAULT_CHECKS = [
-  { code: 'IDENTITY_VERIFIED', ko: '본인 확인 완료', en: 'Identity verified', href: '/verification' },
-  { code: 'HOME_VERIFIED', ko: '집 소유/거주 권한 확인', en: 'Right to host verified', href: '/verification' },
-  { code: 'PROFILE_COMPLETE', ko: '프로필·집 소개 작성', en: 'Profile & home details complete', href: '/account/profile' },
-  { code: 'SAFETY_ACK', ko: '안전 수칙 확인', en: 'Safety guidelines acknowledged' },
-  { code: 'CALENDAR_FREE', ko: '양측 일정 비어 있음', en: 'Both calendars free' },
-];
+const CHECKS: Record<string, { ko: string; en: string; href?: string }> = {
+  IDENTITY: { ko: '본인 확인', en: 'Identity verified', href: '/verification' },
+  PROPERTY: { ko: '집 게시·인증 상태', en: 'Home verified & published', href: '/host/listings' },
+  SAFETY_ACK: { ko: '안전 수칙 확인', en: 'Safety guidelines acknowledged' },
+};
 
 export default function ExchangeVerificationView() {
   const { id } = useParams<{ id: string }>();
@@ -28,7 +26,7 @@ export default function ExchangeVerificationView() {
   const [ack, setAck] = useState(false);
   const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
-  const run = async (path: string, body: any) => {
+  const run = async (path: string, body?: any) => {
     setBusy(true);
     setErr(null);
     try {
@@ -42,46 +40,56 @@ export default function ExchangeVerificationView() {
   };
   return (
     <RequireAuth>
-      <StateView state={st}>
+      <StateView state={st} skeleton="detail">
         {(d) => {
-          const x = exchangeView(d);
-          const v = f<any>(item(d), 'verification', 'checklist', 'gate') ?? {};
-          const remote = arr(v, 'checks', 'items').length ? arr(v, 'checks', 'items') : arr(item(d), 'checks', 'checklist');
-          const mine = user?.id === x.requesterId ? 'requester' : 'counterpart';
-          const passed = (code: string) => {
-            const r = remote.find((c: any) => str(c, 'code', 'key').toUpperCase() === code);
-            if (!r) return undefined;
-            const s = f(r, mine) ?? r;
-            return f(s, 'passed', 'ok') === true || ['PASS', 'PASSED', 'OK', 'DONE'].includes(str(s, 'status').toUpperCase());
-          };
-          const myAck = Boolean(f(item(d), `${mine}SafetyAckAt`, `${mine}SafetyAck`, 'safetyAckedByMe')) || passed('SAFETY_ACK') === true;
-          const rows = remote.length
-            ? remote.map((c: any) => ({ code: str(c, 'code', 'key'), label: str(c, 'label', 'name') || str(c, 'code'), ok: f(c, 'passed', 'ok') === true || ['PASS', 'PASSED', 'OK', 'DONE'].includes(str(c, 'status').toUpperCase()), href: DEFAULT_CHECKS.find((dc) => dc.code === str(c, 'code').toUpperCase())?.href }))
-            : DEFAULT_CHECKS.map((c) => ({ code: c.code, label: c[lang], ok: passed(c.code) ?? false, href: c.href }));
+          const x = exchangeView(d, user?.id);
+          const people: Array<[string, string]> = [
+            [x.requesterId, x.role === 'REQUESTER' ? L('나', 'Me') : x.requesterName || 'A'],
+            [x.responderId, x.role === 'RESPONDER' ? L('나', 'Me') : x.responderName || 'B'],
+          ];
+          const checkOf = (uid: string, type: string) => x.verifications.find((v: any) => str(v, 'partyUserId', 'userId', 'party_user_id') === uid && str(v, 'checkType', 'check_type') === type);
+          const mySafety = checkOf(user?.id ?? '', 'SAFETY_ACK');
+          const myAcked = str(mySafety, 'status') === 'PASSED';
           return (
             <>
               <ExchangeHeader x={x} />
               <Section title={L('맞교환 검증 체크리스트', 'Verification checklist')}>
-                <ul className="card stack" style={{ listStyle: 'none' }}>
-                  {rows.map((r) => (
-                    <li key={r.code} className="row between">
-                      <span>
-                        <span aria-hidden="true">{r.ok ? '✅' : '⬜'}</span> {r.label} <span className="sr-only">{r.ok ? L('완료', 'done') : L('미완료', 'pending')}</span>
-                      </span>
-                      {!r.ok && r.href && <Link className="btn sm" href={r.href}>{L('진행', 'Go')}</Link>}
-                    </li>
-                  ))}
-                </ul>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th scope="col">{L('항목', 'Check')}</th>
+                        {people.map(([uid, name]) => <th key={uid} scope="col">{name}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(CHECKS).map(([type, c]) => (
+                        <tr key={type}>
+                          <th scope="row">{c[lang]}</th>
+                          {people.map(([uid]) => {
+                            const v = checkOf(uid, type);
+                            return (
+                              <td key={uid}>
+                                <StatusPill status={str(v, 'status') || 'PENDING'} />
+                                {uid === user?.id && str(v, 'status') === 'FAILED' && c.href && <Link href={c.href} className="small" style={{ marginLeft: 8 }}>{L('해결하기', 'Fix')}</Link>}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </Section>
               <Section title={L('안전 수칙', 'Safety guidelines')}>
                 <div className="card stack">
-                  <ul>
+                  <ul style={{ margin: 0 }}>
                     <li>{L('귀중품·개인 서류는 잠금 보관하거나 치워 주세요.', 'Lock away valuables and documents.')}</li>
-                    <li>{L('비상 연락처, 가스·전기 차단 위치를 안내서에 적어 주세요.', 'Note emergency contacts and shut-off locations.')}</li>
+                    <li>{L('비상 연락처, 가스·전기 차단 위치를 집 안내서에 적어 주세요.', 'Note emergency contacts and shut-off locations.')}</li>
                     <li>{L('플랫폼 밖 금전 거래(보증금 송금 등)를 요구받으면 즉시 신고하세요.', 'Report any request for off-platform money.')}</li>
-                    <li>{L('도착/출발 시 집 상태 사진을 메시지에 남겨 주세요.', 'Share condition photos on arrival/departure.')}</li>
+                    <li>{L('도착/출발 시 집 상태 사진을 메시지에 남겨 주세요.', 'Share condition photos on arrival and departure.')}</li>
                   </ul>
-                  {myAck ? (
+                  {myAcked ? (
                     <Alert tone="ok">{L('안전 수칙을 확인했습니다.', 'You acknowledged the safety guidelines.')}</Alert>
                   ) : (
                     <>
@@ -89,14 +97,14 @@ export default function ExchangeVerificationView() {
                         <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} />
                         <span>{L('위 안전 수칙을 읽고 동의합니다.', 'I have read and agree to the safety guidelines.')}</span>
                       </label>
-                      <button className="btn" disabled={!ack || busy} onClick={() => run('safety-ack', { version: x.version, acknowledged: true })}>{L('확인 제출', 'Acknowledge')}</button>
+                      <Button variant="primary" disabled={!ack} loading={busy} onClick={() => run('safety-ack', { acknowledged: true })} style={{ justifySelf: 'start' }}>{L('확인 제출', 'Acknowledge')}</Button>
                     </>
                   )}
                 </div>
               </Section>
               <div className="row" style={{ marginTop: 16 }}>
-                <button className="btn primary" disabled={busy} onClick={() => run('verify', { version: x.version })}>{L('검증 요청/재평가', 'Run verification')}</button>
-                <Link className="btn" href={`/exchange/${id}/agreement`}>{L('계약서로 →', 'Agreement →')}</Link>
+                {['MUTUAL_ACCEPTED', 'VERIFICATION_PENDING'].includes(x.status) && <Button loading={busy} onClick={() => run('verify')} icon="shield">{L('검증 다시 실행', 'Re-run verification')}</Button>}
+                <Link className="btn accent" href={`/exchange/${id}/agreement`}>{L('계약서로 →', 'Agreement →')}</Link>
               </div>
               <ErrorText error={err} />
             </>

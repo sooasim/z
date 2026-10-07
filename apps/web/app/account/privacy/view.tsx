@@ -13,16 +13,18 @@ const CONSENTS = [
   { type: 'PRIVACY', ko: '개인정보 수집·이용', en: 'Privacy policy', required: true },
   { type: 'MARKETING', ko: '마케팅 정보 수신', en: 'Marketing', required: false },
   { type: 'LOCATION', ko: '위치기반 서비스', en: 'Location services', required: false },
-  { type: 'PERSONALIZATION', ko: '맞춤형 추천(행태정보)', en: 'Personalisation', required: false },
   { type: 'THIRD_PARTY', ko: '제3자 제공(호스트/가이드/공급사)', en: 'Sharing with partners', required: false },
 ];
 
 function Consents() {
   const { L, lang } = useI18n();
   const st = useApi<any>('/v1/consents', { auth: true });
+  const docs = useApi<any>('/v1/consent-documents');
   const [err, setErr] = useState<unknown>(null);
   const current = new Map<string, any>();
-  for (const c of items(st.data)) current.set(str(c, 'consentType', 'type', 'purpose').toUpperCase(), c);
+  const rows = Array.isArray(st.data?.current) ? st.data.current : items(st.data);
+  for (const c of rows) current.set(str(c, 'consentType', 'type', 'purpose').toUpperCase(), c);
+  const versionOf = (t: string) => str(items(docs.data).find((d: any) => str(d, 'type') === t), 'version') || str(current.get(t), 'version') || '1';
   return (
     <Section title={L('동의 관리', 'Consents')}>
       <ErrorText error={err ?? st.error} />
@@ -48,7 +50,7 @@ function Consents() {
                   onChange={async (e) => {
                     setErr(null);
                     try {
-                      await post('/v1/consents', { consentType: c.type, type: c.type, granted: e.target.checked });
+                      await post('/v1/consents', { consents: [{ type: c.type, version: versionOf(c.type), granted: e.target.checked }] });
                       st.reload();
                     } catch (x) {
                       setErr(x);
@@ -69,6 +71,7 @@ function Consents() {
 function Requests() {
   const { L } = useI18n();
   const [reason, setReason] = useState('');
+  const [password, setPassword] = useState('');
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState<unknown>(null);
   const [k, setK] = useState(0);
@@ -83,7 +86,7 @@ function Requests() {
             onClick={async () => {
               setErr(null);
               try {
-                await post('/v1/privacy/export', {}, { idempotencyKey: true });
+                await post('/v1/privacy/export', {});
                 setMsg(L('내보내기 요청이 접수되었습니다.', 'Export requested.'));
                 setK(k + 1);
               } catch (x) {
@@ -98,13 +101,14 @@ function Requests() {
           <h3>{L('회원 탈퇴 및 삭제', 'Delete account')}</h3>
           <p className="muted small">{L('진행 중인 예약/정산/분쟁이 있으면 법정 보관 기간 동안 일부 데이터가 제한 처리된 뒤 삭제됩니다.', 'Records under legal retention are restricted then deleted when allowed.')}</p>
           <Textarea label={L('사유 (선택)', 'Reason (optional)')} value={reason} onChange={(e) => setReason(e.target.value)} />
+          <label className="field"><span>{L('비밀번호 확인 (소셜 전용 계정은 MFA로 확인)', 'Confirm password (social-only accounts use MFA)')}</span><input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
           <button
             className="btn danger"
             onClick={async () => {
               if (!window.confirm(L('정말 탈퇴를 요청하시겠습니까?', 'Really request deletion?'))) return;
               setErr(null);
               try {
-                await post('/v1/privacy/delete', { reason }, { idempotencyKey: true });
+                await post('/v1/privacy/delete', { confirm: 'DELETE', reason: reason || undefined, password: password || undefined });
                 setMsg(L('삭제 요청이 접수되었습니다. 처리 상태는 아래에서 확인하세요.', 'Deletion requested.'));
                 setK(k + 1);
               } catch (x) {
@@ -125,8 +129,8 @@ function Requests() {
         columns={[
           { key: 'requestType|type', label: L('유형', 'Type') },
           { key: 'status', label: L('상태', 'Status'), kind: 'status' },
-          { key: 'createdAt', label: L('요청일', 'Requested'), kind: 'datetime' },
-          { key: 'downloadUrl', label: L('다운로드', 'Download'), render: (r) => (str(r, 'downloadUrl') ? <a href={str(r, 'downloadUrl')}>{L('받기', 'Download')}</a> : '—') },
+          { key: 'requestedAt|createdAt', label: L('요청일', 'Requested'), kind: 'datetime' },
+          { key: 'completedAt', label: L('완료', 'Completed'), kind: 'datetime' },
         ]}
         empty={<p className="muted">{L('요청 내역이 없습니다.', 'No requests.')}</p>}
       />

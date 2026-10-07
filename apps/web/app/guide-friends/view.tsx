@@ -18,7 +18,7 @@ export default function GuideFriendsView() {
   const [q, setQ] = useState(sp.get('q') ?? '');
   const [date, setDate] = useState(sp.get('date') ?? '');
   const [language, setLanguage] = useState(sp.get('language') ?? '');
-  const st = useApi<any>('/v1/search/guides', { query: { q, type: types, guideType: types, date, availableOn: date, language, limit: 24 } });
+  const st = useApi<any>('/v1/search/guides', { query: { city: q || undefined, types: types.join(',') || undefined, languages: language || undefined, from: date ? `${date}T00:00:00+09:00` : undefined, to: date ? `${date}T23:59:59+09:00` : undefined, availableOnly: date ? 'true' : undefined, limit: 24 } });
   return (
     <>
       <PageHeader title={L('가이드 프렌드', 'Guide Friends')} subtitle={L('동네 친구처럼 함께 걷는 로컬. 무료 교류부터 전문 가이드까지.', 'Locals who show you around — from free friends to licensed pros.')} actions={<Link className="btn" href="/guide/onboarding">{L('가이드로 활동하기', 'Become a guide')}</Link>} />
@@ -32,7 +32,7 @@ export default function GuideFriendsView() {
         <p className="small muted" style={{ margin: 0 }}>{L('프렌드·자원봉사는 무료 교류이며 금전 거래가 금지됩니다. 유료·전문 가이드는 자격 확인 후 결제가 가능합니다.', 'Friend/volunteer meetups are free (no payments allowed). Paid/pro guides are verified and paid via JETPOOL.')}</p>
       </div>
       <div style={{ marginTop: 16 }}>
-        <StateView state={st} isEmpty={(d) => items(d).length === 0} empty={<EmptyState title={L('조건에 맞는 가이드가 없습니다.', 'No guides match.')} />}>
+        <StateView state={st} skeleton="cards" isEmpty={(d) => items(d).length === 0} empty={<EmptyState illo="search" title={L('조건에 맞는 가이드가 없습니다.', 'No guides match.')} />}>
           {(d) => (
             <div className="grid">
               {items(d).map((g: any, i) => (

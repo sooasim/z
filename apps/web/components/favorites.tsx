@@ -25,7 +25,7 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
       setSet(new Set());
       return;
     }
-    api('/v1/favorites', { query: { limit: 500 } })
+    api('/v1/favorites')
       .then((r) => setSet(new Set(items(r).map((f: any) => `${str(f, 'targetType').toUpperCase()}:${str(f, 'targetId')}`))))
       .catch(() => {});
   }, [user]);
@@ -41,7 +41,7 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
         return n;
       });
       try {
-        if (was) await api('/v1/favorites', { method: 'DELETE', query: { targetType: t, targetId: id } });
+        if (was) await api(`/v1/favorites/${t}/${id}`, { method: 'DELETE' });
         else await api('/v1/favorites', { method: 'POST', body: { targetType: t, targetId: id } });
         toast.show(was ? L('저장 목록에서 삭제했어요', 'Removed from saved') : L('저장 목록에 추가했어요', 'Saved'), { tone: 'ok', ms: 2400 });
       } catch {

@@ -37,10 +37,13 @@ export interface Bounds {
  * MapLibre GL map. Exact property addresses are never sent to the client before confirmation (API returns fuzzed
  * coordinates); pins show approximate locations. Calls onMove with the viewport bounds for "search this area".
  */
-export function MapView({ points, onMove, height = 480, center = [126.978, 37.5665], zoom = 6 }: { points: MapPoint[]; onMove?: (b: Bounds) => void; height?: number; center?: [number, number]; zoom?: number }) {
+export function MapView({ points, onMove, height = 480, center = [126.978, 37.5665], zoom = 6, activeId, onPinHover, fill }: { points: MapPoint[]; onMove?: (b: Bounds) => void; height?: number | string; center?: [number, number]; zoom?: number; activeId?: string | null; onPinHover?: (id: string | null) => void; fill?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
+  const elsRef = useRef<Map<string, HTMLElement>>(new Map());
+  const hoverRef = useRef(onPinHover);
+  hoverRef.current = onPinHover;
   const libRef = useRef<any>(null);
   const [failed, setFailed] = useState(false);
   const { L } = useI18n();
@@ -80,6 +83,7 @@ export function MapView({ points, onMove, height = 480, center = [126.978, 37.56
     if (!map || !lib) return;
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
+    elsRef.current.clear();
     const valid = points.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
     for (const p of valid) {
       const el = document.createElement(p.href ? 'a' : 'span');
@@ -87,6 +91,10 @@ export function MapView({ points, onMove, height = 480, center = [126.978, 37.56
       el.textContent = p.label;
       if (p.href) (el as HTMLAnchorElement).href = p.href;
       el.setAttribute('aria-label', p.label);
+      el.addEventListener('mouseenter', () => hoverRef.current?.(p.id));
+      el.addEventListener('mouseleave', () => hoverRef.current?.(null));
+      el.addEventListener('focus', () => hoverRef.current?.(p.id));
+      elsRef.current.set(p.id, el);
       markersRef.current.push(new lib.Marker({ element: el }).setLngLat([p.lng, p.lat]).addTo(map));
     }
     if (valid.length > 1) {
@@ -101,11 +109,15 @@ export function MapView({ points, onMove, height = 480, center = [126.978, 37.56
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(points)]);
 
+  useEffect(() => {
+    elsRef.current.forEach((el, id) => el.classList.toggle('active', id === activeId));
+  }, [activeId, points]);
+
   if (failed)
     return (
       <div className="map state" style={{ height }}>
         {L('지도를 불러올 수 없습니다.', 'Map unavailable.')}
       </div>
     );
-  return <div ref={ref} className="map" style={{ height }} role="region" aria-label={L('지도 (대략적 위치)', 'Map (approximate locations)')} />;
+  return <div ref={ref} className="map" style={{ height: fill ? '100%' : height }} role="region" aria-label={L('지도 (대략적 위치)', 'Map (approximate locations)')} />;
 }

@@ -133,3 +133,12 @@ export function initials(name: string): string {
 export function shortId(id: string): string {
   return (id || '').slice(0, 8);
 }
+
+/** Compact money for KPI tiles: ₩1.8억 (ko) / ₩184M (en). Exact values belong in tables. */
+export function formatMoneyCompact(minor: number | string | null | undefined, currency = 'KRW', lang: Lang = 'ko'): string {
+  if (minor === null || minor === undefined || minor === '') return '—';
+  const n = Number(minor) / 10 ** currencyExponent(currency);
+  if (!Number.isFinite(n)) return '—';
+  if (Math.abs(n) < 100000) return formatMoney(minor, currency, lang);
+  return new Intl.NumberFormat(lang === 'ko' ? 'ko-KR' : 'en-US', { style: 'currency', currency: currency.toUpperCase(), notation: 'compact', maximumFractionDigits: 1 }).format(n);
+}

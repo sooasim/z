@@ -10,7 +10,7 @@ import { item, items, str } from '@/lib/shape';
 import { GUIDE_TYPE_LABEL, guideView } from '@/lib/domain';
 import { addDays, isoDate, toMinor } from '@/lib/format';
 import { StateView, LoginLink } from '@/components/states';
-import { MonthCalendar, calendarDays } from '@/components/calendar';
+import { MonthCalendar } from '@/components/calendar';
 import { FavoriteButton } from '@/components/cards';
 import { ErrorText, Money, PageHeader, Section, Alert } from '@/components/ui';
 
@@ -21,7 +21,7 @@ export default function GuideProfileView() {
   const router = useRouter();
   const st = useApi<any>(`/v1/guides/${id}`);
   const today = isoDate(new Date());
-  const av = useApi<any>(`/v1/guides/${id}/availability`, { query: { from: today, to: addDays(today, 60) } });
+  const av = useApi<any>(`/v1/guides/${id}/availability`, { query: { from: `${today}T00:00:00Z`, to: `${addDays(today, 60)}T00:00:00Z` } });
   const [date, setDate] = useState('');
   const [start, setStart] = useState('10:00');
   const [hours, setHours] = useState('3');
@@ -36,10 +36,13 @@ export default function GuideProfileView() {
       {(d) => {
         const g = guideView(item(d));
         const tl = GUIDE_TYPE_LABEL[g.type] ?? { ko: g.type, en: g.type, paid: false };
-        const avail = items(av.data);
+        // Free intervals (net of bookings) → highlight available days.
         const days: Record<string, any> = {};
-        // availability rows mark AVAILABLE slots; render booked/blocked as unavailable
-        Object.assign(days, calendarDays(avail.filter((r: any) => !['AVAILABLE', 'OPEN'].includes(str(r, 'status', 'kind').toUpperCase()))));
+        for (const iv of items(av.data)) {
+          const s0 = str(iv, 'start', 'startAt').slice(0, 10);
+          const e0 = str(iv, 'end', 'endAt').slice(0, 10);
+          for (let d0 = s0; d0 && d0 <= e0; d0 = addDays(d0, 1)) days[d0] = { kind: 'paid', label: '' };
+        }
         return (
           <>
             <PageHeader title={g.name} subtitle={[g.city, g.languages.join(', ')].filter(Boolean).join(' · ')} back="/guide-friends" actions={<FavoriteButton targetType="GUIDE" targetId={g.id} />} />
@@ -57,7 +60,7 @@ export default function GuideProfileView() {
                     <div className="chip-group">{g.interests.map((i) => <span key={i} className="badge">{i}</span>)}</div>
                   </Section>
                 )}
-                <Section title={L('가능 일정', 'Availability')}>
+                <Section title={L('가능 일정 (파란 날짜)', 'Availability (blue days)')}>
                   <MonthCalendar days={days} selected={{ start: date }} onSelect={setDate} legend={false} />
                 </Section>
               </div>
@@ -72,10 +75,11 @@ export default function GuideProfileView() {
                       setBusy(true);
                       setErr(null);
                       try {
-                        const startsAt = date ? new Date(`${date}T${start}:00`).toISOString() : undefined;
+                        const startD = new Date(`${date}T${start}:00`);
+                        const endD = new Date(startD.getTime() + (Number(hours) || 1) * 3600000);
                         const res = await post(
                           '/v1/guide-requests',
-                          { guideId: g.id, date, startsAt, durationHours: Number(hours), partySize: Number(people), interests: interests.split(',').map((s) => s.trim()).filter(Boolean), budgetMinor: tl.paid && budget ? toMinor(budget) : undefined, message: msg, guideType: g.type },
+                          { guideId: g.id, startAt: startD.toISOString(), endAt: endD.toISOString(), partySize: Number(people) || 1, city: g.city || undefined, interests: interests.split(',').map((s) => s.trim()).filter(Boolean), message: msg || undefined, scope: tl.paid && budget ? { budgetMinor: toMinor(budget) } : {} },
                           { idempotencyKey: true },
                         );
                         router.push(`/guide-requests/${str(item(res), 'id')}`);

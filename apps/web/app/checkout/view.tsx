@@ -41,9 +41,9 @@ function Inner() {
                 {lines.map((l: any, i: number) => (
                   <li key={i} className="line">
                     <span>
-                      {str(l, 'title', 'name', 'productTitle')} × {num(l, 'quantity', 'qty') ?? 1}
+                      {str(l, 'title', 'name', 'productTitle')} × {num(l, 'qty', 'quantity') ?? 1}
                     </span>
-                    <Money minor={num(l, 'amountMinor', 'totalMinor', 'priceMinor')} currency={str(o, 'currency') || 'KRW'} />
+                    <Money minor={num(l, 'amountMinor', 'totalMinor')} currency={str(o, 'currency') || 'KRW'} />
                   </li>
                 ))}
                 <li className="line total">

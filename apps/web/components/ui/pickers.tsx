@@ -255,11 +255,18 @@ export function DestinationInput({ value, onChange, onPick, label, placeholder }
     }
     const t = setTimeout(() => {
       get('/v1/search/suggest', { q: value, limit: 5 })
-        .then((r) => setRemote(items(r).map((x: any) => (typeof x === 'string' ? x : str(x, 'label', 'name', 'text', 'city'))).filter(Boolean)))
+        .then((r: any) => {
+          const list = [
+            ...(Array.isArray(r?.places) ? r.places.map((x: any) => str(x, lang === 'ko' ? 'label' : 'labelEn', 'label')) : []),
+            ...(Array.isArray(r?.cities) ? r.cities.map((x: any) => (typeof x === 'string' ? x : str(x, 'city', 'label', 'name'))) : []),
+            ...items(r).map((x: any) => (typeof x === 'string' ? x : str(x, 'label', 'name', 'city'))),
+          ].filter(Boolean);
+          setRemote(Array.from(new Set(list)).slice(0, 5));
+        })
         .catch(() => setRemote([]));
     }, 220);
     return () => clearTimeout(t);
-  }, [value]);
+  }, [value, lang]);
   const q = value.trim().toLowerCase();
   const local = POPULAR.filter((x) => !q || x.ko.includes(value.trim()) || x.en.toLowerCase().includes(q));
   const options = [...remote.map((r) => ({ text: r, icon: '📍', hint: '' })), ...local.map((x) => ({ text: x[lang], icon: x.icon, hint: x.hint[lang === 'ko' ? 0 : 1] }))].slice(0, 8);

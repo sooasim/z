@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { useRef, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { post } from '@/lib/api';
-import { arr, item, str } from '@/lib/shape';
+import { arr, item, num, str } from '@/lib/shape';
+import { formatMoney } from '@/lib/format';
 import { ApiError } from '@/lib/errors';
 import { RequireAuth } from '@/components/gate';
 import { Alert, ErrorText, PageHeader } from '@/components/ui';
@@ -54,16 +55,17 @@ export default function AssistantView() {
               setBusy(true);
               setErr(null);
               try {
-                const res = await post('/v1/ai/travel-assistant', { message: q, conversationId: conv.current || undefined, locale: lang === 'ko' ? 'ko-KR' : 'en-US', history: msgs.slice(-8).map((m) => ({ role: m.role, content: m.text })) });
+                const res = await post('/v1/ai/travel-assistant', { message: q, sessionId: conv.current || undefined });
                 const r = item(res);
-                conv.current = str(r, 'conversationId') || conv.current;
-                const links = arr(r, 'suggestions', 'items', 'results').map((s: any) => {
-                  const t = str(s, 'type', 'targetType').toUpperCase();
-                  const id = str(s, 'slug', 'id', 'targetId');
-                  const href = t === 'GUIDE' ? `/guides/${id}` : t === 'TRAVEL_PRODUCT' || t === 'PRODUCT' ? `/travel/${id}` : `/stay/${id}`;
-                  return { label: str(s, 'title', 'name') || id, href };
+                conv.current = str(r, 'sessionId') || conv.current;
+                const links = arr(r, 'suggestions').map((s: any) => {
+                  const t = str(s, 'type').toUpperCase();
+                  const id = str(s, 'id');
+                  const href = str(s, 'action.href') || (t === 'GUIDE' ? `/guides/${id}` : t === 'TRAVEL_PRODUCT' ? `/travel/${id}` : `/stay/${id}`);
+                  const price = num(s, 'price.amountMinor');
+                  return { label: `${str(s, 'title')}${str(s, 'city') ? ` · ${str(s, 'city')}` : ''}${price !== undefined ? ` · ${formatMoney(price, str(s, 'price.currency') || 'KRW', lang)}` : ''}`, href };
                 });
-                setMsgs((m) => [...m, { role: 'assistant', text: str(r, 'reply', 'answer', 'message', 'text'), links }]);
+                setMsgs((m) => [...m, { role: 'assistant', text: `${str(r, 'reply', 'answer', 'message')}${str(r, 'disclaimer') ? `\n\n※ ${str(r, 'disclaimer')}` : ''}`, links }]);
               } catch (x) {
                 setErr(x);
               } finally {

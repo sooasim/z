@@ -10,7 +10,7 @@ import { items, str, num, f } from '@/lib/shape';
 import { subscribeRealtime } from '@/lib/realtime';
 import { RequireAuth } from '@/components/gate';
 import { StateView, EmptyState } from '@/components/states';
-import { DateText, ErrorText, PageHeader } from '@/components/ui';
+import { Avatar, DateText, ErrorText, PageHeader } from '@/components/ui';
 
 const CONTEXT_LABEL: Record<string, [string, string]> = {
   RESERVATION: ['숙소 예약', 'Stay'],
@@ -19,9 +19,10 @@ const CONTEXT_LABEL: Record<string, [string, string]> = {
   GUIDE_BOOKING: ['가이드 예약', 'Guide booking'],
   ORDER: ['여행 주문', 'Order'],
   SUPPORT: ['고객센터', 'Support'],
+  INQUIRY: ['숙소 문의', 'Inquiry'],
 };
 
-function Thread({ cid, onActivity }: { cid: string; onActivity: () => void }) {
+function Thread({ cid, onActivity, names }: { cid: string; onActivity: () => void; names: Record<string, string> }) {
   const { L } = useI18n();
   const { user } = useAuth();
   const st = useApi<any>(`/v1/conversations/${cid}/messages`, { auth: true, query: { limit: 50 } });
@@ -64,8 +65,8 @@ function Thread({ cid, onActivity }: { cid: string; onActivity: () => void }) {
               const system = str(m, 'kind', 'type').toUpperCase() === 'SYSTEM';
               return (
                 <div key={str(m, 'id')} className={`bubble ${mine ? 'me' : ''}`} style={system ? { alignSelf: 'center', background: 'var(--c-surface-2)', color: 'var(--c-muted)' } : undefined}>
-                  {!mine && !system && <div className="small" style={{ fontWeight: 700 }}>{str(m, 'senderName', 'sender.displayName')}</div>}
-                  <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{str(m, 'body', 'text', 'content')}</p>
+                  {!mine && !system && <div className="small" style={{ fontWeight: 700 }}>{names[str(m, 'senderId')] || str(m, 'senderName', 'sender.displayName')}</div>}
+                  <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{f(m, 'redacted') ? <em className="muted">{L('삭제·가려진 메시지', 'Message removed')}</em> : str(m, 'body', 'text', 'content')}</p>
                   <div className="row between small" style={{ opacity: 0.8 }}>
                     <DateText value={str(m, 'createdAt')} time />
                     {!mine && !system && (
@@ -76,7 +77,7 @@ function Thread({ cid, onActivity }: { cid: string; onActivity: () => void }) {
                           const reason = window.prompt(L('신고 사유를 입력하세요', 'Why are you reporting this message?'));
                           if (!reason) return;
                           try {
-                            await post(`/v1/conversations/${cid}/report`, { messageId: str(m, 'id'), reason }, { idempotencyKey: `report-${str(m, 'id')}` });
+                            await post(`/v1/messages/${str(m, 'id')}/report`, { reason });
                             window.alert(L('신고가 접수되었습니다.', 'Report submitted.'));
                           } catch (x) {
                             setErr(x);
@@ -128,8 +129,14 @@ export default function MessagesView() {
   const sp = useSearchParams();
   const router = useRouter();
   const cid = sp.get('c') ?? '';
+  const { user } = useAuth();
   const list = useApi<any>('/v1/conversations', { auth: true });
   const reloadList = list.reload;
+  const convs = items(list.data);
+  const others = (c: any) => (Array.isArray(c?.members) ? c.members.filter((m: any) => str(m, 'userId') !== user?.id) : []);
+  const titleOf = (c: any) => others(c).map((m: any) => str(m, 'displayName')).filter(Boolean).join(', ');
+  const current = convs.find((c: any) => str(c, 'id') === cid);
+  const names: Record<string, string> = Object.fromEntries((Array.isArray(current?.members) ? current.members : []).map((m: any) => [str(m, 'userId'), str(m, 'displayName')]));
   useEffect(() => {
     if (!cid) return subscribeRealtime(() => reloadList());
   }, [cid, reloadList]);
@@ -138,7 +145,7 @@ export default function MessagesView() {
       <PageHeader title={L('메시지', 'Messages')} />
       <div className="chat">
         <nav aria-label={L('대화 목록', 'Conversations')} className={cid ? 'hide-mobile' : ''}>
-          <StateView state={list} isEmpty={(d) => items(d).length === 0} empty={<EmptyState title={L('대화가 없습니다.', 'No conversations.')}><p className="muted small">{L('예약·맞교환·가이드 요청을 하면 대화방이 생겨요.', 'Conversations open with bookings and requests.')}</p></EmptyState>}>
+          <StateView state={list} isEmpty={(d) => items(d).length === 0} empty={<EmptyState illo="messages" title={L('대화가 없습니다.', 'No conversations.')}><p className="muted small">{L('예약·맞교환·가이드 요청을 하면 대화방이 생겨요.', 'Conversations open with bookings and requests.')}</p></EmptyState>}>
             {(d) => (
               <ul style={{ listStyle: 'none', padding: 0, margin: 0 }} className="stack">
                 {items(d).map((c: any) => {
@@ -148,13 +155,14 @@ export default function MessagesView() {
                   return (
                     <li key={id}>
                       <Link className="conv" href={`/messages?c=${id}`} aria-current={id === cid ? 'true' : undefined}>
-                        <div className="row between">
-                          <strong>{str(c, 'title', 'counterpartName', 'otherParty.displayName') || (ctx ? ctx[lang === 'ko' ? 0 : 1] : L('대화', 'Chat'))}</strong>
-                          {unread > 0 && <span className="badge danger" aria-label={`${unread} ${L('읽지 않음', 'unread')}`}>{unread}</span>}
-                        </div>
-                        <div className="small muted" style={{ overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-                          {ctx && <span className="badge" style={{ marginRight: 4 }}>{ctx[lang === 'ko' ? 0 : 1]}</span>}
-                          {str(c, 'lastMessage.body', 'lastMessageText', 'preview')}
+                        <Avatar name={titleOf(c) || str(c, 'contextType') || '?'} size={44} />
+                        <div className="grow">
+                          <div className="row between nowrap" style={{ gap: 8 }}>
+                            <strong style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{titleOf(c) || (ctx ? ctx[lang === 'ko' ? 0 : 1] : L('대화', 'Chat'))}</strong>
+                            {unread > 0 && <span className="badge accent" aria-label={`${unread} ${L('읽지 않음', 'unread')}`}>{unread}</span>}
+                          </div>
+                          {ctx && <span className="badge" style={{ marginTop: 2 }}>{ctx[lang === 'ko' ? 0 : 1]}</span>}
+                          <div className="small muted" style={{ overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', marginTop: 2 }}>{str(c, 'lastMessage.body', 'lastMessageText', 'preview')}</div>
                         </div>
                       </Link>
                     </li>
@@ -168,7 +176,7 @@ export default function MessagesView() {
           {cid ? (
             <>
               <button className="btn sm ghost" onClick={() => router.push('/messages')}>← {L('목록', 'All')}</button>
-              <Thread cid={cid} onActivity={reloadList} />
+              <Thread cid={cid} onActivity={reloadList} names={names} />
             </>
           ) : (
             <div className="state">{L('대화를 선택하세요.', 'Select a conversation.')}</div>

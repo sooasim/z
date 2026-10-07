@@ -55,10 +55,11 @@ export default function TripsView() {
             path="/v1/exchanges"
             caption={L('홈 맞교환', 'Exchanges')}
             columns={[
-              { key: 'id', label: L('맞교환', 'Exchange'), render: (r) => <Link href={`/exchange/${str(r, 'id')}`}>{str(r, 'title', 'counterpartName') || '#' + str(r, 'id').slice(0, 8)}</Link> },
-              { key: 'dates', label: L('일정', 'Dates'), render: range },
+              { key: 'id', label: L('맞교환', 'Exchange'), render: (r) => <Link href={`/exchange/${str(r, 'id')}`}>{`${str(r, 'propertyA.title') || 'A'} ⇄ ${str(r, 'propertyB.title') || 'B'}`}</Link> },
+              { key: 'dates', label: L('내가 머무는 기간', 'My stay'), render: (r) => { const mine = str(r, 'role') === 'RESPONDER' ? 'datesA' : 'datesB'; const s0 = str(r, `${mine}.start`); const e0 = str(r, `${mine}.end`); return s0 && e0 ? formatRange(s0, e0, lang) : range(r); } },
               { key: 'status|state', label: L('상태', 'Status'), kind: 'status' },
-              { key: 'version', label: 'v' },
+              { key: 'nextAction', label: L('다음 할 일', 'Next action') },
+              { key: 'currentOfferVersion|version', label: 'v' },
             ]}
             empty={<p className="muted">{L('맞교환이 없습니다.', 'No exchanges.')} <Link href="/exchange">{L('맞교환 둘러보기', 'Explore')}</Link></p>}
           />

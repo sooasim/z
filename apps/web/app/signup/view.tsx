@@ -1,7 +1,9 @@
 'use client';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useApi } from '@/lib/hooks';
+import { items, str } from '@/lib/shape';
 import { useI18n } from '@/lib/i18n';
 import { useAuth } from '@/lib/auth';
 import { ErrorText, Input, Checkbox, Alert } from '@/components/ui';
@@ -20,6 +22,18 @@ export default function SignupView() {
   const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [verifySent, setVerifySent] = useState(false);
+  // Current consent document versions are required by the API (consent evidence is versioned).
+  const docs = useApi<any>('/v1/consent-documents');
+  const version = (t: string) => str(items(docs.data).find((d: any) => str(d, 'type') === t), 'version') || '1';
+  const consents = useMemo(
+    () => [
+      { type: 'TERMS', version: version('TERMS'), granted: terms },
+      { type: 'PRIVACY', version: version('PRIVACY'), granted: privacy },
+      { type: 'MARKETING', version: version('MARKETING'), granted: marketing },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [docs.data, terms, privacy, marketing],
+  );
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value });
 
   return (
@@ -38,12 +52,7 @@ export default function SignupView() {
               const j = await authCall('signup', {
                 ...form,
                 locale: lang === 'ko' ? 'ko-KR' : 'en-US',
-                consents: [
-                  { type: 'TERMS', granted: terms },
-                  { type: 'PRIVACY', granted: privacy },
-                  { type: 'AGE_14', granted: age },
-                  { type: 'MARKETING', granted: marketing },
-                ],
+                consents,
               });
               if (j?.accessToken || j?.item?.accessToken) router.replace(next);
               else setVerifySent(true);
@@ -70,7 +79,8 @@ export default function SignupView() {
           <ErrorText error={err} />
         </form>
       )}
-      <SocialButtons next={next} />
+      <p className="xs muted center" style={{ margin: 0 }}>{L('소셜 가입도 위 필수 약관 동의가 필요합니다.', 'Social sign-up also requires the agreements above.')}</p>
+      <SocialButtons next={next} consents={consents} disabled={!terms || !privacy || !age} />
       <p className="center">
         {L('이미 계정이 있나요?', 'Have an account?')} <Link href={`/login?next=${encodeURIComponent(next)}`}>{L('로그인', 'Log in')}</Link>
       </p>

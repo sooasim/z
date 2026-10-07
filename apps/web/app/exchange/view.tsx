@@ -17,7 +17,7 @@ function ProposeForm({ homeId }: { homeId: string }) {
   const { L } = useI18n();
   const router = useRouter();
   const target = useApi<any>(`/v1/properties/${homeId}`);
-  const mine = useApi<any>('/v1/host/properties', { auth: true, query: { exchangeEnabled: 'true' } });
+  const mine = useApi<any>('/v1/host/properties', { auth: true });
   const today = isoDate(new Date());
   const [myHome, setMyHome] = useState('');
   const [aStart, setAStart] = useState('');
@@ -30,7 +30,7 @@ function ProposeForm({ homeId }: { homeId: string }) {
   const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const t = propertyView(item(target.data));
-  const myHomes = items(mine.data);
+  const myHomes = items(mine.data).filter((p: any) => propertyView(p).exchangeEnabled && propertyView(p).status.toUpperCase() === 'PUBLISHED');
   return (
     <Section title={L('맞교환 제안하기', 'Propose an exchange')}>
       <form
@@ -47,14 +47,14 @@ function ProposeForm({ homeId }: { homeId: string }) {
             const res = await post(
               '/v1/exchanges',
               {
-                requesterPropertyId: myHome,
-                counterpartPropertyId: homeId,
-                requesterStart: aStart,
-                requesterEnd: aEnd,
-                counterpartStart: same ? aStart : bStart,
-                counterpartEnd: same ? aEnd : bEnd,
-                guests: Number(guests) || 1,
-                note,
+                // datesB = when THEIR home (B) is used by me; datesA = when MY home (A) is used by them.
+                myPropertyId: myHome,
+                theirPropertyId: homeId,
+                datesB: { start: aStart, end: aEnd },
+                datesA: same ? { start: aStart, end: aEnd } : { start: bStart, end: bEnd },
+                guestsB: Number(guests) || 1,
+                guestsA: Number(guests) || 1,
+                message: note || null,
               },
               { idempotencyKey: true },
             );
@@ -121,10 +121,12 @@ export default function ExchangeDiscoverView() {
   const [q, setQ] = useState(sp.get('q') ?? '');
   const [from, setFrom] = useState(sp.get('from') ?? '');
   const [months, setMonths] = useState(sp.get('months') ?? '1');
-  const query = { q, from, months, limit: 24 };
-  const st = useApi<any>('/v1/exchange/homes', { query });
+  const startDate = from ? `${from}-01` : undefined;
+  const endDate = from ? (() => { const d = new Date(`${from}-01T00:00:00`); d.setMonth(d.getMonth() + Number(months || 1)); return d.toISOString().slice(0, 10); })() : undefined;
+  const query = { city: q || undefined, start: startDate, end: endDate, limit: 24 };
+  const st = useApi<any>('/v1/exchange/homes', { query, auth: true });
   const elig = useApi<any>(user ? '/v1/exchange/eligibility' : null);
-  const eligible = str(item(elig.data), 'status', 'state').toUpperCase();
+  const eligible = item(elig.data)?.eligible === false ? 'INELIGIBLE' : '';
   return (
     <>
       <PageHeader title={L('한달살기 홈 맞교환', 'Month-long home exchange')} subtitle={L('돈을 주고받지 않고, 검증된 회원끼리 서로의 집을 바꿔 살아봅니다.', 'Swap homes with verified members — no rent changes hands.')} actions={<Link className="btn" href="/exchange/onboarding">{L('내 맞교환 설정', 'My exchange setup')}</Link>} />
@@ -136,7 +138,7 @@ export default function ExchangeDiscoverView() {
           <li>{L('양측 서명 후 두 집의 일정이 동시에 잠기며, 한쪽이라도 실패하면 모두 취소됩니다.', 'Both calendars lock atomically after both sign — or neither does.')}</li>
         </ul>
       </Alert>
-      {user && eligible && !['ELIGIBLE', 'APPROVED', 'ACTIVE', 'VERIFIED'].includes(eligible) && (
+      {user && eligible === 'INELIGIBLE' && (
         <Alert tone="warn">
           {L('맞교환 자격 확인이 필요합니다.', 'Exchange eligibility required.')} <Link href="/exchange/onboarding">{L('자격 확인하기', 'Check eligibility')}</Link>
         </Alert>
@@ -150,7 +152,7 @@ export default function ExchangeDiscoverView() {
         <span />
       </form>
       <div style={{ marginTop: 16 }}>
-        <StateView state={st} isEmpty={(d) => items(d).length === 0} empty={<EmptyState title={L('조건에 맞는 맞교환 집이 없습니다.', 'No matching homes.')} />}>
+        <StateView state={st} skeleton="cards" isEmpty={(d) => items(d).length === 0} empty={<EmptyState illo="search" title={L('조건에 맞는 맞교환 집이 없습니다.', 'No matching homes.')} />}>
           {(d) => (
             <div className="grid">
               {items(d).map((p: any, i) => (

@@ -44,7 +44,7 @@ export function MfaPrompt({ onDone }: { onDone?: () => void }) {
           setBusy(true);
           setErr(null);
           try {
-            await authCall('mfa/verify', { code });
+            await authCall('mfa/challenge', /^\d{6}$/.test(code) ? { code } : { recoveryCode: code });
             onDone?.();
           } catch (x) {
             setErr(x);
@@ -56,7 +56,7 @@ export function MfaPrompt({ onDone }: { onDone?: () => void }) {
         <label className="sr-only" htmlFor="mfa-code">
           {L('인증 코드', 'Code')}
         </label>
-        <input id="mfa-code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} placeholder="123456" value={code} onChange={(e) => setCode(e.target.value)} style={{ maxWidth: 160 }} required />
+        <input id="mfa-code" inputMode="numeric" autoComplete="one-time-code" maxLength={32} placeholder="123456" value={code} onChange={(e) => setCode(e.target.value)} style={{ maxWidth: 160 }} required />
         <button className="btn primary" disabled={busy}>
           {t('state.mfa.cta')}
         </button>

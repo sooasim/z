@@ -1,11 +1,11 @@
 'use client';
 import { useState } from 'react';
 import { useI18n } from '@/lib/i18n';
-import { post, api } from '@/lib/api';
-import { presignedUpload } from '@/lib/media';
+import { post } from '@/lib/api';
+import { presignedUpload, sha256Hex } from '@/lib/media';
+import { str } from '@/lib/shape';
 import { RequireAuth } from '@/components/gate';
 import { ResourceTable } from '@/components/table';
-import { FormCard } from '@/components/form';
 import { Alert, ErrorText, PageHeader, Section } from '@/components/ui';
 
 export default function VerificationView() {
@@ -17,9 +17,10 @@ export default function VerificationView() {
   const [msg, setMsg] = useState('');
   const KINDS = [
     { value: 'IDENTITY', label: L('본인 확인 (신분증)', 'Identity (ID)') },
-    { value: 'BUSINESS', label: L('사업자 확인 (호스트/공급사)', 'Business registration') },
-    { value: 'PAYOUT_ACCOUNT', label: L('정산 계좌 확인', 'Payout account') },
-    { value: 'GUIDE_LICENSE', label: L('가이드 자격증', 'Guide licence') },
+    { value: 'HOST', label: L('호스트 (숙박업 신고증)', 'Host (lodging registration)') },
+    { value: 'BUSINESS', label: L('사업자 확인', 'Business registration') },
+    { value: 'GUIDE', label: L('가이드 자격', 'Guide credentials') },
+    { value: 'SUPPLIER', label: L('여행 공급사 (여행업 등록증)', 'Travel supplier') },
   ];
   return (
     <RequireAuth>
@@ -32,9 +33,11 @@ export default function VerificationView() {
             setErr(null);
             setMsg('');
             try {
-              const documentIds: string[] = [];
-              if (file) documentIds.push(await presignedUpload(file, { purpose: 'VERIFICATION_DOCUMENT', visibility: 'PRIVATE' }));
-              await post('/v1/verifications', { verificationType: kind, type: kind, documentIds }, { idempotencyKey: true });
+              if (!file) throw new Error(L('증빙 서류를 첨부하세요.', 'Attach a document.'));
+              const sha256 = await sha256Hex(file);
+              const mediaId = await presignedUpload(file, 'VERIFICATION');
+              const DOC: Record<string, string> = { IDENTITY: 'ID_CARD', BUSINESS: 'BUSINESS_REGISTRATION', GUIDE: 'GUIDE_LICENSE', HOST: 'LODGING_REGISTRATION', SUPPLIER: 'TRAVEL_AGENCY_REGISTRATION' };
+              await post('/v1/verifications', { subjectType: kind, documents: [{ documentType: DOC[kind] ?? 'OTHER', mediaId, sha256 }] });
               setMsg(L('제출되었습니다. 심사 결과는 알림으로 안내됩니다.', 'Submitted. We will notify you of the result.'));
               setK(k + 1);
             } catch (x) {
@@ -60,16 +63,16 @@ export default function VerificationView() {
         </form>
       </Section>
       <Section title={L('정산 계좌', 'Payout account')}>
-        <FormCard
-          cols={2}
-          fields={[
-            { name: 'bankCode', label: L('은행', 'Bank'), required: true, placeholder: '004' },
-            { name: 'accountNumber', label: L('계좌번호', 'Account number'), required: true, hint: L('저장 시 마스킹되며 전체 번호는 표시되지 않습니다.', 'Stored masked; never displayed in full.') },
-            { name: 'holderName', label: L('예금주', 'Holder name'), required: true },
+        <Alert tone="info">{L('계좌번호 전체는 JETPOOL에 저장되지 않습니다. 제휴 PG의 계좌 본인확인을 거쳐 발급된 토큰과 끝 4자리만 보관하며, 등록에는 MFA 세션이 필요합니다.', 'Full account numbers are never stored: only a PG-issued token and the last 4 digits. Registration requires an MFA session.')}</Alert>
+        <ResourceTable
+          path="/v1/payout-accounts"
+          columns={[
+            { key: 'bankCode', label: L('은행', 'Bank') },
+            { key: 'accountLast4', label: L('계좌 끝자리', 'Last 4'), render: (r) => `•••• ${str(r, 'accountLast4')}` },
+            { key: 'holderName', label: L('예금주', 'Holder') },
+            { key: 'status', label: L('상태', 'Status'), kind: 'status' },
           ]}
-          submit={(body) => api('/v1/verifications/payout-account', { method: 'POST', body, idempotencyKey: true })}
-          submitLabel={L('계좌 인증 요청', 'Verify account')}
-          resetOnSuccess
+          empty={<p className="muted">{L('등록된 정산 계좌가 없습니다. 계좌 인증은 PG 본인확인 연동 후 제공됩니다.', 'No payout account yet. Registration opens with the PG account-verification integration.')}</p>}
         />
       </Section>
       <Section title={L('심사 현황', 'Status')}>
@@ -77,10 +80,10 @@ export default function VerificationView() {
           key={k}
           path="/v1/verifications"
           columns={[
-            { key: 'verificationType|type', label: L('유형', 'Type') },
+            { key: 'subjectType|verificationType', label: L('유형', 'Type') },
             { key: 'status|state', label: L('상태', 'Status'), kind: 'status' },
-            { key: 'decisionReason|reason', label: L('사유', 'Reason') },
-            { key: 'createdAt', label: L('신청일', 'Submitted'), kind: 'date' },
+            { key: 'decisionReason|reason|rejectionReason', label: L('사유', 'Reason') },
+            { key: 'submittedAt|createdAt', label: L('신청일', 'Submitted'), kind: 'date' },
             { key: 'expiresAt', label: L('만료', 'Expires'), kind: 'date' },
           ]}
           empty={<p className="muted">{L('인증 내역이 없습니다.', 'No verifications.')}</p>}

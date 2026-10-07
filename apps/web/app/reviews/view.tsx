@@ -13,12 +13,13 @@ import { Alert, ErrorText, PageHeader, Textarea } from '@/components/ui';
 export default function ReviewsView() {
   const { L } = useI18n();
   const sp = useSearchParams();
-  const st = useApi<any>('/v1/reviews/eligible', { auth: true });
+  const st = useApi<any>('/v1/me/reviews', { auth: true });
+  const pending = (d: any) => (Array.isArray(d?.pending) ? d.pending : items(d));
   const [rating, setRating] = useState(5);
   const [body, setBody] = useState('');
   const [target, setTarget] = useState<{ type: string; id: string; subjectType: string; subjectId: string } | null>(
     sp.get('reservationId') || sp.get('subjectId')
-      ? { type: sp.get('targetType') ?? 'PROPERTY', id: sp.get('targetId') ?? '', subjectType: sp.get('subjectType') ?? 'RESERVATION', subjectId: sp.get('subjectId') ?? sp.get('reservationId') ?? '' }
+      ? { type: (sp.get('targetType') ?? 'HOST').replace('USER', 'EXCHANGE_PARTNER'), id: sp.get('targetId') ?? '', subjectType: sp.get('subjectType') ?? 'RESERVATION', subjectId: sp.get('subjectId') ?? sp.get('reservationId') ?? '' }
       : null,
   );
   const [err, setErr] = useState<unknown>(null);
@@ -34,7 +35,7 @@ export default function ReviewsView() {
             e.preventDefault();
             setErr(null);
             try {
-              await post('/v1/reviews', { targetType: target.type, targetId: target.id || undefined, subjectType: target.subjectType, subjectId: target.subjectId, reservationId: target.subjectType === 'RESERVATION' ? target.subjectId : undefined, rating, body }, { idempotencyKey: `review-${target.subjectType}-${target.subjectId}` });
+              await post('/v1/reviews', { transactionType: target.subjectType, transactionId: target.subjectId, targetType: target.type, targetId: target.id || undefined, rating, body });
               setDone(true);
               setTarget(null);
               setBody('');
@@ -63,16 +64,16 @@ export default function ReviewsView() {
           <ErrorText error={err} />
         </form>
       ) : (
-        <StateView state={st} isEmpty={(d) => items(d).length === 0} empty={<EmptyState title={L('후기를 작성할 수 있는 여행이 없습니다.', 'Nothing to review right now.')} />}>
+        <StateView state={st} isEmpty={(d) => pending(d).length === 0} empty={<EmptyState illo="trips" title={L('후기를 작성할 수 있는 여행이 없습니다.', 'Nothing to review right now.')} />}>
           {(d) => (
             <ul className="stack" style={{ listStyle: 'none', padding: 0 }}>
-              {items(d).map((r: any, i) => (
+              {pending(d).map((r: any, i: number) => (
                 <li key={i} className="card flat row between">
                   <div>
-                    <strong>{str(r, 'title', 'targetTitle')}</strong>
-                    <div className="small muted">{str(r, 'subjectType')} · {L('작성 기한', 'Due')} {str(r, 'deadline', 'windowEndsAt').slice(0, 10)}</div>
+                    <strong>{str(r, 'title', 'targetTitle') || `${str(r, 'transactionType', 'transaction_type')} #${str(r, 'transactionId', 'transaction_id').slice(0, 8)}`}</strong>
+                    <div className="small muted">{L('대상', 'About')}: {str(r, 'targetType', 'target_type')} {str(r, 'deadline', 'windowEndsAt') && `· ${L('작성 기한', 'Due')} ${str(r, 'deadline', 'windowEndsAt').slice(0, 10)}`}</div>
                   </div>
-                  <button className="btn" onClick={() => setTarget({ type: str(r, 'targetType'), id: str(r, 'targetId'), subjectType: str(r, 'subjectType'), subjectId: str(r, 'subjectId') })}>
+                  <button className="btn" onClick={() => setTarget({ type: str(r, 'targetType', 'target_type'), id: str(r, 'targetId', 'target_id'), subjectType: str(r, 'transactionType', 'transaction_type'), subjectId: str(r, 'transactionId', 'transaction_id') })}>
                     {L('후기 쓰기', 'Review')}
                   </button>
                 </li>

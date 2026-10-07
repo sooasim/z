@@ -11,7 +11,7 @@ export function isObj(v: unknown): v is Obj {
 export function items<T = Obj>(res: unknown): T[] {
   if (Array.isArray(res)) return res as T[];
   if (!isObj(res)) return [];
-  for (const k of ['items', 'data', 'results', 'hits', 'rows']) {
+  for (const k of ['items', 'data', 'results', 'hits', 'rows', 'written', 'history']) {
     const v = res[k];
     if (Array.isArray(v)) return v as T[];
     if (isObj(v) && Array.isArray(v.items)) return v.items as T[];

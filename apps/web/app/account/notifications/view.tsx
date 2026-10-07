@@ -9,14 +9,12 @@ import { StateView } from '@/components/states';
 import { ErrorText, PageHeader } from '@/components/ui';
 
 const CATEGORIES = [
-  { key: 'BOOKING', ko: '예약·결제', en: 'Bookings & payments' },
-  { key: 'MESSAGE', ko: '메시지', en: 'Messages' },
-  { key: 'EXCHANGE', ko: '홈 맞교환', en: 'Exchange' },
-  { key: 'GUIDE', ko: '가이드', en: 'Guide' },
-  { key: 'REVIEW', ko: '후기', en: 'Reviews' },
-  { key: 'MARKETING', ko: '혜택·마케팅', en: 'Promotions' },
+  { key: 'TRANSACTIONAL', ko: '예약·결제·메시지', en: 'Bookings, payments & messages' },
+  { key: 'SECURITY', ko: '보안 (끌 수 없음)', en: 'Security (always on)', locked: true },
+  { key: 'SYSTEM', ko: '서비스 공지', en: 'Service notices' },
+  { key: 'MARKETING', ko: '혜택·마케팅 (동의 필요)', en: 'Promotions (consent required)' },
 ];
-const CHANNELS = ['IN_APP', 'EMAIL', 'SMS', 'PUSH'];
+const CHANNELS = ['IN_APP', 'EMAIL', 'SMS', 'PUSH', 'KAKAO_ALIMTALK'];
 
 export default function NotificationPrefsView() {
   const { L, lang } = useI18n();
@@ -39,11 +37,11 @@ export default function NotificationPrefsView() {
               onSubmit={async (e) => {
                 e.preventDefault();
                 const fd = new FormData(e.currentTarget);
-                const preferences = CATEGORIES.flatMap((c) => CHANNELS.map((ch) => ({ category: c.key, channel: ch, enabled: fd.get(`${c.key}:${ch}`) === 'on' })));
+                const preferences = CATEGORIES.filter((c) => !(c as any).locked).flatMap((c) => CHANNELS.map((ch) => ({ category: c.key, channel: ch, enabled: fd.get(`${c.key}:${ch}`) === 'on' })));
                 setErr(null);
                 setSaved(false);
                 try {
-                  await api('/v1/notification-preferences', { method: 'PUT', body: { preferences } });
+                  await api('/v1/notification-preferences', { method: 'PATCH', body: { preferences } });
                   setSaved(true);
                 } catch (x) {
                   setErr(x);
@@ -66,7 +64,7 @@ export default function NotificationPrefsView() {
                         <th scope="row">{c[lang]}</th>
                         {CHANNELS.map((ch) => (
                           <td key={ch}>
-                            <input type="checkbox" name={`${c.key}:${ch}`} defaultChecked={isOn(c.key, ch)} aria-label={`${c[lang]} ${ch}`} />
+                            <input type="checkbox" name={`${c.key}:${ch}`} defaultChecked={(c as any).locked || isOn(c.key, ch)} disabled={(c as any).locked} aria-label={`${c[lang]} ${ch}`} />
                           </td>
                         ))}
                       </tr>

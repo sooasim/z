@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { useApi } from '@/lib/hooks';
 import { post } from '@/lib/api';
-import { item, str, num, arr } from '@/lib/shape';
+import { item, str, num, arr, f } from '@/lib/shape';
 import { RequireAuth } from '@/components/gate';
 import { StateView } from '@/components/states';
 import { Alert, ErrorText, Money, PageHeader, Section, StatusBadge, Textarea, Select } from '@/components/ui';
@@ -19,17 +19,18 @@ function CancelBox({ id, status }: { id: string; status: string }) {
   const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   if (!['CONFIRMED', 'PAYMENT_PENDING', 'HELD'].includes(status)) return <p className="muted">{L('현재 상태에서는 취소할 수 없습니다.', 'Cannot cancel in the current state.')}</p>;
-  const p = item(preview.data);
+  const pv = item(preview.data);
+  const p = f<any>(pv, 'evaluation') ?? pv;
   return (
     <div className="card stack">
       {preview.loading ? (
         <div className="skeleton" style={{ height: 60 }} />
       ) : p ? (
         <div className="price-lines">
-          <div className="line"><span>{L('결제 금액', 'Paid')}</span><Money minor={num(p, 'paidMinor', 'totalMinor')} currency={str(p, 'currency') || 'KRW'} /></div>
-          <div className="line"><span>{L('취소 수수료', 'Penalty')}</span><Money minor={num(p, 'penaltyMinor', 'feeMinor')} currency={str(p, 'currency') || 'KRW'} /></div>
+          <div className="line"><span>{L('결제 금액', 'Paid')}</span><Money minor={num(p, 'totalMinor', 'paidMinor')} currency={str(p, 'currency') || 'KRW'} /></div>
+          <div className="line"><span>{L('취소 수수료', 'Penalty')}</span><Money minor={num(p, 'nonRefundableMinor', 'penaltyMinor')} currency={str(p, 'currency') || 'KRW'} /></div>
           <div className="line total"><span>{L('환불 예정액', 'Refund')}</span><Money minor={num(p, 'refundMinor', 'refundAmountMinor')} currency={str(p, 'currency') || 'KRW'} /></div>
-          {str(p, 'policy', 'policyCode') && <p className="small muted">{L('적용 정책', 'Policy')}: {str(p, 'policy', 'policyCode')}</p>}
+          {str(p, 'policyCode', 'policy') && <p className="small muted">{L('적용 정책', 'Policy')}: {str(p, 'policyCode', 'policy')} · {L('환불률', 'Refund')} {num(p, 'refundPct') ?? '—'}%</p>}
         </div>
       ) : (
         <ErrorText error={preview.error} />
@@ -44,7 +45,7 @@ function CancelBox({ id, status }: { id: string; status: string }) {
           setBusy(true);
           setErr(null);
           try {
-            await post(`/v1/reservations/${id}/cancel`, { reasonCode: code, reason }, { idempotencyKey: `cancel-${id}` });
+            await post(`/v1/reservations/${id}/cancel`, { reason: `${code}${reason ? ': ' + reason : ''}`.slice(0, 500) }, { idempotencyKey: `cancel-${id}` });
             router.push(`/trips/${id}`);
           } catch (e) {
             setErr(e);

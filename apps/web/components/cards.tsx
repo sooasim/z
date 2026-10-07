@@ -9,7 +9,7 @@ import { ListingCard, type CardBadge } from './ui/listing-card';
 import { Avatar, RatingStars } from './ui/display';
 import { Money } from './ui/base';
 
-const COMPLIANT = ['PASS', 'PASSED', 'COMPLIANT', 'APPROVED', 'VERIFIED', 'ELIGIBLE', 'OK'];
+const COMPLIANT = ['ALLOW', 'PASS', 'PASSED', 'COMPLIANT', 'APPROVED', 'VERIFIED', 'ELIGIBLE', 'OK'];
 
 export function isCompliant(status: string) {
   return COMPLIANT.includes((status || '').toUpperCase());
@@ -71,13 +71,15 @@ export function PropertyCard({ p, href, query, active, onHover, priceNote }: { p
 }
 
 export function GuideCard({ g }: { g: any }) {
-  const v = guideView(g);
+  // /v1/search/guides wraps each hit: { guide, score, explanation[], availability }
+  const v = guideView(f(g, 'guide') ?? g);
+  const why = (Array.isArray(g?.explanation) ? g.explanation : []) as string[];
   const { lang, L } = useI18n();
   const tl = GUIDE_TYPE_LABEL[v.type] ?? { ko: v.type, en: v.type, paid: false };
   return (
     <article className="gcard">
       <div className="cover" style={{ backgroundImage: `url(${postcardFor(v.city, v.id)})` }} aria-hidden="true" />
-      <div className="fav" style={{ position: 'absolute', top: 6, right: 6 }}>
+      <div className="fav" style={{ position: 'absolute', top: 6, right: 6, zIndex: 2 }}>
         {v.id && <HeartButton targetType="GUIDE" targetId={v.id} />}
       </div>
       <div className="who">
@@ -109,7 +111,8 @@ export function GuideCard({ g }: { g: any }) {
           ))}
         </div>
       )}
-      {v.bio && <p className="small muted" style={{ margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{v.bio}</p>}
+      {(v.headline || v.bio) && <p className="small muted" style={{ margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{v.headline ? <strong style={{ color: 'var(--text)' }}>{v.headline}. </strong> : null}{v.bio}</p>}
+      {why.length > 0 && <p className="xs" style={{ margin: 0, color: 'var(--link)' }}>✨ {why.slice(0, 2).join(' · ')}</p>}
       <div className="row between small">
         {tl.paid && v.rateMinor !== undefined ? (
           <span>

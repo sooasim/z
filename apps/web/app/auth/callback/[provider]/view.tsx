@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { useAuth } from '@/lib/auth';
 import { ErrorText, Spinner } from '@/components/ui';
+import { ApiError } from '@/lib/errors';
 import { safeNext } from '@/components/auth/social';
 
 export default function OAuthCallbackView() {
@@ -34,9 +35,13 @@ export default function OAuthCallbackView() {
         } catch {
           /* ignore */
         }
-        if (j?.linkRequired || j?.needsLinking) router.replace(`/account/security?link=${provider}`);
-        else router.replace(next);
+        if (j?.linked) router.replace('/account/security?linked=1');
+        else router.replace(safeNext(j?.returnTo) !== '/' ? safeNext(j?.returnTo) : next);
       } catch (e) {
+        if (e instanceof ApiError && e.code === 'ACCOUNT_LINK_REQUIRED') {
+          router.replace(`/login?linkRequired=${provider}&next=${encodeURIComponent(`/account/security?link=${provider}`)}`);
+          return;
+        }
         setErr(e);
       }
     })();

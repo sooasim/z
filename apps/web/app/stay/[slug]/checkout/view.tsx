@@ -80,8 +80,9 @@ function Checkout() {
       const key = stableKey('hold', quote.id, newIdempotencyKey);
       const res = await post('/v1/booking/holds', { quoteId: quote.id }, { idempotencyKey: key });
       const h = item(res);
-      const holdId = str(h, 'id', 'holdId');
-      setHold({ id: holdId, expiresAt: str(h, 'expiresAt', 'expires_at') });
+      // API returns { item: { hold, reservation } } — the reservation (HELD) is created together with the hold.
+      const holdId = str(h, 'hold.id', 'holdId', 'id');
+      setHold({ id: holdId, expiresAt: str(h, 'hold.expiresAt', 'expiresAt') });
       let rid = str(h, 'reservationId', 'reservation.id');
       if (!rid) {
         const rkey = stableKey('reservation', holdId, newIdempotencyKey);

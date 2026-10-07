@@ -10,7 +10,7 @@ export type DayKind = 'paid' | 'exchange' | 'block' | 'hold' | 'unavail' | '';
 export function calendarDays(rows: any[]): Record<string, { kind: DayKind; label?: string; price?: number }> {
   const out: Record<string, { kind: DayKind; label?: string; price?: number }> = {};
   const kindOf = (r: any): DayKind => {
-    const t = (str(r, 'blockType', 'kind', 'type', 'source', 'reason', 'status') || '').toUpperCase();
+    const t = (str(r, 'blockType', 'type', 'kind', 'source', 'reason', 'status') || '').toUpperCase();
     if (t.includes('EXCHANGE')) return 'exchange';
     if (t.includes('HOLD')) return 'hold';
     if (t.includes('RESERV') || t.includes('BOOK') || t.includes('PAID')) return 'paid';
@@ -21,7 +21,17 @@ export function calendarDays(rows: any[]): Record<string, { kind: DayKind; label
   for (const r of rows) {
     const date = str(r, 'date', 'day');
     if (date) {
-      const k = kindOf(r);
+      const blk = f<any>(r, 'block');
+      if (blk) {
+        out[date.slice(0, 10)] = { kind: kindOf({ type: str(blk, 'type', 'blockType') }) || 'block', label: str(blk, 'reservation.code', 'sourceType') || undefined };
+        continue;
+      }
+      const st = (str(r, 'status', 'availability') || '').toUpperCase();
+      if (st === 'BOOKED' || st === 'BLOCKED' || st === 'UNAVAILABLE') {
+        out[date.slice(0, 10)] = { kind: 'unavail', price: Number(f(r, 'priceMinor')) || undefined };
+        continue;
+      }
+      const k = st === 'AVAILABLE' ? '' : kindOf(r);
       out[date.slice(0, 10)] = { kind: k || (f(r, 'available') === false ? 'unavail' : ''), price: Number(f(r, 'priceMinor', 'nightlyPriceMinor')) || undefined };
       continue;
     }

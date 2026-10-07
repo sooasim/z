@@ -15,10 +15,11 @@ export default function ProfileView() {
         cols={2}
         fields={[
           { name: 'displayName', label: L('표시 이름', 'Display name'), required: true },
-          { name: 'phone', label: L('휴대폰', 'Phone'), type: 'tel' },
-          { name: 'avatarUrl', label: L('프로필 사진 URL', 'Avatar URL'), type: 'url' },
-          { name: 'homeCity', label: L('거주 도시', 'Home city') },
-          { name: 'languages', label: L('사용 언어 (쉼표 구분)', 'Languages (comma separated)'), type: 'list', placeholder: 'ko, en' },
+          { name: 'preferredName', label: L('불리고 싶은 이름', 'Preferred name') },
+          { name: 'phone', label: L('휴대폰 (+821012345678)', 'Phone (+821012345678)'), type: 'tel', placeholder: '+821012345678' },
+          { name: 'country', label: L('국가 코드', 'Country'), placeholder: 'KR' },
+          { name: 'timezone', label: L('시간대', 'Time zone'), placeholder: 'Asia/Seoul' },
+          { name: 'languages', label: L('사용 언어 코드 (쉼표 구분)', 'Language codes (comma separated)'), type: 'list', placeholder: 'ko, en' },
           { name: 'bio', label: L('자기소개', 'About me'), type: 'textarea' },
         ]}
       />

@@ -1,11 +1,11 @@
 'use client';
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useApi } from '@/lib/hooks';
 import { items as itemsOf, str, f, nextCursor } from '@/lib/shape';
 import { useI18n } from '@/lib/i18n';
 import { api, type RequestOptions } from '@/lib/api';
 import { StateView, EmptyState } from './states';
-import { DateText, ErrorText, Money, StatusBadge } from './ui';
+import { DateText, ErrorText, Money, StatusBadge } from './ui/base';
 
 export interface Column {
   key: string;
@@ -48,28 +48,78 @@ export interface RowAction {
   tone?: 'primary' | 'danger';
 }
 
-export function DataTable({ rows, columns, actions, onChanged, caption }: { rows: any[]; columns: Column[]; actions?: RowAction[]; onChanged?: () => void; caption?: string }) {
-  const { t } = useI18n();
+function sortValue(row: any, col: Column): string | number {
+  const v = f(row, ...col.key.split('|'));
+  if (v === undefined || v === null) return '';
+  if (col.kind === 'money' || typeof v === 'number') return Number(v);
+  return String(v).toLowerCase();
+}
+
+export function DataTable({ rows, columns, actions, onChanged, caption, pageSize = 20, filterable = true, toolbar }: { rows: any[]; columns: Column[]; actions?: RowAction[]; onChanged?: () => void; caption?: string; pageSize?: number; filterable?: boolean; toolbar?: ReactNode }) {
+  const { t, L } = useI18n();
   const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(null);
+  const [filter, setFilter] = useState('');
+  const [page, setPage] = useState(0);
+  const view = useMemo(() => {
+    let r = rows;
+    if (filter.trim()) {
+      const needle = filter.trim().toLowerCase();
+      r = r.filter((row) => JSON.stringify(row).toLowerCase().includes(needle));
+    }
+    if (sort) {
+      const col = columns.find((c) => c.key === sort.key);
+      if (col) r = [...r].sort((a, b) => (sortValue(a, col) > sortValue(b, col) ? sort.dir : sortValue(a, col) < sortValue(b, col) ? -sort.dir : 0));
+    }
+    return r;
+  }, [rows, filter, sort, columns]);
+  const pages = Math.max(1, Math.ceil(view.length / pageSize));
+  const cur = Math.min(page, pages - 1);
+  const pageRows = view.slice(cur * pageSize, cur * pageSize + pageSize);
   return (
     <div className="stack">
+      {(filterable || toolbar) && (
+        <div className="table-toolbar">
+          {filterable && rows.length > 5 ? (
+            <label className="field" style={{ flex: '1 1 240px', maxWidth: 360 }}>
+              <span className="sr-only">{L('표 내 검색', 'Filter rows')}</span>
+              <input type="search" value={filter} onChange={(e) => { setFilter(e.target.value); setPage(0); }} placeholder={L('🔍 결과 내 검색', '🔍 Filter rows')} />
+            </label>
+          ) : <span />}
+          {toolbar}
+        </div>
+      )}
       <ErrorText error={err} />
       <div className="table-wrap">
         <table>
           {caption && <caption className="sr-only">{caption}</caption>}
           <thead>
             <tr>
-              {columns.map((c) => (
-                <th key={c.key} scope="col">
-                  {c.label}
-                </th>
-              ))}
+              {columns.map((c) => {
+                const active = sort?.key === c.key;
+                return (
+                  <th key={c.key} scope="col" aria-sort={active ? (sort!.dir === 1 ? 'ascending' : 'descending') : undefined}>
+                    {c.render && !c.kind ? (
+                      c.label
+                    ) : (
+                      <button className="sort" onClick={() => setSort(active ? (sort!.dir === 1 ? { key: c.key, dir: -1 } : null) : { key: c.key, dir: 1 })}>
+                        {c.label} <span aria-hidden="true">{active ? (sort!.dir === 1 ? '▲' : '▼') : '↕'}</span>
+                      </button>
+                    )}
+                  </th>
+                );
+              })}
               {actions && actions.length > 0 && <th scope="col">{t('common.actions')}</th>}
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, i) => {
+            {pageRows.length === 0 && (
+              <tr>
+                <td colSpan={columns.length + (actions?.length ? 1 : 0)} className="center muted">{L('일치하는 항목이 없습니다.', 'No matching rows.')}</td>
+              </tr>
+            )}
+            {pageRows.map((r, i) => {
               const id = str(r, 'id') || String(i);
               return (
                 <tr key={id}>
@@ -80,7 +130,7 @@ export function DataTable({ rows, columns, actions, onChanged, caption }: { rows
                   ))}
                   {actions && actions.length > 0 && (
                     <td>
-                      <div className="row" style={{ gap: 6 }}>
+                      <div className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
                         {actions
                           .filter((a) => !a.when || a.when(r))
                           .map((a) => (
@@ -88,6 +138,7 @@ export function DataTable({ rows, columns, actions, onChanged, caption }: { rows
                               key={a.label}
                               className={`btn sm ${a.tone ?? ''}`}
                               disabled={busy === id + a.label}
+                              data-loading={busy === id + a.label ? 'true' : undefined}
                               onClick={async () => {
                                 let reason: string | undefined;
                                 if (a.reason) {
@@ -120,6 +171,15 @@ export function DataTable({ rows, columns, actions, onChanged, caption }: { rows
           </tbody>
         </table>
       </div>
+      {pages > 1 && (
+        <div className="pager">
+          <span>
+            {cur * pageSize + 1}–{Math.min(view.length, (cur + 1) * pageSize)} / {view.length}
+          </span>
+          <button className="btn sm" disabled={cur === 0} onClick={() => setPage(cur - 1)} aria-label={L('이전 페이지', 'Previous page')}>‹</button>
+          <button className="btn sm" disabled={cur >= pages - 1} onClick={() => setPage(cur + 1)} aria-label={L('다음 페이지', 'Next page')}>›</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -154,7 +214,7 @@ export function ResourceTable({
   return (
     <div className="stack">
       {toolbar}
-      <StateView state={st} isEmpty={(d) => itemsOf(d).length === 0} empty={empty ?? <EmptyState />}>
+      <StateView state={st} skeleton="table" isEmpty={(d) => itemsOf(d).length === 0} empty={empty ?? <EmptyState />}>
         {() => (
           <>
             <DataTable

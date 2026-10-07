@@ -59,7 +59,7 @@ export default function TripDetailView() {
                   />
                   <div className="row">
                     {str(r, 'conversationId') && <Link className="btn" href={`/messages?c=${str(r, 'conversationId')}`}>{L('호스트에게 메시지', 'Message host')}</Link>}
-                    {status === 'COMPLETED' && <Link className="btn" href={`/reviews?targetType=PROPERTY&reservationId=${id}`}>{L('후기 쓰기', 'Write review')}</Link>}
+                    {status === 'COMPLETED' && <Link className="btn" href={`/reviews?targetType=PROPERTY&subjectType=RESERVATION&subjectId=${id}`}>{L('후기 쓰기', 'Write review')}</Link>}
                     <Link className="btn ghost" href={`/support/disputes?subjectType=RESERVATION&subjectId=${id}`}>{L('문제 신고', 'Report a problem')}</Link>
                   </div>
                 </section>

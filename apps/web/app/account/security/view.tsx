@@ -7,13 +7,15 @@ import { useApi } from '@/lib/hooks';
 import { api } from '@/lib/api';
 import { arr, item, items, str } from '@/lib/shape';
 import { RequireAuth } from '@/components/gate';
+import { startOAuth } from '@/components/auth/social';
+import { errorMessage } from '@/lib/errors';
 import { Alert, DateText, ErrorText, Input, PageHeader, Section, StatusBadge } from '@/components/ui';
 import { StateView, EmptyState } from '@/components/states';
 
 function MfaSetup() {
   const { L } = useI18n();
   const { authCall, user, reloadMe } = useAuth();
-  const [setup, setSetup] = useState<{ secret: string; uri: string; qr?: string } | null>(null);
+  const [setup, setSetup] = useState<{ factorId: string; secret: string; uri: string; qr?: string } | null>(null);
   const [code, setCode] = useState('');
   const [codes, setCodes] = useState<string[]>([]);
   const [err, setErr] = useState<unknown>(null);
@@ -44,9 +46,9 @@ function MfaSetup() {
               disabled={busy}
               onClick={() =>
                 run(async () => {
-                  const j = await authCall('mfa/setup', {});
+                  const j = await authCall('mfa/totp/enroll', {});
                   const s = item(j) ?? j;
-                  setSetup({ secret: str(s, 'secret', 'base32'), uri: str(s, 'otpauthUrl', 'otpauthUri', 'uri', 'otpauth_url'), qr: str(s, 'qrDataUrl', 'qrCode', 'qr') });
+                  setSetup({ factorId: str(s, 'factorId', 'id'), secret: str(s, 'secret', 'base32'), uri: str(s, 'otpauthUrl', 'otpauthUri', 'uri'), qr: str(s, 'qrDataUrl', 'qrCode', 'qr') });
                 })
               }
             >
@@ -61,7 +63,7 @@ function MfaSetup() {
             onSubmit={(e) => {
               e.preventDefault();
               void run(async () => {
-                const j = await authCall('mfa/enable', { code });
+                const j = await authCall('mfa/totp/verify', { factorId: setup.factorId, code });
                 setCodes(arr(item(j) ?? j, 'recoveryCodes', 'backupCodes').map(String));
                 setSetup(null);
                 await reloadMe();
@@ -116,7 +118,7 @@ function StepUp() {
         e.preventDefault();
         setErr(null);
         try {
-          await authCall('mfa/verify', { code });
+          await authCall('mfa/challenge', /^\d{6}$/.test(code) ? { code } : { recoveryCode: code });
         } catch (x) {
           setErr(x);
         }
@@ -170,26 +172,32 @@ function PasswordChange() {
 }
 
 function LinkedAccounts() {
-  const { L } = useI18n();
+  const { L, lang } = useI18n();
   const sp = useSearchParams();
-  const st = useApi<any>('/v1/auth/identities', { auth: true });
+  const st = useApi<any>('/v1/me/identities', { auth: true });
+  const [err, setErr] = useState<unknown>(null);
   const linked = new Set(items(st.data).map((i: any) => str(i, 'provider').toLowerCase()));
   return (
     <Section title={L('연결된 소셜 계정', 'Linked accounts')}>
-      {sp.get('link') && <Alert tone="info">{L('같은 이메일의 기존 계정이 있습니다. 로그인 후 아래에서 연결하세요.', 'An account with this email exists. Link it below after signing in.')}</Alert>}
+      {sp.get('link') && <Alert tone="info">{L('같은 이메일의 기존 계정이 있습니다. 기존 방법으로 로그인한 뒤 아래에서 연결하세요.', 'An account with this email exists. Sign in with your existing method, then link below.')}</Alert>}
+      {sp.get('linked') && <Alert tone="ok">{L('소셜 계정을 연결했습니다.', 'Account linked.')}</Alert>}
       <div className="card stack">
         {['google', 'kakao', 'naver'].map((p) => (
           <div key={p} className="row between">
-            <span style={{ textTransform: 'capitalize' }}>{p}</span>
+            <span style={{ textTransform: 'capitalize', fontWeight: 600 }}>{p}</span>
             {linked.has(p) ? (
-              <span className="badge ok">{L('연결됨', 'Linked')}</span>
+              <span className="row" style={{ gap: 8 }}>
+                <span className="badge ok">{L('연결됨', 'Linked')}</span>
+                <button className="btn sm ghost" onClick={async () => { setErr(null); try { await api(`/v1/me/identities/${p}`, { method: 'DELETE' }); st.reload(); } catch (e) { setErr(e); } }}>{L('해제', 'Unlink')}</button>
+              </span>
             ) : (
-              <a className="btn sm" href={`/api/auth/oauth/${p}/start`}>
+              <button className="btn sm" onClick={async () => { setErr(null); try { await startOAuth(p, { link: true, returnTo: '/account/security?linked=1' }); } catch (e) { setErr(e); } }}>
                 {L('연결하기', 'Link')}
-              </a>
+              </button>
             )}
           </div>
         ))}
+        {err ? <Alert tone="error">{errorMessage(err, lang)}</Alert> : null}
       </div>
     </Section>
   );

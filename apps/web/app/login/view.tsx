@@ -26,8 +26,8 @@ export default function LoginView() {
   const [info, setInfo] = useState('');
 
   useEffect(() => {
-    if (ready && user && !mfa) router.replace(next);
-  }, [ready, user, mfa, next, router]);
+    if (ready && user && !mfa && !busy) router.replace(next);
+  }, [ready, user, mfa, busy, next, router]);
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -44,6 +44,7 @@ export default function LoginView() {
   return (
     <div style={{ maxWidth: 440, margin: '0 auto' }} className="stack-lg">
       <h1>{L('로그인', 'Log in')}</h1>
+      {sp.get('linkRequired') && <Alert tone="info">{L('이 이메일로 가입된 계정이 있습니다. 기존 방법으로 로그인한 후 계정 보안에서 소셜 계정을 연결하세요.', 'An account with this email already exists. Sign in with your existing method, then link the social account in Account security.')}</Alert>}
       {sp.get('error') && <Alert tone="error">{L('소셜 로그인을 시작할 수 없습니다. 다른 방법을 이용해 주세요.', 'Social login is unavailable. Try another method.')}</Alert>}
       {mfa ? (
         <form
@@ -51,18 +52,19 @@ export default function LoginView() {
           onSubmit={(e) => {
             e.preventDefault();
             void run(async () => {
-              await authCall('mfa/verify', { mfaToken: mfa.token, challengeToken: mfa.token, code });
+              await authCall('mfa/challenge', /^\d{6}$/.test(code) ? { code } : { recoveryCode: code });
               router.replace(next);
             });
           }}
         >
           <h2>{L('2단계 인증', 'Two-step verification')}</h2>
-          <p className="muted">{L('인증 앱의 6자리 코드 또는 복구 코드를 입력하세요.', 'Enter the 6-digit code from your authenticator app or a recovery code.')}</p>
+          <p className="muted">{L('인증 앱의 6자리 코드 또는 복구 코드를 입력하세요. 관리자 기능은 이 단계가 필요합니다.', 'Enter the 6-digit code from your authenticator or a recovery code. Required for admin features.')}</p>
           <Input label={L('인증 코드', 'Code')} inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} required autoFocus />
           <button className="btn primary" disabled={busy}>
             {L('확인', 'Verify')}
           </button>
           <ErrorText error={err} />
+          <button type="button" className="btn ghost sm" onClick={() => router.replace(next)}>{L('나중에 하기', 'Skip for now')}</button>
         </form>
       ) : recovery ? (
         <form
@@ -70,7 +72,7 @@ export default function LoginView() {
           onSubmit={(e) => {
             e.preventDefault();
             void run(async () => {
-              await authCall('password/forgot', { email });
+              await authCall('password/reset/request', { email });
               setInfo(L('계정이 존재하면 재설정 링크를 이메일로 보냈습니다.', 'If the account exists, we sent a reset link.'));
             });
           }}
@@ -94,7 +96,7 @@ export default function LoginView() {
             onChange={setMode}
             tabs={[
               { value: 'email', label: L('이메일', 'Email') },
-              { value: 'otp', label: L('일회용 코드(OTP)', 'One-time code') },
+              { value: 'otp', label: L('이메일 코드', 'Email code') },
             ]}
           />
           {mode === 'email' ? (
@@ -104,9 +106,10 @@ export default function LoginView() {
                 e.preventDefault();
                 void run(async () => {
                   const j = await authCall('login', { email, password });
-                  const mfaToken = j?.mfaToken ?? j?.challengeToken ?? j?.item?.mfaToken;
-                  if ((j?.mfaRequired || mfaToken) && !extractAccessToken(j)) {
-                    setMfa({ token: mfaToken ?? '' });
+                  const u = j?.user ?? {};
+                  // Accounts with an authenticator are prompted for step-up (AAL2) right after password login.
+                  if ((u.mfaEnabled || j?.mfaRequired) && j?.aal !== 'aal2' && extractAccessToken(j)) {
+                    setMfa({ token: '' });
                     return;
                   }
                   router.replace(next);
@@ -129,18 +132,17 @@ export default function LoginView() {
               onSubmit={(e) => {
                 e.preventDefault();
                 void run(async () => {
-                  const channel = dest.includes('@') ? 'EMAIL' : 'SMS';
                   if (!otpSent) {
-                    const j = await authCall('otp/start', { channel, destination: dest, [channel === 'EMAIL' ? 'email' : 'phone']: dest });
-                    setOtpSent({ challengeId: j?.challengeId ?? j?.item?.challengeId ?? j?.id });
+                    await authCall('otp/request', { email: dest });
+                    setOtpSent({});
                     return;
                   }
-                  await authCall('otp/verify', { channel, destination: dest, code, challengeId: otpSent.challengeId });
+                  await authCall('otp/verify', { email: dest, code });
                   router.replace(next);
                 });
               }}
             >
-              <Input label={L('이메일 또는 휴대폰 번호', 'Email or phone')} value={dest} onChange={(e) => setDest(e.target.value)} required autoComplete="username" placeholder="010-1234-5678" disabled={!!otpSent} />
+              <Input label={L('이메일', 'Email')} type="email" value={dest} onChange={(e) => setDest(e.target.value)} required autoComplete="email" disabled={!!otpSent} hint={otpSent ? L('받은편지함의 6자리 코드를 입력하세요.', 'Enter the 6-digit code from your inbox.') : undefined} />
               {otpSent && <Input label={L('받은 코드', 'Code')} inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} required autoFocus />}
               <button className="btn primary block" disabled={busy}>
                 {otpSent ? L('코드 확인', 'Verify code') : L('코드 받기', 'Send code')}

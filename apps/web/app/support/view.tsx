@@ -37,13 +37,14 @@ export default function SupportView() {
             cols={2}
             resetOnSuccess
             fields={[
-              { name: 'category', label: L('분류', 'Category'), type: 'select', required: true, options: [{ value: 'BOOKING', label: L('예약', 'Booking') }, { value: 'PAYMENT', label: L('결제/환불', 'Payment/refund') }, { value: 'EXCHANGE', label: L('맞교환', 'Exchange') }, { value: 'GUIDE', label: L('가이드', 'Guide') }, { value: 'ACCOUNT', label: L('계정', 'Account') }, { value: 'SAFETY', label: L('안전', 'Safety') }, { value: 'OTHER', label: L('기타', 'Other') }] },
-              { name: 'subjectId', label: L('관련 예약/주문 번호 (선택)', 'Related booking id (optional)') },
+              { name: 'category', label: L('분류', 'Category'), type: 'select', required: true, options: [{ value: 'BOOKING', label: L('예약', 'Booking') }, { value: 'PAYMENT', label: L('결제', 'Payment') }, { value: 'REFUND', label: L('환불', 'Refund') }, { value: 'EXCHANGE', label: L('맞교환', 'Exchange') }, { value: 'GUIDE', label: L('가이드', 'Guide') }, { value: 'HOSTING', label: L('호스팅', 'Hosting') }, { value: 'ACCOUNT', label: L('계정', 'Account') }, { value: 'SAFETY', label: L('안전', 'Safety') }, { value: 'TECHNICAL', label: L('기술 문제', 'Technical') }, { value: 'OTHER', label: L('기타', 'Other') }] },
+              { name: 'contextType', label: L('관련 유형 (선택)', 'Related type (optional)'), type: 'select', options: ['RESERVATION', 'EXCHANGE', 'GUIDE_BOOKING', 'ORDER', 'PAYMENT', 'ACCOUNT', 'OTHER'].map((v) => ({ value: v, label: v })) },
+              { name: 'contextId', label: L('관련 번호 (선택, UUID)', 'Related id (optional, UUID)') },
               { name: 'subject', label: L('제목', 'Subject'), required: true },
               { name: 'description', label: L('내용', 'Description'), type: 'textarea', required: true },
             ]}
             submit={async (b) => {
-              await post('/v1/support/cases', b, { idempotencyKey: true });
+              await post('/v1/support/cases', b);
               setK(k + 1);
             }}
             submitLabel={L('문의 접수', 'Submit')}

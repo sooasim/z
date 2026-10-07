@@ -3,6 +3,7 @@ import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { post } from '@/lib/api';
+import { item, str } from '@/lib/shape';
 import { presignedUpload } from '@/lib/media';
 import { RequireAuth } from '@/components/gate';
 import { ResourceTable } from '@/components/table';
@@ -34,8 +35,16 @@ export default function DisputesView() {
             setOk(false);
             try {
               const evidenceIds: string[] = [];
-              for (const f of Array.from(files ?? [])) evidenceIds.push(await presignedUpload(f, { purpose: 'DISPUTE_EVIDENCE', visibility: 'PRIVATE' }));
-              await post(safety ? '/v1/safety-reports' : '/v1/disputes', { subjectType, subjectId, disputeType: kind, category: kind, description: desc, evidenceIds }, { idempotencyKey: true });
+              for (const f of Array.from(files ?? [])) evidenceIds.push(await presignedUpload(f, 'EVIDENCE'));
+              if (safety) {
+                const SAFETY_CAT: Record<string, string> = { HARASSMENT: 'HARASSMENT', SAFETY: 'SAFETY_THREAT', FRAUD: 'FRAUD', PROPERTY_NOT_AS_DESCRIBED: 'PROPERTY_MISREPRESENTATION' };
+                await post('/v1/safety-reports', { subjectType, subjectId, category: SAFETY_CAT[kind] ?? 'OTHER', description: desc, urgent: true });
+              } else {
+                const ctxType = ['RESERVATION', 'EXCHANGE', 'GUIDE_BOOKING', 'ORDER', 'MESSAGE'].includes(subjectType) ? subjectType : 'OTHER';
+                const r = await post('/v1/disputes', { contextType: ctxType, contextId: subjectId, reason: kind, description: desc, severity: kind === 'SAFETY' || kind === 'HARASSMENT' ? 'HIGH' : 'NORMAL' });
+                const did = str(item(r), 'id');
+                for (const mediaId of evidenceIds) if (did && mediaId) await post(`/v1/disputes/${did}/evidence`, { evidenceType: 'MEDIA', mediaId });
+              }
               setOk(true);
               setDesc('');
               setK(k + 1);
@@ -72,8 +81,9 @@ export default function DisputesView() {
           path="/v1/disputes"
           columns={[
             { key: 'id', label: '#', kind: 'id' },
-            { key: 'disputeType|category', label: L('유형', 'Type') },
-            { key: 'subjectType', label: L('대상', 'Subject') },
+            { key: 'reason|disputeType', label: L('유형', 'Type') },
+            { key: 'contextType|subjectType', label: L('대상', 'Subject') },
+            { key: 'severity', label: L('심각도', 'Severity') },
             { key: 'status|state', label: L('상태', 'Status'), kind: 'status' },
             { key: 'createdAt', label: L('접수일', 'Opened'), kind: 'datetime' },
           ]}

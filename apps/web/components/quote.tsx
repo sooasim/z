@@ -1,7 +1,7 @@
 'use client';
 import { useI18n } from '@/lib/i18n';
 import type { QuoteView } from '@/lib/quote';
-import { Money, DateText } from './ui';
+import { DateText, PriceBreakdown } from './ui';
 
 const LABELS: Record<string, { ko: string; en: string }> = {
   NIGHTLY: { ko: '숙박 요금', en: 'Nightly rate' },
@@ -19,22 +19,11 @@ const LABELS: Record<string, { ko: string; en: string }> = {
 export function QuoteBreakdown({ q }: { q: QuoteView }) {
   const { lang, L } = useI18n();
   return (
-    <div className="price-lines" aria-label={L('요금 상세', 'Price breakdown')}>
-      {q.lines.map((l, i) => (
-        <div key={i} className="line">
-          <span>{LABELS[l.code?.toUpperCase()]?.[lang] ?? l.label}</span>
-          <Money minor={l.amountMinor} currency={q.currency} />
-        </div>
-      ))}
-      <div className="line total">
-        <span>{L('총액', 'Total')}</span>
-        <Money minor={q.totalMinor} currency={q.currency} />
-      </div>
-      {q.expiresAt && (
-        <p className="small muted" style={{ margin: 0 }}>
-          {L('견적 유효기간', 'Quote valid until')}: <DateText value={q.expiresAt} time />
-        </p>
-      )}
-    </div>
+    <PriceBreakdown
+      currency={q.currency}
+      totalMinor={q.totalMinor}
+      lines={q.lines.map((l) => ({ label: l.code?.toUpperCase() === 'NIGHTLY' && q.nights ? `${LABELS.NIGHTLY[lang]} · ${q.nights}${lang === 'ko' ? '박' : ' nights'}` : LABELS[l.code?.toUpperCase()]?.[lang] ?? l.label, amountMinor: l.amountMinor }))}
+      footnote={q.expiresAt ? <>{L('견적 유효기간', 'Quote valid until')}: <DateText value={q.expiresAt} time /></> : undefined}
+    />
   );
 }
