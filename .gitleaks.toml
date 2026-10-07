@@ -1,0 +1,43 @@
+# gitleaks configuration (G5 secret scan). Default rules + JETPOOL-specific providers.
+# Run locally: gitleaks detect --source . --config .gitleaks.toml --redact
+title = "jetpool gitleaks config"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "tosspayments-secret-key"
+description = "TossPayments secret key (live or test)"
+regex = '''\b(live|test)_(g)?sk_[0-9A-Za-z]{20,}\b'''
+keywords = ["live_sk_", "test_sk_", "live_gsk_", "test_gsk_"]
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API key"
+regex = '''\bsk-ant-(api|admin)\d{2}-[A-Za-z0-9_\-]{40,}\b'''
+keywords = ["sk-ant-"]
+
+[[rules]]
+id = "jetpool-data-encryption-key"
+description = "Non-placeholder DATA_ENCRYPTION_KEY / JWT_SECRET assignment"
+regex = '''(?i)(DATA_ENCRYPTION_KEY|JWT_SECRET|TOSS_WEBHOOK_SECRET)\s*[=:]\s*["']?([0-9a-zA-Z+/_\-]{32,})["']?'''
+secretGroup = 2
+keywords = ["data_encryption_key", "jwt_secret", "toss_webhook_secret"]
+  [rules.allowlist]
+  # obvious local-dev placeholders
+  regexes = ['''^0+1?$''', '''(?i)change-?me''', '''(?i)dev-only''', '''(?i)local-dev''', '''(?i)test''']
+
+[allowlist]
+description = "Local-dev placeholders, specs and test fixtures"
+paths = [
+  '''(^|/)\.env\.example$''',
+  '''(^|/)docker-compose\.ya?ml$''',
+  '''^dd/''',
+  '''^apps/api/test/fixtures/''',
+  '''(^|/)pnpm-lock\.yaml$''',
+  '''^infra/k8s/overlays/.*/secrets\.example\.env$''',
+]
+regexes = [
+  '''minio12345''',
+  '''dev-master-key''',
+]

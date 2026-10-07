@@ -270,8 +270,8 @@ export async function listNotifications(db: Db, userId: string, opts: { unread?:
       WHERE n.user_id = $1 AND ($2::boolean IS NOT TRUE OR n.read_at IS NULL)
         AND ($3::boolean OR n.category <> 'MARKETING')
         AND NOT EXISTS (SELECT 1 FROM notification_deliveries d WHERE d.notification_id = n.id AND d.channel = 'IN_APP' AND d.status = 'SUPPRESSED')
-        AND ($4::timestamptz IS NULL OR (n.created_at, n.id) < ($4::timestamptz, $5::uuid))
-      ORDER BY n.created_at DESC, n.id DESC LIMIT $6`,
+        AND ($4::timestamptz IS NULL OR (date_trunc('milliseconds', n.created_at), n.id) < ($4::timestamptz, $5::uuid))
+      ORDER BY date_trunc('milliseconds', n.created_at) DESC, n.id DESC LIMIT $6`,
     [userId, opts.unread ?? false, marketingOk, c?.createdAt ?? null, c?.id ?? null, opts.limit + 1],
   );
   const unread = await one<{ n: number }>(

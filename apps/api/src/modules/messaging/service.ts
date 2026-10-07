@@ -202,8 +202,8 @@ export async function listMyConversations(db: Db, userId: string, opts: { limit:
                FROM conversation_members om JOIN users u ON u.id = om.user_id WHERE om.conversation_id = c.id) AS members
        FROM conversation_members me JOIN conversations c ON c.id = me.conversation_id
       WHERE me.user_id = $1 AND c.status <> 'ARCHIVED'
-        AND ($2::timestamptz IS NULL OR (coalesce(c.last_message_at, c.created_at), c.id) < ($2::timestamptz, $3::uuid))
-      ORDER BY sort_at DESC, c.id DESC LIMIT $4`,
+        AND ($2::timestamptz IS NULL OR (date_trunc('milliseconds', coalesce(c.last_message_at, c.created_at)), c.id) < ($2::timestamptz, $3::uuid))
+      ORDER BY date_trunc('milliseconds', coalesce(c.last_message_at, c.created_at)) DESC, c.id DESC LIMIT $4`,
     [userId, c?.createdAt ?? null, c?.id ?? null, opts.limit + 1],
   );
   const items = rows.slice(0, opts.limit).map((r) => ({
@@ -244,8 +244,8 @@ export async function pageMessages(db: Db, conversationId: string, opts: { limit
   const rows = await q<MessageRow>(
     db,
     `SELECT * FROM messages WHERE conversation_id = $1
-        AND ($2::timestamptz IS NULL OR (created_at, id) < ($2::timestamptz, $3::uuid))
-      ORDER BY created_at DESC, id DESC LIMIT $4`,
+        AND ($2::timestamptz IS NULL OR (date_trunc('milliseconds', created_at), id) < ($2::timestamptz, $3::uuid))
+      ORDER BY date_trunc('milliseconds', created_at) DESC, id DESC LIMIT $4`,
     [conversationId, c?.createdAt ?? null, c?.id ?? null, opts.limit + 1],
   );
   const items = rows.slice(0, opts.limit);

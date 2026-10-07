@@ -158,6 +158,12 @@ export async function assertGuideWindowFree(db: Db, guideId: string, start: Date
     [guideId, start, end],
   );
   if (blocked.length) throw conflict('GUIDE_UNAVAILABLE', 'The guide is not available in the requested time');
+  const booked = await q(
+    db,
+    `SELECT 1 FROM guide_bookings WHERE guide_id = $1 AND status = ANY($4::text[]) AND start_at < $3 AND end_at > $2 LIMIT 1`,
+    [guideId, start, end, ACTIVE_BOOKING_STATUSES],
+  );
+  if (booked.length) throw conflict('GUIDE_UNAVAILABLE', 'The guide is already booked for an overlapping time');
   const any = await q(db, `SELECT 1 FROM guide_availability WHERE guide_id = $1 AND status = 'AVAILABLE' LIMIT 1`, [guideId]);
   if (!any.length) return;
   const free = await freeIntervals(db, guideId, start, end);

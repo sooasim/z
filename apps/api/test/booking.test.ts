@@ -53,6 +53,12 @@ async function pay(reservationId: string, payer: TestUser) {
     const snap = await h.payable(tx, actorCtx(payer), reservationId);
     const paymentId = randomUUID();
     await h.onPaymentCreated!(tx, t.ctx(), reservationId, paymentId);
+    // the provider-approved payment row (owned by PAY-01) that a later refund is drawn against
+    await tx.query(
+      `INSERT INTO payments(id, provider, provider_order_id, payment_key, payer_id, subject_type, subject_id, status, amount_minor, currency, approved_at, expires_at)
+       VALUES ($1,'MOCK',$2,$3,$4,'RESERVATION',$5,'APPROVED',$6,$7, now(), now() + interval '10 minutes')`,
+      [paymentId, `ord-${paymentId}`, `pk-${paymentId}`, snap.payerId, reservationId, snap.amountMinor, snap.currency],
+    );
     await h.onPaymentApproved(tx, t.ctx(), reservationId, { id: paymentId, amountMinor: snap.amountMinor, currency: snap.currency });
     return { snap, paymentId };
   });
@@ -60,6 +66,15 @@ async function pay(reservationId: string, payer: TestUser) {
 
 async function status(id: string) {
   return (await t.pool.query(`SELECT status FROM reservations WHERE id = $1`, [id])).rows[0].status as string;
+}
+async function refundsOf(reservationId: string) {
+  return (
+    await t.pool.query(
+      `SELECT r.amount_minor, r.currency, r.status, r.idempotency_key FROM refunds r JOIN payments p ON p.id = r.payment_id
+        WHERE p.subject_type = 'RESERVATION' AND p.subject_id = $1 ORDER BY r.created_at`,
+      [reservationId],
+    )
+  ).rows;
 }
 async function outbox(type: string, aggregateId: string) {
   return (await t.pool.query(`SELECT payload FROM outbox_events WHERE event_type = $1 AND aggregate_id = $2`, [type, aggregateId])).rows.map((r) => r.payload);
@@ -408,13 +423,13 @@ describe('STAY-10 cancellation', () => {
     expect(c.body.item.cancellation.refundMinor).toBe(expectedRefund);
     const replay = await call(t, guest, 'POST', `/v1/reservations/${reservation.id}/cancel`, { reason: 'plans changed' }, key);
     expect(replay.body).toEqual(c.body);
-    const refundReq = await outbox('refund.requested', reservation.id);
-    expect(refundReq).toEqual([{ subjectType: 'RESERVATION', subjectId: reservation.id, amountMinor: expectedRefund, currency: 'KRW', reason: 'cancellation: plans changed', idempotencyKey: `reservation:${reservation.id}:cancellation` }]);
+    expect(await refundsOf(reservation.id)).toEqual([{ amount_minor: expectedRefund, currency: 'KRW', status: 'REQUESTED', idempotency_key: `reservation:${reservation.id}:cancellation` }]);
     expect(await outbox('reservation.cancelled', reservation.id)).toHaveLength(1);
-    const adj = await t.pool.query(`SELECT adjustment_type, amount_minor, policy_evaluation FROM reservation_adjustments WHERE reservation_id = $1`, [reservation.id]);
+    const adj = await t.pool.query(`SELECT adjustment_type, amount_minor, policy_evaluation, refund_id FROM reservation_adjustments WHERE reservation_id = $1`, [reservation.id]);
     expect(adj.rows).toHaveLength(1);
     expect(adj.rows[0]).toMatchObject({ adjustment_type: 'CANCELLATION_REFUND', amount_minor: expectedRefund });
     expect(adj.rows[0].policy_evaluation.policyCode).toBe('MODERATE');
+    expect(adj.rows[0].refund_id).toBeTruthy();
     // historical quote snapshot untouched
     expect((await lockReservation(t.pool, reservation.id)).quote_snapshot).toEqual(reservation.quote);
     // dates free again
@@ -438,7 +453,7 @@ describe('STAY-10 cancellation', () => {
     const c = await call(t, guest, 'POST', `/v1/reservations/${reservation.id}/cancel`, { reason: 'sick' }, idem());
     expect(c.body.item.status).toBe('CANCELLED');
     expect(c.body.item.cancellation.refundMinor).toBe(0);
-    expect(await outbox('refund.requested', reservation.id)).toHaveLength(0);
+    expect(await refundsOf(reservation.id)).toHaveLength(0);
   });
 
   it('host cancellation → full refund + HOST_CANCELLATION_PENALTY → REFUNDED', async () => {
@@ -450,7 +465,7 @@ describe('STAY-10 cancellation', () => {
     expect(c.body.item.cancellation).toMatchObject({ actorRole: 'HOST', refundPct: 100, refundMinor: reservation.totalMinor });
     const adj = await t.pool.query(`SELECT adjustment_type FROM reservation_adjustments WHERE reservation_id = $1 ORDER BY adjustment_type`, [reservation.id]);
     expect(adj.rows.map((r) => r.adjustment_type)).toEqual(['CANCELLATION_REFUND', 'HOST_CANCELLATION_PENALTY']);
-    expect((await outbox('refund.requested', reservation.id))[0].amountMinor).toBe(reservation.totalMinor);
+    expect((await refundsOf(reservation.id))[0].amount_minor).toBe(reservation.totalMinor);
     await withTx(t.pool, (tx) =>
       paymentSubject('RESERVATION').onRefunded!(tx, t.ctx(), reservation.id, { paymentId: randomUUID(), refundId: randomUUID(), amountMinor: reservation.totalMinor, totalRefundedMinor: reservation.totalMinor, fullyRefunded: true }),
     );

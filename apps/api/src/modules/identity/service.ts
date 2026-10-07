@@ -128,7 +128,7 @@ async function checkChallenge(tx: Tx, purpose: string, subject: string, secret: 
   if (new Date(row.expires_at) <= new Date()) return { ok: false, code: 'CODE_EXPIRED' };
   if (!safeEqual(row.code_hash, sha256(secret))) {
     const attempts = row.attempts + 1;
-    await tx.query(`UPDATE auth_challenges SET attempts = $2, consumed_at = CASE WHEN $2 >= $3 THEN now() END WHERE id = $1`, [row.id, attempts, maxAttempts]);
+    await tx.query(`UPDATE auth_challenges SET attempts = $2, consumed_at = CASE WHEN $2::int >= $3::int THEN now() END WHERE id = $1`, [row.id, attempts, maxAttempts]);
     return { ok: false, code: attempts >= maxAttempts ? 'TOO_MANY_ATTEMPTS' : 'CODE_INVALID' };
   }
   await tx.query(`UPDATE auth_challenges SET consumed_at = now() WHERE id = $1`, [row.id]);

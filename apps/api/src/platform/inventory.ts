@@ -22,12 +22,16 @@ export function assertDateRange(start: string, end: string) {
   if (end <= start) throw badRequest('INVALID_DATE_RANGE', 'End date must be after start date');
 }
 
-/** Expire overdue ACTIVE blocks overlapping a range so they do not block new acquisitions. */
+/** Expire overdue ACTIVE blocks (never a hold whose payment is CONFIRMING/APPROVED — ADR-0004) overlapping a range so they do not block new acquisitions. */
 export async function expireOverdueBlocks(db: Db, propertyId: string, start: string, end: string) {
   await db.query(
     `UPDATE inventory_blocks SET state = 'EXPIRED', released_at = now()
       WHERE property_id = $1 AND state = 'ACTIVE' AND expires_at IS NOT NULL AND expires_at <= now()
-        AND stay_range && daterange($2::date, $3::date, '[)')`,
+        AND stay_range && daterange($2::date, $3::date, '[)')
+        AND NOT EXISTS (
+          SELECT 1 FROM reservation_holds h JOIN reservations r ON r.hold_id = h.id
+            JOIN payments p ON p.subject_type = 'RESERVATION' AND p.subject_id = r.id AND p.status IN ('CONFIRMING','APPROVED')
+           WHERE h.inventory_block_id = inventory_blocks.id)`,
     [propertyId, start, end],
   );
 }
@@ -93,7 +97,12 @@ export async function sweepExpiredBlocks(db: Db): Promise<string[]> {
   const rows = await q<{ id: string }>(
     db,
     `UPDATE inventory_blocks SET state = 'EXPIRED', released_at = now()
-      WHERE state = 'ACTIVE' AND expires_at IS NOT NULL AND expires_at <= now() RETURNING id`,
+      WHERE state = 'ACTIVE' AND expires_at IS NOT NULL AND expires_at <= now()
+        AND NOT EXISTS (
+          SELECT 1 FROM reservation_holds h JOIN reservations r ON r.hold_id = h.id
+            JOIN payments p ON p.subject_type = 'RESERVATION' AND p.subject_id = r.id AND p.status IN ('CONFIRMING','APPROVED')
+           WHERE h.inventory_block_id = inventory_blocks.id)
+      RETURNING id`,
   );
   return rows.map((r) => r.id);
 }

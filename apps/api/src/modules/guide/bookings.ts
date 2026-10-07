@@ -15,6 +15,7 @@ import { decodeCursor, page } from '../../platform/http.js';
 import type { PayableSnapshot, PaymentSubjectHandler } from '../../platform/payment-subjects.js';
 import { ensureConversation } from '../messaging/service.js';
 import { quoteFees } from '../finance/rules.js';
+import { requestRefund } from '../payments/service.js';
 import {
   CANCELLABLE_BOOKING_STATUSES, DISPUTABLE_BOOKING_STATUSES, GuideBookingFsm, type GuideBookingStatus,
 } from './fsm.js';
@@ -80,29 +81,14 @@ export function computeGuideRefund(args: { priceMinor: number; refundedMinor?: n
   return { refundMinor, refundPct: pct, policy, hoursBefore: Math.round(hoursBefore * 100) / 100 };
 }
 
-const PAYMENTS_SERVICE = '../payments/service.js';
-
 /**
- * Ask payments for a refund. Uses `requestRefund` from modules/payments/service.ts when that module exports
- * it; otherwise emits the `refund.requested` outbox event for the payments module to consume.
+ * Ask PAY-02 for a refund via `requestRefund` (modules/payments/service.ts) in the caller's tx.
+ * Idempotent per booking + purpose; payments executes the provider cancel asynchronously and reports back
+ * through `onRefunded`. Returns the payments status (NOT_PAID when no approved payment exists).
  */
-export async function requestGuideRefund(tx: Tx, ctx: Ctx, b: GuideBookingRow, amountMinor: number, reason: string): Promise<'PAYMENTS_SERVICE' | 'OUTBOX'> {
-  if (amountMinor <= 0) return 'OUTBOX';
-  let mod: any = null;
-  try {
-    mod = await import(/* @vite-ignore */ PAYMENTS_SERVICE);
-  } catch {
-    mod = null;
-  }
-  if (mod && typeof mod.requestRefund === 'function') {
-    await mod.requestRefund(tx, ctx, { subjectType: 'GUIDE_BOOKING', subjectId: b.id, amountMinor, reason });
-    return 'PAYMENTS_SERVICE';
-  }
-  await emit(tx, ctx, {
-    aggregateType: 'guide_booking', aggregateId: b.id, eventType: 'refund.requested',
-    payload: { subjectType: 'GUIDE_BOOKING', subjectId: b.id, amountMinor, currency: b.currency, reason },
-  });
-  return 'OUTBOX';
+export async function requestGuideRefund(tx: Tx, ctx: Ctx, b: GuideBookingRow, amountMinor: number, reason: string, purpose = 'cancel'): Promise<{ refundId: string | null; status: string }> {
+  if (amountMinor <= 0) return { refundId: null, status: 'NOTHING_TO_REFUND' };
+  return requestRefund(tx, ctx, { subjectType: 'GUIDE_BOOKING', subjectId: b.id, amountMinor, reason, idempotencyKey: `guide-booking:${b.id}:refund:${purpose}` });
 }
 
 // ---------------------------------------------------------------- creation & confirmation
@@ -206,7 +192,7 @@ export const guideBookingPaymentSubject: PaymentSubjectHandler = {
     }
     if (b.status === 'CANCELLED') {
       // paid after cancellation (late approval): refund in full, keep the booking cancelled
-      await requestGuideRefund(tx, ctx, b, payment.amountMinor - b.refunded_minor, 'payment approved after cancellation');
+      await requestGuideRefund(tx, ctx, b, payment.amountMinor - b.refunded_minor, 'payment approved after cancellation', `late-approval:${payment.id}`);
       return;
     }
     if (b.status === 'ACCEPTED' || b.status === 'PAYMENT_FAILED') {
@@ -309,12 +295,13 @@ export async function cancelBooking(tx: Tx, ctx: Ctx, actor: Actor | null, id: s
     table: T, id, to: 'CANCELLED', reason: reason ?? `cancelled by ${by.toLowerCase()}`, actorType: by === 'SYSTEM' ? 'SYSTEM' : 'USER',
     metadata: { cancelledBy: by, refund }, versioned: true,
   });
-  let refundChannel: string | null = null;
-  if (refund && refund.refundMinor > 0) refundChannel = await requestGuideRefund(tx, ctx, b, refund.refundMinor, `guide booking cancelled by ${by.toLowerCase()} (${refund.policy})`);
+  const refundRequest = refund && refund.refundMinor > 0
+    ? await requestGuideRefund(tx, ctx, b, refund.refundMinor, `guide booking cancelled by ${by.toLowerCase()} (${refund.policy})`)
+    : null;
   if (refund) {
     await audit(tx, ctx, { action: 'guide.booking.refund_requested', resourceType: 'guide_booking', resourceId: id, after: { refundMinor: refund.refundMinor, policy: refund.policy, currency: b.currency }, category: 'MONEY' });
   }
-  await ev(tx, ctx, row, 'guide.booking.cancelled', { cancelledBy: by, reason: reason ?? null, refundMinor: refund?.refundMinor ?? 0, refundPolicy: refund?.policy ?? null, refundChannel });
+  await ev(tx, ctx, row, 'guide.booking.cancelled', { cancelledBy: by, reason: reason ?? null, refundMinor: refund?.refundMinor ?? 0, refundPolicy: refund?.policy ?? null, refundId: refundRequest?.refundId ?? null, refundStatus: refundRequest?.status ?? null });
   const other = by === 'TRAVELER' ? b.guide_id : by === 'GUIDE' ? b.traveler_id : null;
   for (const userId of other ? [other] : [b.guide_id, b.traveler_id]) {
     await notify(tx, ctx, {
@@ -322,7 +309,7 @@ export async function cancelBooking(tx: Tx, ctx: Ctx, actor: Actor | null, id: s
       data: { bookingId: id, cancelledBy: by }, dedupeKey: `guide-booking:${id}:cancelled`,
     });
   }
-  return { booking: row, refund };
+  return { booking: row, refund: refund ? { ...refund, refundId: refundRequest?.refundId ?? null, status: refundRequest?.status ?? null } : null };
 }
 
 export async function disputeBooking(tx: Tx, ctx: Ctx, actor: Actor, id: string, reason: string) {

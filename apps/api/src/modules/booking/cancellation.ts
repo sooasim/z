@@ -7,6 +7,7 @@ import { emit } from '../../platform/outbox.js';
 import { notify } from '../../platform/notify.js';
 import { applyBps } from '../../platform/money.js';
 import { releaseBlock } from '../../platform/inventory.js';
+import { requestRefund } from '../payments/service.js';
 import { reservationMachine } from './fsm.js';
 import { lockReservation, roleOf, type ReservationRole, type ReservationRow } from './reservations.js';
 
@@ -98,19 +99,6 @@ export async function cancellationPreview(db: Db, actor: Actor, id: string) {
   return { reservationId: id, status: r.status, cancellable: reservationMachine.can(r.status, 'CANCELLED'), evaluation };
 }
 
-/**
- * Refund request through the payments module. `modules/payments/service.ts#requestRefund` did not exist when
- * this module was written, so the contract is fulfilled with the `refund.requested` outbox event carrying the
- * exact requestRefund payload (payments consumes it idempotently by idempotencyKey).
- */
-async function requestRefund(
-  tx: Tx,
-  ctx: Ctx,
-  args: { subjectType: 'RESERVATION'; subjectId: string; amountMinor: number; currency: string; reason: string; idempotencyKey: string },
-) {
-  await emit(tx, ctx, { aggregateType: 'reservation', aggregateId: args.subjectId, eventType: 'refund.requested', payload: args });
-}
-
 export async function cancelReservation(tx: Tx, ctx: Ctx, id: string, reason: string) {
   const actor = ctx.actor!;
   const r = await lockReservation(tx, id);
@@ -124,12 +112,6 @@ export async function cancelReservation(tx: Tx, ctx: Ctx, id: string, reason: st
     set: { cancelled_at: new Date(), cancel_reason: reason }, metadata: { by: role, refundMinor: ev.refundMinor, policy: ev.policyCode },
   });
   if (r.inventory_block_id) await releaseBlock(tx, r.inventory_block_id, 'RELEASED');
-  const adj = await one<{ id: string }>(
-    tx,
-    `INSERT INTO reservation_adjustments(reservation_id, adjustment_type, amount_minor, currency, policy_evaluation, created_by)
-     VALUES ($1,'CANCELLATION_REFUND',$2,$3,$4,$5) RETURNING id`,
-    [id, ev.refundMinor, r.currency, JSON.stringify(ev), actor.userId],
-  );
   if (role === 'HOST') {
     // record the host-caused cancellation; the forfeited payout is the factual basis, any extra penalty is a finance rule decision
     const qs = r.quote_snapshot ?? {};
@@ -141,13 +123,20 @@ export async function cancelReservation(tx: Tx, ctx: Ctx, id: string, reason: st
     );
   }
   const idempotencyKey = `reservation:${id}:cancellation`;
+  let refund: { refundId: string | null; status: string } | null = null;
   if (ev.refundMinor > 0) {
     await reservationMachine.transition(tx, ctx, {
       table: 'reservations', id, from: 'CANCELLED', to: 'REFUND_PENDING', reason: 'refund requested', actorType, versioned: true,
-      metadata: { refundMinor: ev.refundMinor, idempotencyKey, adjustmentId: adj.id },
+      metadata: { refundMinor: ev.refundMinor, idempotencyKey },
     });
-    await requestRefund(tx, ctx, { subjectType: 'RESERVATION', subjectId: id, amountMinor: ev.refundMinor, currency: r.currency, reason: `cancellation: ${reason}`.slice(0, 500), idempotencyKey });
+    // PAY-02 contract: payments owns the refund FSM and calls onRefunded when the provider completes it
+    refund = await requestRefund(tx, ctx, { subjectType: 'RESERVATION', subjectId: id, amountMinor: ev.refundMinor, reason: `cancellation: ${reason}`.slice(0, 500), idempotencyKey });
   }
+  await tx.query(
+    `INSERT INTO reservation_adjustments(reservation_id, adjustment_type, amount_minor, currency, policy_evaluation, refund_id, created_by)
+     VALUES ($1,'CANCELLATION_REFUND',$2,$3,$4,$5,$6)`,
+    [id, ev.refundMinor, r.currency, JSON.stringify({ ...ev, refundRequest: refund }), refund?.refundId ?? null, actor.userId],
+  );
   const payload = { reservationId: id, propertyId: r.property_id, guestId: r.guest_id, hostId: r.host_id, cancelledBy: role, refundMinor: ev.refundMinor, currency: r.currency, checkIn: r.check_in, checkOut: r.check_out };
   await emit(tx, ctx, { aggregateType: 'reservation', aggregateId: id, eventType: 'reservation.cancellation_requested', payload: { ...payload, evaluation: ev } });
   await emit(tx, ctx, { aggregateType: 'reservation', aggregateId: id, eventType: 'reservation.cancelled', payload });

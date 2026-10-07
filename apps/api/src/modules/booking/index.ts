@@ -161,7 +161,7 @@ export default async function bookingModule(app: FastifyInstance) {
 
   const lifecycle = (path: string, tag: string, fn: (tx: Tx, ctx: Ctx, id: string, reason?: string) => Promise<any>) =>
     r.post(path, {
-      schema: { tags: [tag], params: idParams, body: z.object({ reason: z.string().min(1).max(500).optional() }).optional() },
+      schema: { tags: [tag], params: idParams, body: z.object({ reason: z.string().min(1).max(500).optional() }).nullish() },
       preHandler: requireAuth,
     }, async (req) => {
       const ctx = ctxFromRequest(req);

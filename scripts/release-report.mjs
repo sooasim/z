@@ -12,12 +12,13 @@
 //   vitest-api.json                 vitest --reporter=json (unit/integration/E2E/permission-negative)
 //   web-build.json                  {"status":"success"|"failure"}
 //   gitleaks.json, no-pan.json, pnpm-audit.json, sbom.spdx.json
-//   k6-*.json (k6 --summary-export), oversell-check.json (scripts/load/check-oversell.mjs)
+//   k6-*.json (handleSummary in scripts/load/*.js), oversell-check.json (scripts/load/check-oversell.mjs)
 //   dr-drill.json (docs/runbooks/db-restore-drill.md), migration-dryrun.json (MIG-01)
 //   env JOB_RESULTS = toJSON(needs) from GitHub Actions (fallback status per job)
 import { readFileSync, readdirSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execSync } from 'node:child_process';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arg = (k, d) => (process.argv.includes(k) ? process.argv[process.argv.indexOf(k) + 1] : d);
@@ -146,11 +147,11 @@ const summarize = (list) => {
   const over = readJson('oversell-check.json');
   const parts = []; let failed = false;
   for (const [f, j] of k6) {
-    const th = Object.entries(j.metrics ?? {}).flatMap(([m, d]) => Object.entries(d.thresholds ?? {}).map(([t, v]) => ({ m, t, ok: v === true || v?.ok === true || v === false ? v !== false : true })));
-    // k6 summary-export: thresholds map "expr" -> boolean (true = FAILED in legacy exporter); normalise both shapes
-    const bad = Object.entries(j.metrics ?? {}).flatMap(([m, d]) => Object.entries(d.thresholds ?? {}).filter(([, v]) => v === true || v?.ok === false).map(([t]) => `${m}:${t}`));
-    const p95 = j.metrics?.http_req_duration?.['p(95)'];
-    parts.push(`${f.replace(/^k6-|\.json$/g, '')}: p95=${p95 != null ? Math.round(p95) + 'ms' : '?'}${bad.length ? ' threshold breach ' + bad.join(',') : ''} (${th.length} thresholds)`);
+    // written by handleSummary() in scripts/load/*.js: metrics.<m>.thresholds = { "<expr>": { ok: boolean } }
+    const all = Object.entries(j.metrics ?? {}).flatMap(([m, d]) => Object.entries(d.thresholds ?? {}).map(([t, v]) => ({ id: `${m}:${t}`, ok: v?.ok !== false })));
+    const bad = all.filter((x) => !x.ok).map((x) => x.id);
+    const p95 = j.metrics?.http_req_duration?.values?.['p(95)'];
+    parts.push(`${f.replace(/^k6-|\.json$/g, '')}: p95=${p95 != null ? Math.round(p95) + 'ms' : '?'}, ${all.length - bad.length}/${all.length} thresholds ok${bad.length ? ' — breach ' + bad.join(',') : ''}`);
     if (bad.length) failed = true;
   }
   if (over) { parts.push(`no-oversell: ${over.ok ? 'ok' : 'OVERSOLD'} (${over.detail ?? ''})`); if (!over.ok) failed = true; }
@@ -183,7 +184,7 @@ gate('G9', 'Legal/Business approval', HUMAN, 'Accommodation/guide/travel/charter
 gate('G10', 'Production approval', HUMAN, 'Immutable digest verified on staging + GitHub Environment `production` reviewer approval + canary/smoke/rollback in deploy-production.yml');
 
 // ---------- render ----------
-const sha = process.env.GITHUB_SHA ?? (() => { try { return readFileSync(path.join(root, '.git/HEAD'), 'utf8').trim(); } catch { return 'unknown'; } })();
+const sha = process.env.GITHUB_SHA ?? (() => { try { return execSync('git rev-parse HEAD', { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { return 'unknown'; } })();
 const badge = (s) => ({ [PASS]: '✅ PASS', [FAIL]: '❌ FAIL', [PARTIAL]: '🟡 PARTIAL', [NOTRUN]: '⚪ NOT RUN', [HUMAN]: '🔒 REQUIRES HUMAN APPROVAL', [NEEDS]: '🟡 NEEDS SIGN-OFF' }[s] ?? s);
 const auto = gates.filter((g) => ['G0', 'G1', 'G2', 'G3', 'G4', 'G5', 'G6'].includes(g.id));
 const blocking = gates.filter((g) => g.status === FAIL);

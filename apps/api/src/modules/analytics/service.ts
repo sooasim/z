@@ -28,7 +28,8 @@ export const analyticsBatchSchema = z.object({
 });
 export type AnalyticsBatch = z.infer<typeof analyticsBatchSchema>;
 
-const looksLikePii = (s: string) => EMAIL_PATTERN.test(s) || PHONE_PATTERN.test(s) || RRN_PATTERN.test(s);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const looksLikePii = (s: string) => !UUID_RE.test(s.trim()) && (EMAIL_PATTERN.test(s) || PHONE_PATTERN.test(s) || RRN_PATTERN.test(s));
 
 /** Remove PII-named keys and redact PII-looking values (recursively). Returns the stripped paths. */
 export function stripPii(props: Record<string, unknown>, prefix = ''): { clean: Record<string, unknown>; stripped: string[] } {
@@ -197,8 +198,8 @@ export async function readAuditLogs(db: Db, ctx: Ctx, f: z.infer<typeof auditQue
       WHERE ($1::text IS NULL OR category = $1) AND ($2::text IS NULL OR resource_type = $2) AND ($3::text IS NULL OR resource_id = $3)
         AND ($4::uuid IS NULL OR actor_id = $4) AND ($5::text IS NULL OR action = $5)
         AND ($6::timestamptz IS NULL OR created_at >= $6) AND ($7::timestamptz IS NULL OR created_at < $7)
-        AND ($8::timestamptz IS NULL OR (created_at, id) < ($8::timestamptz, $9::uuid))
-      ORDER BY created_at DESC, id DESC LIMIT $10`,
+        AND ($8::timestamptz IS NULL OR (date_trunc('milliseconds', created_at), id) < ($8::timestamptz, $9::uuid))
+      ORDER BY date_trunc('milliseconds', created_at) DESC, id DESC LIMIT $10`,
     [f.category ?? null, f.resourceType ?? null, f.resourceId ?? null, f.actorId ?? null, f.action ?? null, f.from ?? null, f.to ?? null, c?.createdAt ?? null, c?.id ?? null, f.limit + 1],
   );
   const { cursor: _c, limit: _l, ...filters } = f;
