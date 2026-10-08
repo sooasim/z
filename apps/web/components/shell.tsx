@@ -1,12 +1,15 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { useAuth } from '@/lib/auth';
+import { useApi } from '@/lib/hooks';
+import { items, str } from '@/lib/shape';
 import { Icon, type IconName } from './ui/icons';
 import { Avatar } from './ui/display';
-import { usePopover } from './ui/pickers';
+import { usePopover, useFitPopover } from './ui/pickers';
+import { Drawer, Modal } from './ui/modal';
 import { ThemeToggle } from './theme';
 
 const NAV = [
@@ -26,47 +29,134 @@ export function Wordmark() {
   );
 }
 
+type MenuLink = [href: string, label: string, icon: IconName];
+
+/**
+ * WAI-ARIA menu button: role=menu on the list, menuitems are links (middle-click works), ↑/↓/Home/End move,
+ * Space/Enter activate and close, Esc closes and returns focus to the button, Tab closes.
+ */
 function UserMenu() {
   const { user, logout, isStaff, hasRole } = useAuth();
   const { t, L } = useI18n();
   const router = useRouter();
   const p = usePopover();
+  const menuId = useId();
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const focusOnOpen = useRef<'first' | 'last' | null>(null);
+  useFitPopover(p.open, popRef);
+  useEffect(() => {
+    if (!p.open || !focusOnOpen.current) return;
+    const els = listRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]');
+    (focusOnOpen.current === 'last' ? els?.[els.length - 1] : els?.[0])?.focus();
+    focusOnOpen.current = null;
+  }, [p.open]);
   if (!user) return null;
-  const links: Array<[string, string, IconName]> = [
+  const links: MenuLink[] = [
     ['/trips', t('nav.trips'), 'bag'],
     ['/messages', t('nav.messages'), 'chat'],
     ['/saved', t('nav.saved'), 'heart'],
     ['/notifications', L('알림', 'Notifications'), 'bell'],
     ['/account', t('nav.account'), 'user'],
   ];
-  const partner: Array<[string, string, IconName]> = [
+  const partner: MenuLink[] = [
     [hasRole('HOST') ? '/host/dashboard' : '/host/onboarding', hasRole('HOST') ? L('호스트 센터', 'Host center') : L('호스트 되기', 'Become a host'), 'home'],
     [hasRole('GUIDE') ? '/guide/requests' : '/guide/onboarding', hasRole('GUIDE') ? L('가이드 센터', 'Guide center') : L('가이드 되기', 'Become a guide'), 'compass'],
   ];
   if (hasRole('SUPPLIER')) partner.push(['/supplier/products', L('공급사 센터', 'Supplier center'), 'ticket']);
   if (hasRole('HOST') || hasRole('GUIDE') || hasRole('SUPPLIER')) partner.push(['/earnings', L('정산', 'Earnings'), 'coin']);
   if (isStaff) partner.push(['/admin', t('nav.admin'), 'chart']);
+  const close = (refocus = false) => {
+    p.setOpen(false);
+    if (refocus) btnRef.current?.focus();
+  };
+  const onMenuKey = (e: KeyboardEvent<HTMLUListElement>) => {
+    const els = Array.from(listRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
+    const i = els.indexOf(document.activeElement as HTMLElement);
+    let n = -1;
+    if (e.key === 'ArrowDown') n = (i + 1) % els.length;
+    else if (e.key === 'ArrowUp') n = (i - 1 + els.length) % els.length;
+    else if (e.key === 'Home') n = 0;
+    else if (e.key === 'End') n = els.length - 1;
+    else if (e.key === ' ' && i >= 0) {
+      e.preventDefault();
+      els[i].click();
+      return;
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      close(true);
+      return;
+    } else if (e.key === 'Tab') {
+      close();
+      return;
+    }
+    if (n >= 0) {
+      e.preventDefault();
+      els[n]?.focus();
+    }
+  };
   return (
     <div className="popover-anchor" ref={p.ref}>
-      <button type="button" className="user-chip" aria-expanded={p.open} aria-haspopup="menu" onClick={() => p.setOpen(!p.open)}>
+      <button
+        ref={btnRef}
+        type="button"
+        className="user-chip"
+        aria-expanded={p.open}
+        aria-haspopup="menu"
+        aria-controls={p.open ? menuId : undefined}
+        onClick={() => p.setOpen(!p.open)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            focusOnOpen.current = e.key === 'ArrowDown' ? 'first' : 'last';
+            if (p.open) {
+              const els = listRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]');
+              (e.key === 'ArrowDown' ? els?.[0] : els?.[els.length - 1])?.focus();
+            } else p.setOpen(true);
+          }
+        }}
+      >
         <Icon name="menu" size={16} />
-        <Avatar name={user.displayName} size={30} verified={user.aal === 'aal2'} />
+        <Avatar name={user.displayName} size={30} verified={user.aal === 'aal2'} decorative />
         <span className="sr-only">{L('사용자 메뉴', 'User menu')}</span>
       </button>
       {p.open && (
-        <div className="popover right" role="menu" style={{ minWidth: 240, padding: 8 }}>
+        <div className="popover right" ref={popRef} style={{ minWidth: 260, padding: 8 }}>
           <div style={{ padding: '8px 12px 10px' }}>
             <strong>{user.displayName}</strong>
             <div className="xs muted">{user.email}</div>
           </div>
-          <ul className="listbox" style={{ maxHeight: 'none' }}>
-            {[...links, ...partner].map(([href, label, icon]) => (
-              <li key={href} role="menuitem" onClick={() => { p.setOpen(false); router.push(href); }} onKeyDown={(e) => e.key === 'Enter' && router.push(href)} tabIndex={0}>
-                <Icon name={icon} size={18} /> <span className="small">{label}</span>
+          <ul className="menu" role="menu" id={menuId} aria-label={L('사용자 메뉴', 'User menu')} ref={listRef} onKeyDown={onMenuKey}>
+            {links.map(([href, label, icon]) => (
+              <li key={href} role="none">
+                <Link href={href} role="menuitem" tabIndex={-1} onClick={() => close()}>
+                  <Icon name={icon} size={18} /> {label}
+                </Link>
               </li>
             ))}
-            <li role="menuitem" tabIndex={0} onClick={async () => { p.setOpen(false); await logout(); router.push('/'); }}>
-              <Icon name="logout" size={18} /> <span className="small">{t('nav.logout')}</span>
+            <li role="separator" />
+            {partner.map(([href, label, icon]) => (
+              <li key={href} role="none">
+                <Link href={href} role="menuitem" tabIndex={-1} onClick={() => close()}>
+                  <Icon name={icon} size={18} /> {label}
+                </Link>
+              </li>
+            ))}
+            <li role="separator" />
+            <li role="none">
+              <button
+                type="button"
+                role="menuitem"
+                tabIndex={-1}
+                onClick={async () => {
+                  close();
+                  await logout();
+                  router.push('/');
+                }}
+              >
+                <Icon name="logout" size={18} /> {t('nav.logout')}
+              </button>
             </li>
           </ul>
         </div>
@@ -117,46 +207,86 @@ export function Header() {
         ) : (
           <span className="skeleton" style={{ width: 74, height: 38, borderRadius: 999 }} aria-hidden="true" />
         )}
-        <button className="btn ghost icon sm menu-toggle" aria-expanded={open} aria-controls="mobile-nav" onClick={() => setOpen(!open)} aria-label={t('nav.menu')}>
-          <Icon name={open ? 'close' : 'menu'} size={20} />
+        <button className="btn ghost icon sm menu-toggle" aria-expanded={open} aria-controls="mobile-nav" aria-haspopup="dialog" onClick={() => setOpen(true)} aria-label={t('nav.menu')}>
+          <Icon name="menu" size={20} />
         </button>
       </div>
-      {open && (
-        <div className="container" id="mobile-nav">
-          <nav className="mobile-nav" aria-label={L('모바일 메뉴', 'Mobile')}>
-            {NAV.map((n) => (
-              <Link key={n.href} href={n.href}>
-                {t(n.key)}
+      <Drawer open={open} onClose={() => setOpen(false)} title={L('메뉴', 'Menu')} id="mobile-nav">
+        <nav className="mobile-nav" aria-label={L('모바일 메뉴', 'Mobile')}>
+          {NAV.map((n) => (
+            <Link key={n.href} href={n.href} aria-current={cur(n.href)} onClick={() => setOpen(false)}>
+              {t(n.key)}
+            </Link>
+          ))}
+          <hr />
+          <Link href="/map" onClick={() => setOpen(false)}>
+            <Icon name="map" size={18} /> {L('지도로 찾기', 'Map')}
+          </Link>
+          <Link href="/discover" onClick={() => setOpen(false)}>
+            <Icon name="globe" size={18} /> {L('여행지 탐색', 'Discover')}
+          </Link>
+          <Link href="/assistant" onClick={() => setOpen(false)}>
+            <Icon name="sparkle" size={18} /> {L('AI 여행 도우미', 'AI assistant')}
+          </Link>
+          <Link href="/support" onClick={() => setOpen(false)}>
+            <Icon name="support" size={18} /> {L('고객센터', 'Help')}
+          </Link>
+          {!user && (
+            <div className="stack" style={{ marginTop: 12 }}>
+              <Link className="btn accent block" href="/signup" onClick={() => setOpen(false)}>
+                {t('nav.signup')}
               </Link>
-            ))}
-            <Link href="/map">{L('지도로 찾기', 'Map')}</Link>
-            <Link href="/discover">{L('여행지 탐색', 'Discover')}</Link>
-            <Link href="/assistant">{L('AI 여행 도우미', 'AI assistant')}</Link>
-            <Link href="/support">{L('고객센터', 'Help')}</Link>
-            {!user && <Link href="/signup">{t('nav.signup')}</Link>}
-          </nav>
-        </div>
-      )}
+              <Link className="btn block" href={`/login?next=${encodeURIComponent(path)}`} onClick={() => setOpen(false)}>
+                {t('nav.login')}
+              </Link>
+            </div>
+          )}
+        </nav>
+      </Drawer>
     </header>
   );
 }
 
-/** Mobile bottom tab bar: Explore / Saved / Trips / Messages / Profile. */
+type Tab = [href: string, label: string, icon: IconName, active: (p: string) => boolean];
+
+/** Mobile bottom tab bar. Traveler tabs by default; provider centers get their own role-specific tabs. */
 export function BottomNav() {
   const { L } = useI18n();
   const path = usePathname() || '/';
-  const tabs: Array<[string, string, IconName, (p: string) => boolean]> = [
+  const isGuideCenter = path === '/guide' || path.startsWith('/guide/');
+  const host: Tab[] = [
+    ['/host/dashboard', L('대시보드', 'Dashboard'), 'chart', (p) => p.startsWith('/host/dashboard')],
+    ['/host/calendar', L('달력', 'Calendar'), 'calendar', (p) => p.startsWith('/host/calendar')],
+    ['/host/reservations', L('예약', 'Bookings'), 'bag', (p) => p.startsWith('/host/reservations')],
+    ['/host/listings', L('숙소', 'Listings'), 'home', (p) => p.startsWith('/host/listings') || p.startsWith('/host/onboarding') || p.startsWith('/host/integrations')],
+    ['/earnings', L('정산', 'Earnings'), 'coin', (p) => p.startsWith('/earnings')],
+  ];
+  const guide: Tab[] = [
+    ['/guide/requests', L('요청', 'Requests'), 'compass', (p) => p.startsWith('/guide/requests')],
+    ['/guide/calendar', L('달력', 'Calendar'), 'calendar', (p) => p.startsWith('/guide/calendar')],
+    ['/messages', L('메시지', 'Messages'), 'chat', (p) => p.startsWith('/messages')],
+    ['/earnings', L('정산', 'Earnings'), 'coin', (p) => p.startsWith('/earnings')],
+    ['/guide/onboarding', L('프로필', 'Profile'), 'user', (p) => p.startsWith('/guide/onboarding')],
+  ];
+  const supplier: Tab[] = [
+    ['/supplier/products', L('상품', 'Products'), 'ticket', (p) => p.startsWith('/supplier')],
+    ['/messages', L('메시지', 'Messages'), 'chat', (p) => p.startsWith('/messages')],
+    ['/earnings', L('정산', 'Earnings'), 'coin', (p) => p.startsWith('/earnings')],
+    ['/account', L('계정', 'Account'), 'user', (p) => p.startsWith('/account')],
+  ];
+  const traveler: Tab[] = [
     ['/', L('둘러보기', 'Explore'), 'search', (p) => p === '/' || p.startsWith('/stay') || p.startsWith('/exchange') || p.startsWith('/guide-friends') || p.startsWith('/travel') || p.startsWith('/map')],
     ['/saved', L('저장', 'Saved'), 'heart', (p) => p.startsWith('/saved')],
     ['/trips', L('여행', 'Trips'), 'bag', (p) => p.startsWith('/trips') || p.startsWith('/orders') || p.startsWith('/guide-bookings')],
     ['/messages', L('메시지', 'Messages'), 'chat', (p) => p.startsWith('/messages')],
     ['/account', L('프로필', 'Profile'), 'user', (p) => p.startsWith('/account') || p.startsWith('/login') || p.startsWith('/signup')],
   ];
-  if (path.startsWith('/admin') || path.startsWith('/checkout')) return null;
+  if (path.startsWith('/admin') || path.startsWith('/checkout') || /^\/stay\/[^/]+\/checkout/.test(path)) return null;
+  const tabs = path.startsWith('/host') ? host : isGuideCenter ? guide : path.startsWith('/supplier') ? supplier : path.startsWith('/earnings') ? host : traveler;
   return (
-    <nav className="bottom-nav" aria-label={L('하단 메뉴', 'Bottom navigation')}>
+    <nav className="bottom-nav" aria-label={L('하단 메뉴', 'Bottom navigation')} style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}>
       {tabs.map(([href, label, icon, active]) => (
-        <Link key={href} href={href} aria-current={active(path) ? 'page' : undefined}>
+        <Link key={href + label} href={href} aria-current={active(path) ? 'page' : undefined}>
           <Icon name={icon} />
           {label}
         </Link>
@@ -165,8 +295,65 @@ export function BottomNav() {
   );
 }
 
+/** Operator disclosure required on Korean e-commerce sites (전자상거래법 §10). Values come from NEXT_PUBLIC_BIZ_* env. */
+const BIZ = {
+  name: process.env.NEXT_PUBLIC_BIZ_NAME || 'JETPOOL',
+  ceo: process.env.NEXT_PUBLIC_BIZ_CEO || '',
+  regNo: process.env.NEXT_PUBLIC_BIZ_REG_NO || '',
+  mailOrderNo: process.env.NEXT_PUBLIC_BIZ_MAIL_ORDER_NO || '',
+  tourismNo: process.env.NEXT_PUBLIC_BIZ_TOURISM_NO || '',
+  address: process.env.NEXT_PUBLIC_BIZ_ADDRESS || '',
+  phone: process.env.NEXT_PUBLIC_BIZ_PHONE || '',
+  email: process.env.NEXT_PUBLIC_BIZ_EMAIL || '',
+  privacyOfficer: process.env.NEXT_PUBLIC_BIZ_PRIVACY_OFFICER || '',
+  hosting: process.env.NEXT_PUBLIC_BIZ_HOSTING || '',
+};
+
+/** Policy document viewer (terms, privacy, refund) backed by /v1/consent-documents — no extra route needed. */
+function PolicyDialog({ type, onClose }: { type: string | null; onClose: () => void }) {
+  const { L } = useI18n();
+  const st = useApi<any>(type ? '/v1/consent-documents' : null);
+  const doc = items(st.data).find((d: any) => str(d, 'type') === type);
+  const body = str(doc, 'bodyMd', 'body');
+  return (
+    <Modal open={!!type} onClose={onClose} title={str(doc, 'title') || (type === 'PRIVACY' ? L('개인정보 처리방침', 'Privacy policy') : type === 'REFUND_POLICY' ? L('취소·환불 정책', 'Cancellation & refunds') : L('이용약관', 'Terms of service'))} wide>
+      {st.loading && !doc ? (
+        <p className="muted">{L('불러오는 중…', 'Loading…')}</p>
+      ) : doc ? (
+        <div className="stack">
+          <p className="xs muted" style={{ margin: 0 }}>
+            {L('버전', 'Version')} {str(doc, 'version')}
+            {str(doc, 'publishedAt') ? ` · ${L('시행일', 'Effective')} ${str(doc, 'publishedAt').slice(0, 10)}` : ` · ${L('게시 준비 중', 'Not yet published')}`}
+          </p>
+          {body.split(/\n{2,}/).map((para, i) => (
+            <p key={i} style={{ whiteSpace: 'pre-line' }}>
+              {para.replace(/^#+\s*/, '')}
+            </p>
+          ))}
+        </div>
+      ) : (
+        <p className="muted">{L('문서를 불러오지 못했어요. 고객센터로 문의해 주세요.', 'Could not load this document. Please contact support.')}</p>
+      )}
+    </Modal>
+  );
+}
+
 export function Footer() {
   const { t, L } = useI18n();
+  const [doc, setDoc] = useState<string | null>(null);
+  const rows: Array<[string, string]> = (
+    [
+      [L('상호', 'Company'), BIZ.name],
+      [L('대표', 'CEO'), BIZ.ceo],
+      [L('사업자등록번호', 'Business reg. no.'), BIZ.regNo],
+      [L('통신판매업 신고', 'Mail-order reg. no.'), BIZ.mailOrderNo],
+      [L('관광사업 등록', 'Tourism reg. no.'), BIZ.tourismNo],
+      [L('주소', 'Address'), BIZ.address],
+      [L('고객센터', 'Customer center'), [BIZ.phone, BIZ.email].filter(Boolean).join(' · ')],
+      [L('개인정보 보호책임자', 'Privacy officer'), BIZ.privacyOfficer],
+      [L('호스팅 서비스', 'Hosting'), BIZ.hosting],
+    ] as Array<[string, string]>
+  ).filter(([, v]) => v);
   return (
     <footer className="site-footer">
       <div className="container stack-lg">
@@ -175,46 +362,86 @@ export function Footer() {
             <Wordmark />
             <p className="small">{L('WONT Travel Club의 새로운 이름. 한달살기 맞교환, 전세기 공유, 로컬 라이프.', 'The new home of WONT Travel Club — month-long exchanges, charter sharing and local life.')}</p>
           </div>
-          <nav aria-label={L('서비스', 'Services')}>
-            <h3>{L('여행', 'Travel')}</h3>
+          <nav aria-labelledby="ft-travel">
+            <h2 className="footer-h" id="ft-travel">{L('여행', 'Travel')}</h2>
             <Link href="/stay">{t('nav.stay')}</Link>
             <Link href="/exchange">{t('nav.exchange')}</Link>
             <Link href="/guide-friends">{t('nav.guide')}</Link>
             <Link href="/travel">{t('nav.travel')}</Link>
             <Link href="/jetpool-charter">{t('nav.charter')}</Link>
           </nav>
-          <nav aria-label={L('파트너', 'Partners')}>
-            <h3>{L('파트너', 'Partners')}</h3>
+          <nav aria-labelledby="ft-partner">
+            <h2 className="footer-h" id="ft-partner">{L('파트너', 'Partners')}</h2>
             <Link href="/host/onboarding">{L('호스트 되기', 'Become a host')}</Link>
             <Link href="/guide/onboarding">{L('가이드 되기', 'Become a guide')}</Link>
             <Link href="/supplier/products">{L('여행 공급사', 'Suppliers')}</Link>
             <Link href="/discover">{L('여행지 탐색', 'Discover')}</Link>
             <Link href="/stories">{L('스토리', 'Stories')}</Link>
           </nav>
-          <nav aria-label={L('지원', 'Support')}>
-            <h3>{L('지원', 'Support')}</h3>
+          <nav aria-labelledby="ft-support">
+            <h2 className="footer-h" id="ft-support">{L('지원', 'Support')}</h2>
             <Link href="/support">{L('고객센터', 'Help center')}</Link>
             <Link href="/support/disputes">{L('분쟁·안전 신고', 'Disputes & safety')}</Link>
             <Link href="/assistant">{L('AI 여행 도우미', 'AI assistant')}</Link>
-            <Link href="/account/privacy">{L('개인정보 처리방침', 'Privacy')}</Link>
+            <Link href="/account/privacy">{L('내 개인정보 관리', 'My privacy settings')}</Link>
           </nav>
         </div>
         <hr />
-        <div className="row between xs">
-          <span>© JETPOOL · {t('footer.rights')}</span>
-          <span>{L('결제는 토스페이먼츠를 통해 안전하게 처리됩니다.', 'Payments are processed securely by TossPayments.')}</span>
+        <div className="stack" style={{ gap: 12 }}>
+          <div className="legal-links small">
+            <button type="button" className="legal-link strong" aria-haspopup="dialog" onClick={() => setDoc('TERMS')}>
+              {L('이용약관', 'Terms of service')}
+            </button>
+            <button type="button" className="legal-link strong" aria-haspopup="dialog" onClick={() => setDoc('PRIVACY')}>
+              {L('개인정보 처리방침', 'Privacy policy')}
+            </button>
+            <button type="button" className="legal-link" aria-haspopup="dialog" onClick={() => setDoc('REFUND_POLICY')}>
+              {L('취소·환불 정책', 'Cancellation & refunds')}
+            </button>
+            <Link href="/support">{L('고객센터', 'Help center')}</Link>
+          </div>
+          <div className="biz">
+            <dl aria-label={L('사업자 정보', 'Business information')}>
+              {rows.map(([k, v]) => (
+                <div key={k}>
+                  <dt>{k}</dt>
+                  <dd>{v}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+          <p className="disclaimer">
+            {L(
+              `${BIZ.name}은(는) 통신판매중개자로서 통신판매의 당사자가 아닙니다. 호스트·가이드·여행 공급사가 등록한 상품의 정보와 거래에 대한 책임은 각 판매자에게 있습니다. 단, ${BIZ.name}이(가) 판매자로 명시된 상품은 예외입니다.`,
+              `${BIZ.name} acts as a mail-order intermediary and is not a party to transactions between members. Hosts, guides and travel suppliers are responsible for their listings and transactions, except where ${BIZ.name} is named as the seller.`,
+            )}
+          </p>
+          <div className="row between xs" style={{ color: 'var(--text-muted)' }}>
+            <span>{t('footer.rights')}</span>
+            <span>{L('결제는 토스페이먼츠를 통해 안전하게 처리됩니다.', 'Payments are processed securely by TossPayments.')}</span>
+          </div>
         </div>
       </div>
+      <PolicyDialog type={doc} onClose={() => setDoc(null)} />
     </footer>
   );
 }
 
-export function SideNav({ items, label }: { items: Array<{ href: string; label: string; icon?: IconName; group?: string }>; label: string }) {
+export function SideNav({ items: navItems, label }: { items: Array<{ href: string; label: string; icon?: IconName; group?: string }>; label: string }) {
   const path = usePathname() || '';
+  const ref = useRef<HTMLElement>(null);
+  // On phones the side nav is a horizontal strip: keep the active item in view.
+  useEffect(() => {
+    const el = ref.current?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (el && ref.current && ref.current.scrollWidth > ref.current.clientWidth) {
+      const nav = ref.current;
+      nav.scrollTo({ left: el.offsetLeft - nav.clientWidth / 2 + el.clientWidth / 2, behavior: 'auto' });
+    }
+  }, [path]);
   let lastGroup = '';
   return (
-    <nav className="side-nav" aria-label={label}>
-      {items.map((i) => {
+    <nav className="side-nav" aria-label={label} ref={ref}>
+      {navItems.map((i) => {
         const showGroup = i.group && i.group !== lastGroup;
         if (i.group) lastGroup = i.group;
         const active = path === i.href || (i.href.split('/').length > 2 && path.startsWith(i.href + '/'));

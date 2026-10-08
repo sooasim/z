@@ -84,7 +84,7 @@ export function locallyBookedNights(propertyId: string): Set<string> {
 export function locallyReleasedNights(propertyId: string): Set<string> {
   const out = new Set<string>();
   for (const r of entities('reservation')) {
-    if (r.propertyId !== propertyId || !['CANCELLED', 'EXPIRED', 'CANCELLED_BY_GUEST', 'CANCELLED_BY_HOST'].includes(r.status)) continue;
+    if (r.propertyId !== propertyId || !/CANCEL|EXPIRED|REFUND/.test(r.status)) continue;
     for (const d of dateRange(r.checkIn, r.checkOut)) out.add(d);
   }
   return out;

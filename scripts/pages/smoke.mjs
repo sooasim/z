@@ -50,7 +50,7 @@ const browser = await pw.chromium.launch({ headless: !args.includes('--headed') 
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'ko-KR' });
 const page = await ctx.newPage();
 const problems = [];
-page.on('pageerror', (e) => problems.push(`pageerror: ${e.message.slice(0, 200)}`));
+page.on('pageerror', (e) => problems.push(`pageerror @${page.url().replace(URL0, '')}: ${e.message.slice(0, 160)}`));
 page.on('console', (m) => {
   if (m.type() === 'error' && !/ERR_TUNNEL|ERR_NAME_NOT_RESOLVED|ERR_INTERNET|tile\.openstreetmap|cdn\.jsdelivr|Failed to load resource/.test(m.text())) problems.push(`console: ${m.text().slice(0, 200)}`);
 });
@@ -116,7 +116,7 @@ try {
 
   await step('trips shows the seeded reservation', async () => {
     await page.goto(`${URL0}/trips/`, { waitUntil: 'domcontentloaded' });
-    await page.locator('table tbody tr, [role=row]').first().waitFor({ timeout: 15000 });
+    await page.getByText(/북촌 한옥 스테이|애월 오션뷰 빌라|강릉 안목 커피거리 바다집/).first().waitFor({ timeout: 15000 });
     const txt = await page.locator('main').innerText();
     check('trips shows the seeded reservation', /북촌 한옥 스테이|애월 오션뷰 빌라|강릉/.test(txt) && /확정|CONFIRMED/i.test(txt), txt.match(/북촌 한옥 스테이|애월 오션뷰 빌라|강릉[^\n]*/)?.[0] ?? '');
     await shot('05-trips');
@@ -163,6 +163,45 @@ try {
     const txt = await page.locator('main').innerText();
     check('host sees the new booking after persona switch', /여행자 김/.test(txt));
     await shot('09-host-reservations');
+  });
+
+  const fx = JSON.parse(await (await import('node:fs/promises')).readFile(path.join(ROOT, 'packages/demo/fixtures/api.json'), 'utf8'));
+  const as = (persona) => page.evaluate((p) => localStorage.setItem('jpdemo:session:v1', JSON.stringify({ persona: p, aal: 'aal1', sid: 'smoke', at: new Date().toISOString() })), persona);
+  const requested = fx.ids.exchangeIds.find((id) => fx.bodies[fx.responses[`host|GET /v1/exchanges/${id}`]?.body]?.item?.status === 'REQUESTED');
+  if (requested) {
+    await step('host accepts a home exchange', async () => {
+      await as('host');
+      await page.goto(`${URL0}/exchange/${requested}/`, { waitUntil: 'domcontentloaded' });
+      await page.getByRole('button', { name: /조건 수락|Accept v/ }).click();
+      await page.getByText(/안전 수칙|Verification|검증/).first().waitFor({ timeout: 15000 });
+      check('host accepts a home exchange', true);
+    });
+  }
+
+  await step('tour order paid (MOCK)', async () => {
+    await as('guest');
+    await page.goto(`${URL0}/travel/${fx.ids.travelProductIds[0]}/`, { waitUntil: 'domcontentloaded' });
+    await page.locator('input[type=radio][name=dep]').nth(1).check({ timeout: 15000 });
+    await page.getByRole('button', { name: /예약하기|Book now/ }).click();
+    await page.getByRole('button', { name: /결제하기|Pay now/ }).click({ timeout: 15000 });
+    await page.getByText(/결제가 승인되었습니다|Payment approved/).waitFor({ timeout: 15000 });
+    await page.getByRole('link', { name: /상세 보기|View booking/ }).click();
+    await page.waitForURL(/\/orders\/[0-9a-f-]{36}\/?/, { timeout: 15000 });
+    await page.getByText(/결제 완료|PAID/).first().waitFor({ timeout: 15000 });
+    check('tour order paid (MOCK)', true, page.url().replace(URL0, ''));
+    await shot('10-order');
+  });
+
+  await step('cancel a stay with refund preview', async () => {
+    const rid = fx.ids.reservationIds[0];
+    await page.goto(`${URL0}/trips/${rid}/manage/`, { waitUntil: 'domcontentloaded' });
+    await page.getByText(/환불 예정액|Refund/).first().waitFor({ timeout: 15000 });
+    page.once('dialog', (d) => d.accept());
+    await page.getByRole('button', { name: /예약 취소|Cancel reservation/ }).click();
+    await page.waitForTimeout(1200);
+    await page.goto(`${URL0}/trips/${rid}/`, { waitUntil: 'domcontentloaded' });
+    await page.getByText(/환불|취소|Refund|Cancel/).first().waitFor({ timeout: 15000 });
+    check('cancel a stay with refund preview', true);
   });
 } finally {
   const uniq = [...new Set(problems)];

@@ -1,28 +1,32 @@
 # Static GitHub Pages demo of the real apps/web UI (no server). See docs/DEMO.md.
 # The recorded API fixtures (packages/demo/fixtures/api.json) are committed, so this job needs no PostgreSQL.
-# One-time setup: Settings → Pages → Build and deployment → Source: "GitHub Actions".
+# Publishing model: the built site is pushed to the `gh-pages` branch (GitHub Pages "Deploy from a branch",
+# which GitHub enables automatically for public repositories when that branch exists).
+# Site URL: https://<owner>.github.io/<repo>/ (basePath = /<repo>).
 name: pages
 
 on:
   push:
     branches: [claude/eager-ride-bjce41]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'infra/**'
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   NEXT_TELEMETRY_DISABLED: "1"
 
 jobs:
-  build:
-    name: Build static demo
+  build-deploy:
+    name: Build static demo and publish to gh-pages
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,34 +36,49 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Configure Pages
-        id: pages
-        uses: actions/configure-pages@v5
       - name: Build (next export + demo runtime)
         run: node scripts/pages/build.mjs
         env:
-          NEXT_BASE_PATH: ${{ steps.pages.outputs.base_path }}
-          PAGES_ORIGIN: ${{ steps.pages.outputs.origin }}
+          NEXT_BASE_PATH: /${{ github.event.repository.name }}
+          PAGES_ORIGIN: https://${{ github.repository_owner }}.github.io
       - name: Sanity check
         run: |
           test -f dist-pages/index.html
           test -f dist-pages/404.html
-          test -f dist-pages/.nojekyll
           test -f dist-pages/demo-backend.js
           test -f dist-pages/demo-fixtures.json
           grep -q 'demo-backend.js' dist-pages/index.html
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist-pages
+          touch dist-pages/.nojekyll
+      - name: Publish to gh-pages branch
+        working-directory: dist-pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "Deploy static demo from ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+      - name: Summary
+        run: echo "Published https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/" >> "$GITHUB_STEP_SUMMARY"
 
-  deploy:
-    name: Deploy to GitHub Pages
-    needs: build
+  live-check:
+    name: Verify the published site is live
+    needs: build-deploy
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Wait for GitHub Pages and check key URLs
+        run: |
+          BASE="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          for i in $(seq 1 40); do
+            code=$(curl -s -o page.html -w '%{http_code}' "$BASE/")
+            if [ "$code" = "200" ] && grep -q 'JETPOOL' page.html; then break; fi
+            echo "attempt $i: HTTP $code"; sleep 15
+          done
+          for path in "" "stay/" "exchange/" "guide-friends/" "travel/" "login/" "demo-backend.js" "demo-fixtures.json"; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/$path")
+            echo "$code $BASE/$path"
+            test "$code" = "200"
+          done
+          echo "Live: $BASE/" >> "$GITHUB_STEP_SUMMARY"

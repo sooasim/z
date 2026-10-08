@@ -33,12 +33,41 @@ function rewriteAssets(v: any, base: string): any {
 }
 export const assetUrl = (s: string, base: string) => (typeof s === 'string' && ASSET.test(s) ? base + s : s);
 
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const DATE_TIME = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}(:?\d{2})?)?$/;
+/**
+ * Keeps the demo "evergreen": every recorded date is moved forward by the whole days elapsed since recording, so
+ * upcoming stays, departures and recent notifications stay upcoming/recent no matter when the demo is opened.
+ */
+function shiftDates(v: any, days: number): any {
+  if (typeof v === 'string') {
+    if (DATE_ONLY.test(v)) {
+      const d = new Date(v + 'T00:00:00Z');
+      d.setUTCDate(d.getUTCDate() + days);
+      return d.toISOString().slice(0, 10);
+    }
+    if (DATE_TIME.test(v)) {
+      const t = Date.parse(v.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00'));
+      return Number.isFinite(t) ? new Date(t + days * 86400000).toISOString() : v;
+    }
+    return v;
+  }
+  if (Array.isArray(v)) {
+    for (let i = 0; i < v.length; i++) v[i] = shiftDates(v[i], days);
+    return v;
+  }
+  if (v && typeof v === 'object') for (const k of Object.keys(v)) v[k] = shiftDates(v[k], days);
+  return v;
+}
+export let shiftDays = 0;
+
 export async function loadFixtures(url: string, base: string): Promise<void> {
   const res = await nativeFetch(url, { cache: 'force-cache' });
   if (!res.ok) throw new Error(`demo fixtures: HTTP ${res.status}`);
   F = await res.json();
-  for (const k of Object.keys(F.bodies)) F.bodies[k] = rewriteAssets(F.bodies[k], base);
-  F.templates = rewriteAssets(F.templates || {}, base);
+  shiftDays = Math.max(0, Math.floor((Date.now() - Date.parse(F.recordedAt)) / 86400000));
+  for (const k of Object.keys(F.bodies)) F.bodies[k] = rewriteAssets(shiftDays ? shiftDates(F.bodies[k], shiftDays) : F.bodies[k], base);
+  F.templates = rewriteAssets(shiftDays ? shiftDates(F.templates || {}, shiftDays) : F.templates || {}, base);
   for (const key of Object.keys(F.responses)) {
     const bar = key.indexOf('|GET ');
     const persona = key.slice(0, bar);

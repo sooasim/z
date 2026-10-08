@@ -83,6 +83,26 @@ declare global {
   });
   window.__JETPOOL_DEMO__ = { base: BASE, ready, version: '1' };
 
+  /**
+   * Resolves once React has hydrated the prerendered page (every element in <main> carries a fiber; max 4 s). Demo answers
+   * arrive in ~40ms — much faster than a real network — so the first ones wait for this; otherwise a state update
+   * can reach a Suspense boundary that is still dehydrated and React re-renders it on the client (error #418).
+   */
+  const hasFiber = (el: Element) => Object.keys(el).some((k) => k.startsWith('__reactFiber'));
+  const isHydrated = () => {
+    if (document.readyState === 'loading') return false;
+    const main = document.querySelector('main');
+    if (!main) return document.readyState === 'complete';
+    if (!hasFiber(main)) return false;
+    for (const el of Array.from(main.querySelectorAll('*'))) if (!hasFiber(el) && !el.closest('.maplibregl-map, [data-demo]')) return false;
+    return true;
+  };
+  const hydration: Promise<void> = (async () => {
+    for (let i = 0; i < 80; i++) {
+      if (isHydrated()) return;
+      await sleep(50);
+    }
+  })();
   const abortError = () => new DOMException('The operation was aborted.', 'AbortError');
   async function readBody(input: RequestInfo | URL, init?: RequestInit): Promise<any> {
     let raw: any = init?.body;
@@ -115,6 +135,7 @@ declare global {
     const method = String(init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
     const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
     await ready;
+    await hydration;
     const body = await readBody(input, init);
     let res: Response;
     if (isBff) {
@@ -175,7 +196,19 @@ declare global {
     true,
   );
 
-  const mount = () => ready.then(() => setTimeout(mountRibbon, 300)).catch(() => {});
+  const mount = () =>
+    ready
+      .then(async () => {
+        await hydration;
+        await sleep(300);
+        try {
+          if (localStorage.getItem('jpdemo:noribbon') === '1') return;
+        } catch {
+          /* ignore */
+        }
+        mountRibbon();
+      })
+      .catch(() => {});
   if (document.readyState === 'complete') mount();
   else window.addEventListener('load', mount, { once: true });
 })();

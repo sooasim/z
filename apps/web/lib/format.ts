@@ -108,8 +108,69 @@ export function formatDate(s: string | Date | null | undefined, lang: Lang = 'ko
   }).format(d);
 }
 
-export function formatRange(start: string, end: string, lang: Lang = 'ko'): string {
-  return `${formatDate(start, lang)} – ${formatDate(end, lang)}`;
+/** Full, screen-reader friendly date: "2026년 11월 10일 화요일" / "Tuesday, November 10, 2026". */
+export function formatDateLong(s: string | Date | null | undefined, lang: Lang = 'ko'): string {
+  if (!s) return '—';
+  const d = typeof s === 'string' ? (s.length === 10 ? parseIsoDate(s) : new Date(s)) : s;
+  if (!d || Number.isNaN(d.getTime())) return String(s);
+  return new Intl.DateTimeFormat(lang === 'ko' ? 'ko-KR' : 'en-US', { dateStyle: 'full' }).format(d);
+}
+
+function toDate(s: string | Date | null | undefined): Date | null {
+  if (!s) return null;
+  const d = typeof s === 'string' ? (s.length === 10 ? parseIsoDate(s) : new Date(s)) : s;
+  return d && !Number.isNaN(d.getTime()) ? d : null;
+}
+
+/**
+ * Compact date range that drops repeated year/month: "2026년 11월 10일 – 13일", "11월 28일 – 12월 2일" (current year),
+ * "Nov 10 – 13, 2026". `opts.nights` appends "· 3박" / "· 3 nights"; `opts.year: false` never prints the year.
+ */
+export function formatRange(start: string, end: string, lang: Lang = 'ko', opts: { nights?: boolean; year?: boolean } = {}): string {
+  const a = toDate(start);
+  const b = toDate(end);
+  if (!a || !b) return `${formatDate(start, lang)} – ${formatDate(end, lang)}`;
+  const nowY = new Date().getFullYear();
+  const showYear = opts.year ?? !(a.getFullYear() === nowY && b.getFullYear() === nowY);
+  const sameY = a.getFullYear() === b.getFullYear();
+  const sameM = sameY && a.getMonth() === b.getMonth();
+  let out: string;
+  if (lang === 'ko') {
+    const y = (d: Date) => (showYear ? `${d.getFullYear()}년 ` : '');
+    const left = `${y(a)}${a.getMonth() + 1}월 ${a.getDate()}일`;
+    const right = sameM ? `${b.getDate()}일` : sameY ? `${b.getMonth() + 1}월 ${b.getDate()}일` : `${y(b)}${b.getMonth() + 1}월 ${b.getDate()}일`;
+    out = `${left} – ${right}`;
+  } else {
+    const md = (d: Date) => new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(d);
+    if (sameM) out = `${md(a)} – ${b.getDate()}${showYear ? `, ${b.getFullYear()}` : ''}`;
+    else if (sameY) out = `${md(a)} – ${md(b)}${showYear ? `, ${b.getFullYear()}` : ''}`;
+    else out = `${md(a)}, ${a.getFullYear()} – ${md(b)}, ${b.getFullYear()}`;
+  }
+  if (opts.nights) {
+    const n = nightsBetween(String(start).slice(0, 10), String(end).slice(0, 10));
+    if (n > 0) out += lang === 'ko' ? ` · ${n}박` : ` · ${n} night${n === 1 ? '' : 's'}`;
+  }
+  return out;
+}
+
+/**
+ * Time range on one line, repeating the day only when it changes: "11월 11일 (수) 10:00–14:00",
+ * "Wed, Nov 11 · 10:00–14:00"; across days "11월 11일 (수) 22:00 – 11월 12일 (목) 02:00".
+ */
+export function formatTimeRange(start: string | Date | null | undefined, end: string | Date | null | undefined, lang: Lang = 'ko'): string {
+  const a = toDate(start);
+  const b = toDate(end);
+  if (!a) return '—';
+  const loc = lang === 'ko' ? 'ko-KR' : 'en-US';
+  const time = (d: Date) => new Intl.DateTimeFormat(loc, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(d);
+  const day = (d: Date) =>
+    lang === 'ko'
+      ? `${d.getMonth() + 1}월 ${d.getDate()}일 (${new Intl.DateTimeFormat('ko-KR', { weekday: 'short' }).format(d)})`
+      : new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(d);
+  const sep = lang === 'ko' ? ' ' : ' · ';
+  if (!b) return `${day(a)}${sep}${time(a)}`;
+  if (isoDate(a) === isoDate(b)) return `${day(a)}${sep}${time(a)}–${time(b)}`;
+  return `${day(a)}${sep}${time(a)} – ${day(b)}${sep}${time(b)}`;
 }
 
 /** Month grid (6 weeks x 7 days) starting Sunday, for calendar views. */
@@ -140,5 +201,18 @@ export function formatMoneyCompact(minor: number | string | null | undefined, cu
   const n = Number(minor) / 10 ** currencyExponent(currency);
   if (!Number.isFinite(n)) return '—';
   if (Math.abs(n) < 100000) return formatMoney(minor, currency, lang);
+  return new Intl.NumberFormat(lang === 'ko' ? 'ko-KR' : 'en-US', { style: 'currency', currency: currency.toUpperCase(), notation: 'compact', maximumFractionDigits: 1 }).format(n);
+}
+
+/** Very short price for calendar cells: "18만" / "18.5만" (ko), "₩180K" (en); other currencies use compact notation. */
+export function formatPriceShort(minor: number | string | null | undefined, currency = 'KRW', lang: Lang = 'ko'): string {
+  if (minor === null || minor === undefined || minor === '') return '';
+  const n = Number(minor) / 10 ** currencyExponent(currency);
+  if (!Number.isFinite(n)) return '';
+  if ((currency || 'KRW').toUpperCase() === 'KRW') {
+    if (lang === 'ko' && n >= 10000) return `${Math.round(n / 1000) / 10}만`;
+    if (lang !== 'ko' && n >= 1000) return `₩${Math.round(n / 100) / 10}K`;
+    return formatMoney(minor, currency, lang);
+  }
   return new Intl.NumberFormat(lang === 'ko' ? 'ko-KR' : 'en-US', { style: 'currency', currency: currency.toUpperCase(), notation: 'compact', maximumFractionDigits: 1 }).format(n);
 }

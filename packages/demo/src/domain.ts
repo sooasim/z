@@ -248,7 +248,7 @@ on('GET', /^\/v1\/host\/calendar$/, (c) => {
   const byNight = new Map<string, Obj>();
   for (const r of entities('reservation')) if (r.propertyId === pid && ['HELD', 'CONFIRMED', 'CHECKED_IN'].includes(r.status)) for (const d of dateRange(r.checkIn, r.checkOut)) byNight.set(d, r);
   const cancelled = new Map<string, Obj>();
-  for (const r of entities('reservation')) if (r.propertyId === pid && /CANCEL|EXPIRED/.test(r.status)) for (const d of dateRange(r.checkIn, r.checkOut)) cancelled.set(d, r);
+  for (const r of entities('reservation')) if (r.propertyId === pid && /CANCEL|EXPIRED|REFUND/.test(r.status)) for (const d of dateRange(r.checkIn, r.checkOut)) cancelled.set(d, r);
   const price = local?.basePriceMinor ?? propertyDetail(pid)?.basePriceMinor ?? null;
   const days = dateRange(from, to).map((date) => {
     const d = rec.get(date) ?? { date, availability: 'AVAILABLE', priceMinor: price, priceSource: 'BASE', minNights: 1, block: null };
@@ -259,6 +259,22 @@ on('GET', /^\/v1\/host\/calendar$/, (c) => {
     return d;
   });
   return ok({ item: { ...(itemOf(body) ?? { propertyId: pid, currency: 'KRW' }), from, to, days } });
+});
+
+/**
+ * /v1/exchange/homes rows carry no slug/photos, so the web would link /stay/<uuid> (not a prerendered page).
+ * Fill them from the catalog so cards link to the listing page and show its photos.
+ */
+on('GET', /^\/v1\/exchange\/homes$/, (c) => {
+  const h = recorded(c);
+  if (!h || h.status >= 300) return null;
+  const cat = new Map(catalog().map((p) => [p.id, p]));
+  const body = clone(h.body);
+  body.items = itemsOf(body).map((it: Obj) => {
+    const p = cat.get(it.id);
+    return p ? { ...p, ...it, slug: it.slug ?? p.slug, coverUrl: it.coverUrl ?? p.coverUrl, photoUrls: it.photoUrls ?? p.photoUrls, location: it.location ?? p.location } : it;
+  });
+  return ok(body);
 });
 
 // ---- host listing management (local drafts)
@@ -478,7 +494,7 @@ on('GET', /^\/v1\/host\/reservations$/, (c) => {
   const keep = (r: Obj) => {
     if (r.status === 'HELD') return false;
     if (!filter) return true;
-    if (filter === 'cancelled') return /CANCEL/.test(r.status);
+    if (filter === 'cancelled') return /CANCEL|REFUND/.test(r.status);
     if (filter === 'completed') return r.status === 'COMPLETED';
     if (filter === 'current') return r.status === 'CHECKED_IN' || (r.checkIn <= t && r.checkOut > t && r.status === 'CONFIRMED');
     return r.checkIn >= t && ['CONFIRMED', 'PAYMENT_PENDING'].includes(r.status);
@@ -527,7 +543,7 @@ on('GET', /^\/v1\/reservations\/([^/]+)\/cancellation-preview$/, (c, id) => {
   if (!c.p) return unauth();
   const r = getReservation(c, id);
   if (!r || !visibleRes(c, r)) return notFound('Reservation');
-  const cancellable = ['CONFIRMED', 'PAYMENT_PENDING', 'HELD'].includes(r.status);
+  const cancellable = r.status === 'CONFIRMED';
   return ok({ item: { reservationId: id, status: r.status, cancellable, evaluation: cancellationEval(r, r.hostId === me(c) ? 'HOST' : 'GUEST') } });
 });
 on('POST', /^\/v1\/reservations\/([^/]+)\/(cancel|check-in|complete|no-show)$/, (c, id, action) => {
@@ -537,9 +553,12 @@ on('POST', /^\/v1\/reservations\/([^/]+)\/(cancel|check-in|complete|no-show)$/, 
   const now = nowIso();
   const next: Obj = { ...r, version: Number(r.version ?? 1) + 1, updatedAt: now };
   if (action === 'cancel') {
-    if (!['CONFIRMED', 'PAYMENT_PENDING', 'HELD'].includes(r.status)) return problem(409, 'INVALID_STATE_TRANSITION', `Reservation is ${r.status}`);
+    if (r.status !== 'CONFIRMED') return problem(409, 'INVALID_STATE_TRANSITION', `Reservation is ${r.status}; only CONFIRMED stays can be cancelled`);
     const ev = cancellationEval(r, r.hostId === me(c) ? 'HOST' : 'GUEST');
-    Object.assign(next, { status: r.hostId === me(c) ? 'CANCELLED_BY_HOST' : 'CANCELLED_BY_GUEST', cancelledAt: now, cancelReason: c.body?.reason ?? 'demo', refundedMinor: Number(r.refundedMinor ?? 0) + (r.status === 'CONFIRMED' ? ev.refundMinor : 0) });
+    // Real API: CONFIRMED → CANCELLED → REFUND_PENDING → (PARTIALLY_)REFUNDED once the PG refund settles.
+    const refunded = Number(r.refundedMinor ?? 0) + ev.refundMinor;
+    const status = ev.refundMinor <= 0 ? 'CANCELLED' : refunded >= Number(r.totalMinor) ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
+    Object.assign(next, { status, cancelledAt: now, cancelReason: c.body?.reason ?? 'demo', refundedMinor: refunded, cancelledBy: r.hostId === me(c) ? 'HOST' : 'GUEST' });
     putEntity('reservation', next);
     const pay = entities('payment').find((p) => p.subjectId === id && p.status === 'APPROVED');
     if (pay && ev.refundMinor > 0) putEntity('payment', { ...pay, refundedMinor: ev.refundMinor, status: ev.refundMinor >= pay.amountMinor ? 'REFUNDED' : 'PARTIALLY_REFUNDED', updatedAt: now });

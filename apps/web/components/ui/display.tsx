@@ -6,16 +6,21 @@ import { formatMoney } from '@/lib/format';
 import { DateText } from './base';
 import { StatusPill } from './status';
 
-const AVATAR_BG = ['#1f4e7a', '#d94a33', '#2b6296', '#6d3fd6', '#15803d', '#b45309', '#0e2a47'];
+const AVATAR_BG = ['#1f4e7a', '#bf3f2a', '#2b6296', '#6d3fd6', '#166534', '#9a5800', '#0e2a47'];
 
-export function Avatar({ name, src, size = 40, verified }: { name: string; src?: string; size?: number; verified?: boolean }) {
+/**
+ * Initial/photo avatar. Exposed as one image to assistive tech ("홍길동, 본인 확인됨"); the verified tick is
+ * decorative. `decorative` hides it entirely (when the name is already in adjacent text).
+ */
+export function Avatar({ name, src, size = 40, verified, decorative }: { name: string; src?: string; size?: number; verified?: boolean; decorative?: boolean }) {
   const { L } = useI18n();
   const bg = AVATAR_BG[hashString(name || '?') % AVATAR_BG.length];
+  const label = `${name || '?'}${verified ? `, ${L('본인 확인됨', 'verified')}` : ''}`;
   return (
-    <span className="avatar" style={{ width: size, height: size, background: bg, fontSize: size * 0.42 }} aria-label={name}>
-      {src ? <img src={src} alt="" /> : (name || '?').trim().slice(0, 1).toUpperCase()}
+    <span className="avatar" style={{ width: size, height: size, background: bg, fontSize: size * 0.42 }} {...(decorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': label })}>
+      {src ? <img src={src} alt="" /> : <span aria-hidden="true">{(name || '?').trim().slice(0, 1).toUpperCase()}</span>}
       {verified && (
-        <span className="verified" title={L('본인 확인됨', 'Verified')} aria-label={L('본인 확인됨', 'Verified')}>
+        <span className="verified" title={L('본인 확인됨', 'Verified')} aria-hidden="true">
           <svg viewBox="0 0 24 24" width="70%" height="70%" fill="none" stroke="#fff" strokeWidth="4" aria-hidden="true">
             <path d="M5 12.5 10 17 19 7" />
           </svg>

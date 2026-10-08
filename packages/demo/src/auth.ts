@@ -197,7 +197,8 @@ export function handleBff(sub: string, method: string, body: Obj, base: string):
     case 'mfa/totp/enroll': {
       if (!s) return problem(401, 'UNAUTHENTICATED', 'Sign in first');
       const p = persona(s.persona)!;
-      const secret = 'JBSWY3DPEHPK3PXPDEMOJETPOOL2026';
+      const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+      const secret = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => alphabet[b % 32]).join('');
       return json(201, { factorId: uuid(), secret, otpauthUrl: `otpauth://totp/JETPOOL:${encodeURIComponent(p.email)}?secret=${secret}&issuer=JETPOOL&period=30&digits=6`, period: 30, digits: 6, demoHint: '데모: 아무 6자리 코드나 입력하세요' });
     }
     case 'mfa/totp/verify':

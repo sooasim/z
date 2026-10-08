@@ -27,12 +27,24 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
+/**
+ * Brand font: Pretendard Variable, self-hosted as a unicode-range dynamic subset under /public/fonts/pretendard
+ * (no third-party CDN, CSP `font-src 'self'`). next/font/local cannot express unicode-range slices, and the single
+ * 2 MB variable file is far heavier than the ~40–120 KB of slices a Korean page actually needs. The slice holding
+ * Latin + the most frequent Hangul syllables is preloaded so first paint rarely swaps.
+ */
+const FONT_CSS = '/fonts/pretendard/pretendard.css';
+const FONT_PRELOAD = '/fonts/pretendard/PretendardVariable.subset.91.woff2';
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="ko-KR" suppressHydrationWarning>
+    // data-scroll-behavior: Next disables CSS smooth scrolling while it restores/resets scroll on route changes.
+    <html lang="ko-KR" suppressHydrationWarning data-scroll-behavior="smooth">
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
-        <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
+        <link rel="preload" href={FONT_PRELOAD} as="font" type="font/woff2" crossOrigin="anonymous" />
+        {/* eslint-disable-next-line @next/next/no-css-tags -- static, cacheable @font-face sheet (unicode-range slices) */}
+        <link rel="stylesheet" href={FONT_CSS} />
       </head>
       <body>
         <a href="#main" className="skip-link">

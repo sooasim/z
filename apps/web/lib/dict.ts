@@ -24,7 +24,7 @@ export const DICT = {
     'state.forbidden': '이 페이지에 접근할 권한이 없습니다.',
     'state.mfa': '관리자 기능은 2단계 인증(MFA) 세션이 필요합니다.',
     'state.mfa.cta': 'MFA 인증하기',
-    'state.disabled': '이 기능은 현재 운영 정책에 따라 비활성화되어 있습니다.',
+    'state.disabled': '곧 제공될 예정이에요',
     'state.notfound': '요청한 페이지를 찾을 수 없습니다.',
     'common.search': '검색',
     'common.save': '저장',
@@ -41,7 +41,7 @@ export const DICT = {
     'common.actions': '작업',
     'common.back': '뒤로',
     'common.lang': 'English',
-    'footer.rights': '모든 거래 상태는 서버에서 확정됩니다.',
+    'footer.rights': '© 2026 JETPOOL. All rights reserved.',
   },
   en: {
     'nav.stay': 'Stays',
@@ -67,7 +67,7 @@ export const DICT = {
     'state.forbidden': 'You do not have access to this page.',
     'state.mfa': 'Admin features require a multi-factor (MFA) session.',
     'state.mfa.cta': 'Verify with MFA',
-    'state.disabled': 'This feature is currently disabled by operating policy.',
+    'state.disabled': 'Coming soon',
     'state.notfound': 'Page not found.',
     'common.search': 'Search',
     'common.save': 'Save',
@@ -84,7 +84,7 @@ export const DICT = {
     'common.actions': 'Actions',
     'common.back': 'Back',
     'common.lang': '한국어',
-    'footer.rights': 'All transaction states are confirmed server-side.',
+    'footer.rights': '© 2026 JETPOOL. All rights reserved.',
   },
 } as const;
 

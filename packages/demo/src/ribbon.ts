@@ -10,7 +10,10 @@ export function mountRibbon() {
   host.setAttribute('data-demo', 'ribbon');
   host.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:2147483000;';
   const root = host.attachShadow({ mode: 'open' });
-  const ui = readJson<{ collapsed?: boolean }>(UI_KEY, {});
+  // First visit: open, so the visitor reads what this is. Afterwards it stays a small pill unless re-opened.
+  const ui = readJson<{ collapsed?: boolean; seen?: number }>(UI_KEY, {});
+  const firstVisit = !ui.seen;
+  ui.seen = (ui.seen ?? 0) + 1;
   const lang = (document.documentElement.lang || 'ko').startsWith('en') ? 'en' : 'ko';
   const L = (ko: string, en: string) => (lang === 'ko' ? ko : en);
   const s = session();
@@ -26,7 +29,7 @@ export function mountRibbon() {
   .pill { display:flex; align-items:center; gap:6px; border:0; cursor:pointer; background:#0b1f3a; color:#fff; font:700 12px/1 system-ui; letter-spacing:.08em;
           padding:9px 12px; border-radius:999px; box-shadow:0 6px 20px rgba(0,0,0,.25); }
   .pill .dot { width:8px; height:8px; border-radius:50%; background:#ffb020; }
-  .card { width:min(340px, calc(100vw - 24px)); background:#0b1f3a; color:#e9f0fb; border-radius:14px; padding:12px 14px 12px; box-shadow:0 12px 32px rgba(0,0,0,.32);
+  .card { width:min(320px, calc(100vw - 24px)); background:#0b1f3a; color:#e9f0fb; border-radius:14px; padding:12px 14px 12px; box-shadow:0 12px 32px rgba(0,0,0,.32);
           font-size:12.5px; line-height:1.45; }
   .row { display:flex; align-items:center; gap:8px; }
   .between { justify-content:space-between; }
@@ -44,8 +47,9 @@ export function mountRibbon() {
 </style>
 <div id="wrap"></div>`;
   const wrap = root.getElementById('wrap')!;
-  const render = (collapsed: boolean) => {
-    writeJson(UI_KEY, { ...ui, collapsed });
+  const render = (collapsed: boolean, persist = true) => {
+    if (persist) ui.collapsed = collapsed;
+    writeJson(UI_KEY, ui);
     if (collapsed) {
       wrap.innerHTML = `<button class="pill" id="open" aria-label="${L('데모 안내 열기', 'Open demo panel')}"><span class="dot"></span>DEMO${p ? ` · ${PERSONA_LABEL[p.key]?.[lang === 'ko' ? 0 : 1] ?? p.displayName}` : ''}</button>`;
       root.getElementById('open')!.addEventListener('click', () => render(false));
@@ -74,7 +78,7 @@ export function mountRibbon() {
       location.reload();
     });
   };
-  render(ui.collapsed ?? window.matchMedia?.('(max-width: 640px)').matches ?? false);
+  render(ui.collapsed ?? (!firstVisit || (window.matchMedia?.('(max-width: 640px)').matches ?? false)), false);
   const place = () => {
     const nav = document.querySelector<HTMLElement>('.bottom-nav, nav.bottomnav, [data-bottom-nav]');
     const h = nav && getComputedStyle(nav).display !== 'none' && getComputedStyle(nav).position === 'fixed' ? nav.getBoundingClientRect().height : 0;

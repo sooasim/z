@@ -605,12 +605,15 @@ async function recordAll(templates) {
 
 // ------------------------------------------------------------------------------------------ scrub + write
 const SECRET_KEY = /^(access_?token|refresh_?token|id_?token|token|secret|password|password_?hash|otpauth_?url|recovery_?codes|client_?secret|api_?key|signing_?secret|ical_?token|export_?token|session_?token)$/i;
+// Not secrets (MOCK provider values), but high-entropy "*Key" strings trip secret scanners (gitleaks generic-api-key).
+const PLACEHOLDER = { customerKey: 'JPU_demo', paymentKey: 'mock_payment', clientKey: 'mock_client_key' };
 function scrub(v) {
   if (Array.isArray(v)) return v.map(scrub);
   if (v && typeof v === 'object') {
     const o = {};
     for (const [k, x] of Object.entries(v)) {
       if (SECRET_KEY.test(k) && x !== null && typeof x !== 'boolean') o[k] = typeof x === 'string' ? '[redacted]' : null;
+      else if (k in PLACEHOLDER && typeof x === 'string') o[k] = PLACEHOLDER[k];
       else o[k] = scrub(x);
     }
     return o;

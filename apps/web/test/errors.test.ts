@@ -32,10 +32,22 @@ describe('API error mapping', () => {
     const text = await problemFromResponse(new Response('Bad Gateway', { status: 502 }));
     expect(text.detail).toBe('Bad Gateway');
   });
-  it('uses server detail for unknown codes', () => {
-    expect(errorMessage(new ApiError(422, { code: 'WEIRD', detail: 'custom text' }))).toBe('custom text');
-    expect(errorMessage(new ApiError(422, { code: 'WEIRD2', title: 'Home A allows at most 4 guests' }))).toBe('Home A allows at most 4 guests');
+  it('uses server detail for unknown codes when it is in the UI language', () => {
+    expect(errorMessage(new ApiError(422, { code: 'WEIRD', detail: 'custom text' }), 'en')).toBe('custom text');
+    expect(errorMessage(new ApiError(422, { code: 'WEIRD2', title: 'Home A allows at most 4 guests' }), 'en')).toBe('Home A allows at most 4 guests');
+    expect(errorMessage(new ApiError(422, { code: 'WEIRD4', detail: '숙소 A는 최대 4명까지 가능합니다' }), 'ko')).toBe('숙소 A는 최대 4명까지 가능합니다');
     expect(errorMessage(new ApiError(422, { code: 'WEIRD3', title: 'Unprocessable Entity' }), 'en')).toBe('Please check your input.');
     expect(errorMessage(new ApiError(422, { code: 'NOT_ELIGIBLE', title: 'x' }), 'ko')).toContain('맞교환 자격');
+  });
+  it('never shows raw English server text in the Korean UI', () => {
+    expect(errorMessage(new ApiError(422, { code: 'WEIRD', detail: 'custom text' }), 'ko')).toBe('입력값을 확인해 주세요.');
+    expect(errorMessage(new ApiError(500, { title: 'Internal' }), 'ko')).toBe('일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+    expect(errorMessage(new ApiError(403, { code: 'GUIDE_REQUIRED', detail: 'Only published guides can browse open requests' }), 'ko')).toContain('가이드 프로필');
+    expect(errorMessage(new ApiError(409, { code: 'EMAIL_TAKEN', detail: 'An account with this email already exists' }), 'ko')).toContain('이미 가입된 이메일');
+    expect(errorMessage(new ApiError(400, { code: 'MFA_CODE_INVALID' }), 'ko')).toContain('인증 코드');
+  });
+  it('supports per-screen overrides', () => {
+    const e = new ApiError(401, { code: 'INVALID_CREDENTIALS' });
+    expect(errorMessage(e, 'ko', { INVALID_CREDENTIALS: ['현재 비밀번호가 올바르지 않습니다.', 'Current password is incorrect.'] })).toBe('현재 비밀번호가 올바르지 않습니다.');
   });
 });
