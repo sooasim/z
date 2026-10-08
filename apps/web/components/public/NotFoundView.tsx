@@ -32,7 +32,7 @@ export function NotFoundView({ kind = 'page' }: { kind?: NotFoundKind }) {
     <div className={s.notFound}>
       <div className="state" role="status" style={{ borderStyle: 'solid' }}>
         <Illustration name="search" />
-        <p className="eyebrow" style={{ margin: 0 }}>404</p>
+        <p className="eyebrow" style={{ margin: '0 auto 4px' }}>404</p>
         <h1>{c.title[i]}</h1>
         <p className="muted">{c.body[i]}</p>
         <div className="actions">

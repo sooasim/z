@@ -21,7 +21,7 @@ export function parseRobots(text) {
         cur = { agents: [], rules: [], crawlDelay: null };
         groups.push(cur);
       }
-      cur.agents.push(value.toLowerCase());
+      if (value) cur.agents.push(value.toLowerCase()); // an empty agent must not match every crawler
       lastWasAgent = true;
       continue;
     }
@@ -110,7 +110,7 @@ export class RobotsCache {
             robots = { groups: [], sitemaps: [] };
             status = `ABSENT_${res.status}`;
           } else {
-            robots = { groups: [], sitemaps: [], disallowAll: true };
+            robots = { groups: [], sitemaps: [], disallowAll: true, error: res.error ?? `HTTP_${res.status}`, message: res.message ?? null };
             status = `UNREACHABLE_${res.error ?? res.status}`;
             this.log?.warn(`robots.txt unreachable for ${origin} (${res.error ?? res.status}) — treating as disallow-all (RFC 9309)`);
           }
@@ -123,12 +123,16 @@ export class RobotsCache {
     return this.cache.get(origin);
   }
 
-  /** true | 'ROBOTS_DISALLOWED' */
+  /**
+   * true | 'ROBOTS_DISALLOWED' (a rule forbids it — permanent) | 'ROBOTS_UNREACHABLE <error>' (robots.txt could not
+   * be fetched, e.g. PROXY_403 — retryable once the host is reachable)
+   */
   async check(url) {
     if (!this.enabled) return true;
     const u = new URL(url);
     if (u.pathname === '/robots.txt') return true;
     const robots = await this.forOrigin(u.origin);
+    if (robots.disallowAll) return `ROBOTS_UNREACHABLE ${robots.error ?? ''}`.trim();
     return isAllowed(robots, this.userAgent, u.pathname + u.search) ? true : 'ROBOTS_DISALLOWED';
   }
 

@@ -16,13 +16,25 @@ class FetchError extends Error {
   }
 }
 
+const causeChain = (err) => {
+  const out = [];
+  for (let c = err, d = 0; c && d < 6; c = c.cause, d++) out.push(c);
+  return out;
+};
+
 function errorCode(err) {
   if (err instanceof FetchError) return err.code;
+  const chain = causeChain(err);
+  // egress proxy refused the CONNECT tunnel (e.g. sandbox network policy) — not retryable
+  const proxy = chain.map((c) => /Proxy response \((\d{3})\)/i.exec(String(c.message ?? ''))).find(Boolean);
+  if (proxy) return `PROXY_${proxy[1]}`;
   if (err?.name === 'AbortError' || err?.name === 'TimeoutError') return 'TIMEOUT';
-  const c = err?.cause?.code ?? err?.code;
-  if (c) return String(c);
+  const c = chain.map((x) => x.code).find((x) => typeof x === 'string' && x);
+  if (c) return c;
   return 'NETWORK_ERROR';
 }
+
+const errorMessage = (err) => causeChain(err).map((c) => c.message).filter(Boolean).join(': ').slice(0, 300);
 
 function retryAfterMs(value) {
   if (!value) return null;
@@ -103,7 +115,7 @@ export class Fetcher {
         last = await this.#once(url, opts);
       } catch (err) {
         const code = errorCode(err);
-        last = { ok: false, status: 0, url, error: code, message: String(err?.message ?? err).slice(0, 300) };
+        last = { ok: false, status: 0, url, error: code, message: errorMessage(err) };
         if (opts.toFile) await rm(opts.toFile, { force: true });
         if (!RETRY_ERRORS.has(code) || attempt === attempts) return { ...last, attempts: attempt + 1 };
         await this.#backoff(attempt, null, url, code);
@@ -186,25 +198,25 @@ export class Fetcher {
             } catch (err) {
               ws.destroy();
               await rm(opts.toFile, { force: true });
-              if (err instanceof FetchError && err.code === 'TOO_LARGE') {
-                ac.abort();
-                return { ...base, ok: false, error: 'TOO_LARGE', bytes, cap };
-              }
+              if (err instanceof FetchError && err.code === 'TOO_LARGE') return { ...base, ok: false, error: 'TOO_LARGE', bytes, cap };
               throw err;
             }
             ws.end();
             await once(ws, 'close');
           } else {
             const chunks = [];
+            let tooLarge = false;
+            // leaving the loop with `break` cancels the body stream; aborting first would make that cleanup throw
             for await (const chunk of res.body ?? []) {
               bytes += chunk.length;
               if (bytes > cap) {
-                ac.abort();
-                return { ...base, ok: false, error: 'TOO_LARGE', bytes, cap };
+                tooLarge = true;
+                break;
               }
               hash.update(chunk);
               chunks.push(chunk);
             }
+            if (tooLarge) return { ...base, ok: false, error: 'TOO_LARGE', bytes, cap };
             body = Buffer.concat(chunks);
           }
           this.stats.bytes += bytes;

@@ -1,0 +1,7 @@
+# Working state of the migrator (large / regenerable). Review artefacts stay committable:
+# out/manifest.json, out/inventory.json, out/urls.csv, out/report.md, out/report.json, out/import/*
+out/state/
+out/staging/
+out/snapshots/
+out/build/
+out/.lock

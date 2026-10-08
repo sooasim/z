@@ -169,3 +169,45 @@ export function useCountdown(iso: string | null | undefined) {
   const s = Math.floor((left % 60000) / 1000);
   return { left, label: `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`, expired: left <= 0, valid: true };
 }
+
+export interface ContextSummary {
+  title: string;
+  href: string;
+  linkLabel: string;
+}
+
+/** What a conversation is about: listing / product title + a link to the booking (cached per page session). */
+export function useContextSummary(contextType: string, contextId: string, L: (ko: string, en: string) => string): ContextSummary | null {
+  const t = (contextType || '').toUpperCase();
+  const path =
+    !contextId ? null : t === 'RESERVATION' ? `/v1/reservations/${contextId}` : t === 'INQUIRY' ? `/v1/properties/${contextId}` : t === 'ORDER' ? `/v1/orders/${contextId}` : t === 'EXCHANGE' ? `/v1/exchanges/${contextId}` : null;
+  const { data } = useCachedApi<any>(path);
+  const d = item(data) ?? {};
+  const resPropId = t === 'RESERVATION' ? str(d, 'propertyId') : '';
+  const { data: pdata } = useCachedApi<any>(resPropId && !str(d, 'property.title') ? `/v1/properties/${resPropId}` : null);
+  if (!contextId) return null;
+  switch (t) {
+    case 'RESERVATION':
+      return { title: str(d, 'property.title') || str(item(pdata), 'title'), href: `/trips/${contextId}`, linkLabel: L('예약 보기', 'View booking') };
+    case 'INQUIRY':
+      return { title: str(d, 'title'), href: str(d, 'slug') ? `/stay/${str(d, 'slug')}` : '', linkLabel: L('숙소 보기', 'View listing') };
+    case 'ORDER': {
+      const first = Array.isArray(d.items) ? d.items[0] : null;
+      return { title: str(first, 'title'), href: `/orders/${contextId}`, linkLabel: L('주문 보기', 'View order') };
+    }
+    case 'EXCHANGE':
+      return { title: [str(d, 'propertyA.title'), str(d, 'propertyB.title')].filter(Boolean).join(' ⇄ '), href: `/exchange/${contextId}`, linkLabel: L('맞교환 보기', 'View exchange') };
+    case 'GUIDE_BOOKING':
+      return { title: '', href: `/guide-bookings/${contextId}`, linkLabel: L('일정 보기', 'View booking') };
+    case 'GUIDE_REQUEST':
+      return { title: '', href: `/guide-requests/${contextId}`, linkLabel: L('요청 보기', 'View request') };
+    default:
+      return null;
+  }
+}
+
+/** Public profile name of another member (no contact data) — e.g. the traveler on a guide booking. */
+export function usePublicName(userId: string): string {
+  const { data } = useCachedApi<any>(userId ? `/v1/users/${userId}/profile` : null);
+  return str(item(data), 'displayName', 'preferredName');
+}

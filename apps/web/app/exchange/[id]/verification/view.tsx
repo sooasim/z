@@ -9,7 +9,7 @@ import { post } from '@/lib/api';
 import { str } from '@/lib/shape';
 import { RequireAuth } from '@/components/gate';
 import { StateView } from '@/components/states';
-import { Alert, ErrorText, Section, StatusPill, Button } from '@/components/ui';
+import { Alert, ErrorText, Section, StatusPill, Button, ButtonLink } from '@/components/ui';
 import { ExchangeHeader, exchangeView } from '../../shared';
 
 const CHECKS: Record<string, { ko: string; en: string; href?: string }> = {
@@ -44,12 +44,17 @@ export default function ExchangeVerificationView() {
         {(d) => {
           const x = exchangeView(d, user?.id);
           const people: Array<[string, string]> = [
-            [x.requesterId, x.role === 'REQUESTER' ? L('나', 'Me') : x.requesterName || 'A'],
-            [x.responderId, x.role === 'RESPONDER' ? L('나', 'Me') : x.responderName || 'B'],
+            [x.requesterId, x.role === 'REQUESTER' ? L('나', 'Me') : x.requesterName || L('상대', 'Them')],
+            [x.responderId, x.role === 'RESPONDER' ? L('나', 'Me') : x.responderName || L('상대', 'Them')],
           ];
+          // Put "me" first.
+          if (x.role === 'RESPONDER') people.reverse();
           const checkOf = (uid: string, type: string) => x.verifications.find((v: any) => str(v, 'partyUserId', 'userId', 'party_user_id') === uid && str(v, 'checkType', 'check_type') === type);
           const mySafety = checkOf(user?.id ?? '', 'SAFETY_ACK');
           const myAcked = str(mySafety, 'status') === 'PASSED';
+          const otherId = x.role === 'REQUESTER' ? x.responderId : x.requesterId;
+          const otherPending = Object.keys(CHECKS).some((t) => str(checkOf(otherId, t), 'status') !== 'PASSED');
+          const agreementReady = ['AGREEMENT_PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'REVIEWED'].includes(x.status);
           return (
             <>
               <ExchangeHeader x={x} />
@@ -103,8 +108,21 @@ export default function ExchangeVerificationView() {
                 </div>
               </Section>
               <div className="row" style={{ marginTop: 16 }}>
-                {['MUTUAL_ACCEPTED', 'VERIFICATION_PENDING'].includes(x.status) && <Button loading={busy} onClick={() => run('verify')} icon="shield">{L('검증 다시 실행', 'Re-run verification')}</Button>}
-                <Link className="btn accent" href={`/exchange/${id}/agreement`}>{L('계약서로 →', 'Agreement →')}</Link>
+                {agreementReady ? (
+                  <ButtonLink variant="accent" href={`/exchange/${id}/agreement`} iconRight="right">
+                    {L('계약서 확인하고 서명하기', 'Review & sign the agreement')}
+                  </ButtonLink>
+                ) : (
+                  <span className="row small muted" style={{ gap: 8 }}>
+                    <StatusPill status="PENDING" labels={{ PENDING: [otherPending && myAcked ? '상대방 검증 대기 중' : '검증 진행 중', otherPending && myAcked ? 'Waiting for the other member' : 'Verification in progress'] }} />
+                    {L('양측 검증이 모두 끝나면 계약서가 열려요.', 'The agreement opens once both sides are verified.')}
+                  </span>
+                )}
+                {['MUTUAL_ACCEPTED', 'VERIFICATION_PENDING'].includes(x.status) && (
+                  <Button variant="ghost" loading={busy} onClick={() => run('verify')} icon="refresh">
+                    {L('검증 상태 새로고침', 'Refresh verification status')}
+                  </Button>
+                )}
               </div>
               <ErrorText error={err} />
             </>

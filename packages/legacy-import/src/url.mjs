@@ -151,7 +151,28 @@ export function originalCandidates(url, { stripParams = RESIZE_PARAMS } = {}) {
       out.unshift(v.toString());
     }
   }
+  // Sixshop resize proxy: https://thumb.sixshop.kr/uploadedFiles/<shop>/…/x.jpg?width=2500 → contents.sixshop.com original
+  if (u.hostname === 'thumb.sixshop.kr' && /^\/uploadedFiles\//i.test(u.pathname)) out.unshift(`https://contents.sixshop.com${u.pathname}`);
   return [...new Set(out)].filter((x) => x !== url);
+}
+
+/**
+ * Fold scheme / www variants of the site onto the canonical origin (first start URL): http://wontc.co.kr/x and
+ * https://www.wontc.co.kr/x are one page, not two. Other hosts are returned unchanged.
+ */
+export function canonicalizeSiteUrl(url, canonicalOrigin) {
+  if (!url || !canonicalOrigin) return url;
+  try {
+    const u = new URL(url);
+    const c = new URL(canonicalOrigin);
+    const bare = (h) => h.replace(/^www\./, '');
+    if (bare(u.hostname) !== bare(c.hostname) || u.port !== c.port) return url;
+    u.protocol = c.protocol;
+    u.host = c.host;
+    return u.toString();
+  } catch {
+    return url;
+  }
 }
 
 /** YouTube / Vimeo embed detection → { provider, videoId, embedUrl, watchUrl, thumbnailUrl } or null. */

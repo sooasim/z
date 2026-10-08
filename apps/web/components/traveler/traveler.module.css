@@ -106,8 +106,9 @@
 }
 .convMeta { display: flex; gap: 6px; align-items: center; min-width: 0; font-size: var(--fs-xs); color: var(--text-muted); margin-top: 2px; }
 .convMeta .t { margin-left: auto; white-space: nowrap; flex: 0 0 auto; }
-.convTitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.convList { list-style: none; padding: 0; margin: 0; display: grid; gap: 2px; }
+.convTitle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.convList { list-style: none; padding: 0; margin: 0; display: grid; gap: 2px; grid-template-columns: minmax(0, 1fr); }
+.convList > li { min-width: 0; }
 
 /* ———————————————————— notifications ———————————————————— */
 .notifList { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
@@ -186,6 +187,7 @@
 .fieldset legend { font-weight: 700; font-size: var(--fs-sm); padding: 0 6px; }
 
 .accountNavSelect { display: none; }
+.accountNavStrip { display: contents; }
 @media (max-width: 640px) {
   .accountNavSelect { display: grid; }
   .accountNavStrip { display: none; }
@@ -227,3 +229,17 @@
 @media (max-width: 959px) {
   .stickyBar { display: flex; position: sticky; bottom: calc(env(safe-area-inset-bottom) + 0px); z-index: 5; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; margin: 16px -16px 0; background: color-mix(in srgb, var(--surface) 96%, transparent); backdrop-filter: blur(12px); border-top: 1px solid var(--border); box-shadow: 0 -8px 24px -12px rgba(7, 21, 38, 0.18); }
 }
+
+/* ———————————————————— generic checkout (orders / guide bookings) ———————————————————— */
+.checkoutGrid { display: grid; gap: var(--sp-6); grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 960px) {
+  .checkoutGrid { grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); gap: var(--sp-10); }
+  .checkoutGrid > .sumCol { grid-column: 2; grid-row: 1; position: sticky; top: calc(var(--header-h) + 16px); }
+  .checkoutGrid > .payCol { grid-column: 1; grid-row: 1; }
+}
+
+/* ListingCard's implicit grid track sizes to the title's min-content; long titles (tour packages) widen the card
+   past its grid column. Constrain it inside traveler grids. */
+.cardGrid :global(.lcard) { grid-template-columns: minmax(0, 1fr); }
+.cardGrid :global(.lcard .body) { grid-template-columns: minmax(0, 1fr); }
+.cardGrid :global(.lcard .title-row > :first-child) { min-width: 0; }

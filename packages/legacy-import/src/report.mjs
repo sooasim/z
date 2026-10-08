@@ -2,8 +2,11 @@ import path from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { outPaths } from './config.mjs';
-import { findOrphans } from './publish.mjs';
+import { findOrphans, foreignPublisherDirs } from './publish.mjs';
 import { atomicWrite, formatBytes, readJson, uniq, writeJson } from './util.mjs';
+import { hostMatches } from './url.mjs';
+
+const DOC_RE = /\.(pdf|hwp|hwpx|docx?|xlsx?|pptx?|zip)$/i;
 
 /**
  * Step 7 — reconciliation: per-page counts, failed downloads with reasons, duplicates, bytes and coverage
@@ -54,7 +57,12 @@ export async function buildReport(cfg) {
     .filter((u) => !u.resolved)
     .map((u) => ({ url: u.url, kind: u.kind, via: [...u.vias], pages: [...u.pages], reasons: uniq(u.errors.map((e) => e.error)), attempts: u.errors }));
   const hostsBlocked = {};
-  for (const f of failed) if (f.reasons.some((r) => /HOST_NOT_ALLOWED/.test(r))) hostsBlocked[new URL(f.url).host] = (hostsBlocked[new URL(f.url).host] ?? 0) + 1;
+  const hostsProxyDenied = {};
+  for (const f of failed) {
+    const h = new URL(f.url).host;
+    if (f.reasons.some((r) => /HOST_NOT_ALLOWED/.test(r))) hostsBlocked[h] = (hostsBlocked[h] ?? 0) + 1;
+    if (f.reasons.some((r) => /PROXY_\d/.test(r))) hostsProxyDenied[h] = (hostsProxyDenied[h] ?? 0) + 1;
+  }
   const reasons = {};
   for (const f of failed) for (const r of f.reasons) reasons[r] = (reasons[r] ?? 0) + 1;
 
@@ -76,14 +84,16 @@ export async function buildReport(cfg) {
     };
   });
   const embeds = Object.values(st?.embeds ?? {});
-  const orphans = await findOrphans(cfg.publicDir, new Set(Object.keys(manifest?.assets ?? {})));
+  const foreign = new Set(await foreignPublisherDirs(cfg.publicDir));
+  const orphans = (await findOrphans(cfg.publicDir, new Set(Object.keys(manifest?.assets ?? {})))).filter((d) => !foreign.has(d));
   const report = {
     generatedAt: new Date().toISOString(),
     source: { startUrls: inv.startUrls, siteHosts: inv.siteHosts, assetHosts: inv.assetHosts, crawlFinished: inv.finished },
     pages: {
       total: inv.pages.length,
-      ok: inv.pages.filter((p) => p.ok && !p.aliasOf).length,
+      ok: inv.pages.filter((p) => p.ok && !p.aliasOf && !p.template).length,
       aliases: inv.pages.filter((p) => p.aliasOf).length,
+      templates: inv.pages.filter((p) => p.template).map((p) => ({ url: p.url, title: p.title ?? null })),
       failed: inv.pages.filter((p) => !p.ok).map((p) => ({ url: p.url, error: p.error, status: p.status ?? null })),
       skipped: inv.skipped,
     },
@@ -95,9 +105,11 @@ export async function buildReport(cfg) {
       resolved,
       failed: failed.length,
       coveragePct: Math.floor(coverage * 100) / 100,
-      complete: failed.length === 0,
+      // an empty crawl is never "complete"
+      complete: failed.length === 0 && inv.pages.some((p) => p.ok),
       reasons,
       hostsNotAllowed: hostsBlocked,
+      hostsDeniedByProxy: hostsProxyDenied,
       failedList: failed,
       implicitMissing: refs.filter((r) => r.implicit && !r.sha256).map((r) => r.url),
     },
@@ -113,9 +125,20 @@ export async function buildReport(cfg) {
       publishedFiles: published.files,
       publishedBytes: published.bytes,
       orphans,
+      foreignPublisherDirs: foreign.size,
     },
     embeds: embeds.map((e) => ({ id: e.id, provider: e.provider, watchUrl: e.watchUrl, pages: e.pageUrls.length })),
     otherIframes: uniq((inv.pages ?? []).flatMap((p) => (p.otherIframes ?? []).map((x) => x.url))),
+    // brochures / forms linked from pages on the site's own hosts — not media, so review and migrate by hand
+    documents: uniq(
+      (inv.pages ?? []).flatMap((p) => (p.links ?? []).map((l) => l.url)).filter((u) => {
+        try {
+          return DOC_RE.test(new URL(u).pathname) && hostMatches(u, [...(inv.siteHosts ?? []), ...(inv.assetHosts ?? [])]);
+        } catch {
+          return false;
+        }
+      }),
+    ),
     perPage: pages,
     manifest: manifest ? { generatedAt: manifest.generatedAt, contentSha256: manifest.contentSha256, pages: manifest.pages.length, assets: Object.keys(manifest.assets).length } : null,
   };
@@ -133,6 +156,7 @@ export function renderReport(r) {
   const rows = [
     ['Pages crawled (ok / failed / aliases)', `${r.pages.ok} / ${r.pages.failed.length} / ${r.pages.aliases}`],
     ['URLs skipped (robots, excluded, limits)', r.pages.skipped.length],
+    ['Sixshop template pages skipped', r.pages.templates.length],
     ['Media references on pages', r.media.references],
     ['Unique media URLs', r.media.uniqueUrls],
     ['Downloaded (resolved)', r.media.resolved],
@@ -151,13 +175,21 @@ export function renderReport(r) {
       L.push('', 'Hosts not in the asset allowlist (add with `--asset-host <host>` after confirming they belong to the site):', '');
       for (const [h, n] of Object.entries(r.media.hostsNotAllowed)) L.push(`- \`${h}\` — ${n} URL(s)`);
     }
+    if (Object.keys(r.media.hostsDeniedByProxy ?? {}).length) {
+      L.push('', 'Hosts denied by the egress proxy / network policy (allow them in the environment, then re-run with `--resume`):', '');
+      for (const [h, n] of Object.entries(r.media.hostsDeniedByProxy)) L.push(`- \`${h}\` — ${n} URL(s)`);
+    }
     L.push('', 'Reasons: ' + Object.entries(r.media.reasons).map(([k, v]) => `${k} × ${v}`).join(', '));
   }
   if (r.media.implicitMissing.length) L.push('', `Implicit references not found (not counted): ${r.media.implicitMissing.join(', ')}`);
   L.push('', '## Pages', '', '| Page | Title | Media refs | Unique | Downloaded | Failed | Images | Videos | Embeds |', '|---|---|---|---|---|---|---|---|---|');
   for (const p of r.perPage) {
-    const status = p.ok ? (p.aliasOf ? ` (alias of ${p.aliasOf})` : '') : ` **${p.error}**`;
+    const status = p.ok ? (p.aliasOf ? ` (alias of ${p.aliasOf})` : p.template ? ' (Sixshop template, skipped)' : '') : ` **${p.error}**`;
     L.push(`| ${p.url}${status} | ${(p.title ?? '').replace(/\|/g, '\\|')} | ${p.mediaRefs} | ${p.uniqueMedia} | ${p.downloaded} | ${p.failed} | ${p.images} | ${p.videos} | ${p.embeds} |`);
+  }
+  if (r.pages.templates.length) {
+    L.push('', '## Sixshop template pages (skipped — default editor manual, sample images of another shop)', '', 'Re-run with `--include-template-pages` if any of these is real content.', '');
+    for (const t of r.pages.templates) L.push(`- ${t.url} — ${t.title ?? ''}`);
   }
   if (r.pages.skipped.length) {
     L.push('', '## Skipped URLs', '', '| URL | Reason | Found on |', '|---|---|---|');
@@ -175,7 +207,14 @@ export function renderReport(r) {
     L.push('', '## Other iframes (not migrated — review manually)', '');
     for (const u of r.otherIframes) L.push(`- ${u}`);
   }
+  if (r.documents.length) {
+    L.push('', '## Linked documents (not migrated automatically — review)', '');
+    for (const u of r.documents) L.push(`- ${u}`);
+  }
   if (r.assets.orphans.length) L.push('', `## Orphaned public directories (kept)`, '', r.assets.orphans.map((o) => `- ${o}`).join('\n'));
+  if (r.assets.foreignPublisherDirs) {
+    L.push('', '## Shared public directory', '', `> **Warning:** the public dir also contains ${r.assets.foreignPublisherDirs} asset director(ies) written by another publisher (\`<sha12>/original.<ext>\` layout). If that publisher prunes entries it does not know, it will delete this migration's files — publish with \`--public-dir\`/\`--url-prefix\` to a directory this tool owns, or let one pipeline own it.`);
+  }
   L.push('', '## Robots / sitemaps', '');
   for (const rb of r.robots ?? []) L.push(`- robots ${rb.origin}: ${rb.status}${rb.crawlDelay ? `, crawl-delay ${rb.crawlDelay}s` : ''}, ${rb.rules} rule(s)`);
   for (const s of r.sitemaps ?? []) L.push(`- sitemap ${s.url}: ${s.ok ? `${s.urls} URL(s)` : s.error}`);

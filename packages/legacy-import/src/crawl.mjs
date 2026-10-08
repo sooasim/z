@@ -3,7 +3,8 @@ import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { extractPage, parseCssUrls } from './extract.mjs';
 import { parseSitemap } from './robots.mjs';
-import { hostMatches, isLikelyPage, normalizeUrl, pageKey } from './url.mjs';
+import { canonicalizeSiteUrl, hostMatches, isLikelyPage, kindFromUrl, normalizeUrl, pageKey } from './url.mjs';
+import { parseExtraMedia } from './extra-media.mjs';
 import { outPaths } from './config.mjs';
 import { atomicWrite, ensureDir, mapPool, readJson, removeIfExists, sha12, sha256, toCsv, writeJson } from './util.mjs';
 
@@ -79,6 +80,24 @@ async function cssRefsFor(page, ctx, cache) {
   return refs;
 }
 
+/** Sixshop's default editor-manual pages ("사용 설명서", sample images of shop 113) — not the owner's content. */
+export function isSixshopTemplate(page) {
+  // "사용 설명서", "Q&A - 사용 설명서 | <shop name>" …
+  const head = String(page.title ?? '').split(/\s+[|:–—]\s+/)[0];
+  if (/(^|[\s-])사용\s*설명서\s*$/.test(head)) return true;
+  return (page.textBlocks ?? []).some((b) => /식스샵\s*편집\s*도구/.test(b.text));
+}
+
+/** Post-extraction normalisation shared by crawl and extract: fold site URL variants, flag template pages. */
+function finishPage(page, cfg) {
+  const origin = new URL(cfg.startUrls[0]).origin;
+  for (const m of page.media ?? []) m.url = canonicalizeSiteUrl(m.url, origin);
+  for (const l of page.links ?? []) l.url = canonicalizeSiteUrl(l.url, origin);
+  if (page.canonical) page.canonical = canonicalizeSiteUrl(page.canonical, origin);
+  page.template = !cfg.includeTemplatePages && isSixshopTemplate(page);
+  return page;
+}
+
 function appendCssMedia(page, cssRefs) {
   for (const r of cssRefs) {
     if (page.media.some((m) => m.url === r.url && m.via === 'css')) continue;
@@ -111,15 +130,16 @@ async function crawlOne(item, ctx, cssCache) {
   if (!existsSync(path.join(paths.out, snapshot))) await atomicWrite(path.join(paths.out, snapshot), res.body);
   const page = { ...base, ok: true, status: res.status, finalUrl: res.url, finalKey: pageKey(res.url), redirects: res.redirects, contentType: res.contentType, sha256: res.sha256, bytes: res.bytes, snapshot, ...extractPage(html, res.url, { isAssetHost: scope.isAssetHost }) };
   appendCssMedia(page, await cssRefsFor(page, ctx, cssCache));
-  return page;
+  return finishPage(page, cfg);
 }
 
 function discover(page, scope, cfg) {
   const out = [];
   const cands = [...(page.links ?? []).map((l) => l.url)];
   if (page.canonical) cands.push(page.canonical);
+  const origin = new URL(cfg.startUrls[0]).origin;
   for (const raw of cands) {
-    const u = normalizeUrl(raw);
+    const u = canonicalizeSiteUrl(normalizeUrl(raw), origin);
     if (!u || !scope.isSiteHost(u) || !isLikelyPage(u)) continue;
     out.push(u);
   }
@@ -184,6 +204,17 @@ export async function runCrawl(ctx) {
     st.fetched = (await readdir(paths.pagesDir)).filter((f) => f.endsWith('.json')).length;
     log.info(`crawl: resuming at level ${st.level} with ${st.fetched} page(s) already fetched`);
   }
+  // fail fast (and clearly) when a start origin cannot be reached at all — an empty crawl would look like success
+  for (const origin of [...new Set(cfg.startUrls.map((u) => new URL(u).origin))]) {
+    const r = await robots.forOrigin(origin);
+    if (!r.status.startsWith('UNREACHABLE_')) continue;
+    const hint = /PROXY_4\d\d/.test(r.status)
+      ? `the egress proxy / network policy denies ${new URL(origin).host} — allow the site and CDN hosts first (docs/runbooks/legacy-media-import.md, step 2)`
+      : /^UNREACHABLE_HTTP_5/.test(r.status) || /^UNREACHABLE_5/.test(r.status)
+        ? 'robots.txt answers 5xx, which RFC 9309 treats as "disallow all" — retry later'
+        : 'check DNS / connectivity / proxy settings (HTTPS_PROXY, NODE_EXTRA_CA_CERTS)';
+    throw new Error(`cannot crawl ${origin}: robots.txt is unreachable (${r.status.slice('UNREACHABLE_'.length)}${r.message ? `: ${r.message}` : ''}); ${hint}`);
+  }
   if (!st) {
     st = { version: 1, startedAt: new Date().toISOString(), startUrls: cfg.startUrls, frontier: [], seen: [], skipped: [], fetched: 0, level: 0, sitemaps: null, finished: false };
     const push = (url, via, depth, extra = {}) => {
@@ -197,7 +228,7 @@ export async function runCrawl(ctx) {
     for (const u of cfg.startUrls) push(u, 'start', 0);
     const sm = await loadSitemaps({ ...ctx, paths });
     st.sitemaps = sm.results;
-    for (const x of sm.urls) push(x.loc, 'sitemap', 1, { lastmod: x.lastmod });
+    for (const x of sm.urls) push(canonicalizeSiteUrl(normalizeUrl(x.loc), new URL(cfg.startUrls[0]).origin), 'sitemap', 1, { lastmod: x.lastmod });
     await writeJson(paths.crawlState, st);
   }
   const seen = new Set(st.seen);
@@ -217,8 +248,9 @@ export async function runCrawl(ctx) {
         st.skipped.push({ url: item.url, reason: 'EXCLUDED_PATTERN', from: item.from ?? null });
         continue;
       }
-      if (cfg.respectRobots && (await robots.check(item.url)) !== true) {
-        st.skipped.push({ url: item.url, reason: 'ROBOTS_DISALLOWED', from: item.from ?? null });
+      const allowed = cfg.respectRobots ? await robots.check(item.url) : true;
+      if (allowed !== true) {
+        st.skipped.push({ url: item.url, reason: allowed, from: item.from ?? null });
         continue;
       }
       if (item.depth > cfg.maxDepth) {
@@ -278,7 +310,7 @@ export async function runExtract(ctx) {
     const html = decodeHtml(buf, rec.contentType);
     const page = { ...rec, ...extractPage(html, rec.finalUrl, { isAssetHost: ctx.scope.isAssetHost }) };
     appendCssMedia(page, await cssRefsFor(page, { ...ctx, paths, cfg: { ...cfg, resume: true } }, cssCache));
-    await writeJson(path.join(paths.pagesDir, f), page);
+    await writeJson(path.join(paths.pagesDir, f), finishPage(page, cfg));
     n++;
   }
   log.info(`extract: re-parsed ${n} snapshot(s)`);
@@ -297,9 +329,46 @@ export async function loadPages(cfg) {
   return pages.sort((a, b) => a.depth - b.depth || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
 
+/**
+ * Media observed in a real browser session (HAR or URL list, --extra-media) that the static crawl cannot see,
+ * e.g. slides loaded by JavaScript. Kept in the crawl state so later --resume runs keep them.
+ */
+async function mergeExtraMedia(cfg, st, pages) {
+  if (cfg.extraMedia) {
+    st.extraMedia = parseExtraMedia(await readFile(cfg.extraMedia, 'utf8'), cfg.extraMedia);
+    await writeJson(outPaths(cfg).crawlState, st);
+  }
+  const extra = st.extraMedia ?? [];
+  if (!extra.length) return 0;
+  const origin = new URL(cfg.startUrls[0]).origin;
+  const ok = pages.filter((p) => p.ok && !p.template);
+  const byKey = new Map(ok.map((p) => [p.finalKey ?? p.key, p]));
+  let added = 0;
+  for (const x of extra) {
+    const url = canonicalizeSiteUrl(normalizeUrl(x.url), origin);
+    if (!url) continue;
+    let page = null;
+    try {
+      page = x.pageUrl ? byKey.get(pageKey(canonicalizeSiteUrl(normalizeUrl(x.pageUrl), origin))) : null;
+    } catch {
+      page = null;
+    }
+    page ??= ok[0];
+    if (!page || page.media.some((m) => m.url === url)) continue;
+    const k = kindFromUrl(url);
+    page.media.push({
+      url, kind: k === 'video' ? 'video' : k === 'image' ? 'image' : 'unknown', via: 'extra', role: 'content', zone: 'main', group: `extra:${url}`,
+      alt: null, title: null, caption: null, context: null, width: null, height: null, descriptor: null, implicit: false,
+    });
+    added++;
+  }
+  return added;
+}
+
 async function writeInventory(cfg, st) {
   const paths = outPaths(cfg);
   const pages = await loadPages(cfg);
+  const extraAdded = await mergeExtraMedia(cfg, st, pages);
   // redirect aliases: a URL that redirected to an already-crawled page is kept as an alias of that page
   // (a page fetched at its own URL wins; otherwise the first page that redirected there)
   const byKey = new Map();
@@ -308,6 +377,13 @@ async function writeInventory(cfg, st) {
   for (const p of pages) {
     const target = p.ok && p.finalKey ? byKey.get(p.finalKey) : null;
     if (target && target !== p) p.aliasOf = target.url;
+  }
+  // byte-identical pages under different URLs (Sixshop serves / and /home from one template): first one wins
+  const bySha = new Map();
+  for (const p of pages) {
+    if (!p.ok || p.aliasOf || !p.sha256) continue;
+    if (bySha.has(p.sha256)) p.aliasOf = bySha.get(p.sha256).url;
+    else bySha.set(p.sha256, p);
   }
   const inv = {
     version: 1,
@@ -326,6 +402,8 @@ async function writeInventory(cfg, st) {
       failed: pages.filter((p) => !p.ok).length,
       skipped: st.skipped.length,
       mediaRefs: pages.reduce((n, p) => n + (p.media?.length ?? 0), 0),
+      extraMediaRefs: extraAdded,
+      templatePages: pages.filter((p) => p.template).length,
       embeds: pages.reduce((n, p) => n + (p.embeds?.length ?? 0), 0),
     },
     pages,

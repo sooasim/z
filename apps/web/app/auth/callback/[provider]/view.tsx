@@ -4,7 +4,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { useAuth } from '@/lib/auth';
-import { ErrorText, Spinner } from '@/components/ui';
+import { ErrorText, Illustration, Spinner } from '@/components/ui';
 import { ApiError } from '@/lib/errors';
 import { safeNext } from '@/components/auth/social';
 
@@ -49,14 +49,24 @@ export default function OAuthCallbackView() {
   return (
     <div style={{ maxWidth: 440, margin: '0 auto' }}>
       {err ? (
-        <div className="stack">
+        <div className="state" role="alert">
+          <Illustration name="lock" />
+          <h1>{L('소셜 로그인을 완료하지 못했어요', 'We couldn’t finish signing you in')}</h1>
           <ErrorText error={err} />
-          <Link className="btn" href="/login">
-            {L('로그인으로 돌아가기', 'Back to login')}
-          </Link>
+          <div className="actions">
+            <Link className="btn primary" href="/login">
+              {L('다시 로그인하기', 'Try logging in again')}
+            </Link>
+            <Link className="btn ghost" href="/support">
+              {L('고객센터', 'Help centre')}
+            </Link>
+          </div>
         </div>
       ) : (
-        <Spinner label={L('로그인 처리 중…', 'Signing you in…')} />
+        <>
+          <h1 className="sr-only">{L('로그인 처리 중', 'Signing you in')}</h1>
+          <Spinner label={L('로그인 처리 중…', 'Signing you in…')} />
+        </>
       )}
     </div>
   );

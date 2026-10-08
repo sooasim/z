@@ -15,13 +15,13 @@ import { ensureDir, mapPool, readJson, uniq, writeJson } from './util.mjs';
  * Provenance (source URLs, pages, alt/caption/heading context, declared + real dimensions, duration) is kept.
  */
 
-const PERMANENT = /^(HTTP_4\d\d|HOST_NOT_ALLOWED|REDIRECT_HOST_NOT_ALLOWED|ROBOTS_DISALLOWED|TOO_LARGE|NOT_MEDIA|UNEXPECTED_CONTENT_TYPE|MAGIC_UNSUPPORTED|EMPTY|UNSUPPORTED_STREAM|TOO_MANY_REDIRECTS)/;
+export const PERMANENT_ERRORS = /^(HTTP_4(?!08|25|29)\d\d|HOST_NOT_ALLOWED|REDIRECT_HOST_NOT_ALLOWED|ROBOTS_DISALLOWED|TOO_LARGE|NOT_MEDIA|UNEXPECTED_CONTENT_TYPE|MAGIC_UNSUPPORTED|EMPTY|UNSUPPORTED_STREAM|TOO_MANY_REDIRECTS)/;
 
 /** All media references of the inventory, flattened with page provenance. */
 export function collectRefs(inv) {
   const out = [];
   for (const p of inv.pages ?? []) {
-    if (!p.ok || p.aliasOf) continue;
+    if (!p.ok || p.aliasOf || p.template) continue;
     (p.media ?? []).forEach((m, index) => out.push({ ...m, index, pageUrl: p.url, pageKey: p.key }));
   }
   return out;
@@ -45,7 +45,7 @@ async function readHead(file, n = 4096) {
 async function downloadOne(url, ctx) {
   const { cfg, fetcher, robots, scope, paths } = ctx;
   const fetchedAt = new Date().toISOString();
-  const fail = (error, extra = {}) => ({ url, status: 'failed', error, permanent: PERMANENT.test(error), fetchedAt, ...extra });
+  const fail = (error, extra = {}) => ({ url, status: 'failed', error, permanent: PERMANENT_ERRORS.test(error), fetchedAt, ...extra });
   if (!scope.isAssetHost(url)) return fail('HOST_NOT_ALLOWED', { host: new URL(url).host });
   if (kindFromUrl(url) === 'stream') return fail('UNSUPPORTED_STREAM');
   await ensureDir(paths.stagingTmp);
@@ -184,7 +184,7 @@ export async function buildAssets(inv, downloads, cfg, paths) {
         const a = assets[sha];
         a.pageUrls.push(r.pageUrl);
         // page content (not theme CSS, not header/nav/footer chrome, not <head>)
-        if (r.zone === 'main' && r.via !== 'css') a.mainPageUrls.push(r.pageUrl);
+        if ((r.zone === 'main' && r.via !== 'css') || r.role === 'og') a.mainPageUrls.push(r.pageUrl);
         if (r.alt) a.alts.push(r.alt);
         if (r.caption) a.captions.push(r.caption);
         if (r.title) a.titles.push(r.title);
@@ -212,7 +212,7 @@ export async function buildAssets(inv, downloads, cfg, paths) {
   }
   const embeds = {};
   for (const p of inv.pages ?? []) {
-    if (!p.ok || p.aliasOf) continue;
+    if (!p.ok || p.aliasOf || p.template) continue;
     for (const e of p.embeds ?? []) {
       const id = `${e.provider}-${e.videoId}`;
       embeds[id] ??= { id, provider: e.provider, videoId: e.videoId, embedUrl: e.embedUrl, watchUrl: e.watchUrl, thumbnailUrl: e.thumbnailUrl, oembedUrl: e.oembedUrl ?? null, titles: [], contexts: [], pageUrls: [] };

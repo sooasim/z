@@ -21,6 +21,10 @@ dropdb -h "$PGHOST" -U "$PGUSER" --if-exists --force "$DB"
 createdb -h "$PGHOST" -U "$PGUSER" "$DB"
 node "$ROOT/packages/db/migrate.mjs" >/dev/null
 NODE_ENV=development node "$ROOT/packages/db/seed-dev.mjs"
+# Legacy WONT Travel Club media/content, when its import manifest exists (no-op otherwise; never fatal here).
+if [ -f "$ROOT/packages/db/seed-legacy.mjs" ]; then
+  NODE_ENV=development node "$ROOT/packages/db/seed-legacy.mjs" ${DEMO_LEGACY_PUBLISH:+--publish} || echo "[record.sh] seed-legacy skipped"
+fi
 
 export NODE_ENV=development PAYMENT_PROVIDER=MOCK OAUTH_MOCK=true PORT="$PORT" RATE_LIMIT_PER_MIN=100000 WORKER_METRICS_PORT=off
 pids=()

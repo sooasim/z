@@ -6,7 +6,8 @@
 import { formatDate, formatRange, formatTimeRange, type Lang } from '@/lib/format';
 import { placeLabel, countryLabel } from '@/lib/places';
 import { enumLabel } from '@/lib/enums';
-import { f, isObj, num, str } from '@/lib/shape';
+import { arr, f, isObj, num, str } from '@/lib/shape';
+import type { PriceLine } from '@/components/ui';
 
 type Pair = readonly [string, string];
 const pick = (p: Pair | undefined, lang: Lang) => (p ? p[lang === 'ko' ? 0 : 1] : undefined);
@@ -468,4 +469,96 @@ export function todayIso(now = new Date()): string {
 /** First Hangul-free check: true when an API string is English-only (hide it from the Korean UI). */
 export function isLatinOnly(s: string): boolean {
   return !!s && !/[가-힣]/.test(s);
+}
+
+/** "11월 10일 (화)" / "Tue, Nov 10" — day label with weekday (no year). */
+export function dayLabel(iso: string, lang: Lang): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+  const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  if (lang === 'ko') return `${d.getMonth() + 1}월 ${d.getDate()}일 (${new Intl.DateTimeFormat('ko-KR', { weekday: 'short' }).format(d)})`;
+  return new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(d);
+}
+
+/** Order price lines: items, then platform fee and tax from the server-side pricing snapshot. */
+export function orderPriceLines(o: any, L: (ko: string, en: string) => string): PriceLine[] {
+  const lines = arr<any>(o, 'items', 'lines', 'orderItems');
+  const out: PriceLine[] = lines.map((l) => ({ label: `${str(l, 'title', 'productTitle', 'name')} × ${num(l, 'qty', 'quantity') ?? 1}`, amountMinor: num(l, 'amountMinor', 'totalMinor') ?? 0 }));
+  const fee = num(o, 'pricing.platformFeeMinor');
+  const tax = num(o, 'pricing.taxMinor');
+  if (fee !== undefined || tax !== undefined) {
+    if (fee) out.push({ label: L('서비스 수수료', 'Service fee'), amountMinor: fee });
+    if (tax) out.push({ label: L('부가세', 'VAT'), amountMinor: tax });
+  } else if (num(o, 'feeMinor')) out.push({ label: L('수수료·세금', 'Fees & tax'), amountMinor: num(o, 'feeMinor')! });
+  return out;
+}
+
+
+/** Order statuses read from the buyer's point of view. */
+export const ORDER_STATUS_LABELS: Record<string, [string, string]> = {
+  PENDING: ['결제 대기', 'Awaiting payment'],
+  CREATED: ['결제 대기', 'Awaiting payment'],
+  PAID: ['결제 완료', 'Paid'],
+  CONFIRMED: ['예약 확정', 'Confirmed'],
+  FULFILLED: ['이용 완료', 'Completed'],
+  EXPIRED: ['결제 시간 만료', 'Expired'],
+};
+
+/** "방금 · 5분 전 · 3시간 전 · 어제 · 10월 3일" (ko) / "now · 5m · 3h · Yesterday · Oct 3" (en). */
+export function relTime(iso: string, lang: Lang, now = new Date()): string {
+  const d = new Date(iso);
+  if (!iso || Number.isNaN(d.getTime())) return '';
+  const diff = (now.getTime() - d.getTime()) / 1000;
+  const ko = lang === 'ko';
+  if (diff < 60) return ko ? '방금' : 'now';
+  if (diff < 3600) return ko ? `${Math.floor(diff / 60)}분 전` : `${Math.floor(diff / 60)}m`;
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  if (d.getTime() >= startToday) return ko ? `${Math.floor(diff / 3600)}시간 전` : `${Math.floor(diff / 3600)}h`;
+  if (d.getTime() >= startToday - 86400000) return ko ? '어제' : 'Yesterday';
+  if (d.getFullYear() === now.getFullYear()) return ko ? `${d.getMonth() + 1}월 ${d.getDate()}일` : new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(d);
+  return formatDate(iso, lang);
+}
+
+/** "오후 2:34" / "2:34 PM". */
+export function clockTime(iso: string, lang: Lang): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat(lang === 'ko' ? 'ko-KR' : 'en-US', { hour: 'numeric', minute: '2-digit' }).format(d);
+}
+
+/** Day separator text: "오늘", "어제", "10월 8일 (목)". */
+export function daySeparator(iso: string, lang: Lang, now = new Date()): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const delta = Math.round((day(now) - day(d)) / 86400000);
+  if (delta === 0) return lang === 'ko' ? '오늘' : 'Today';
+  if (delta === 1) return lang === 'ko' ? '어제' : 'Yesterday';
+  const base = dayLabel(todayIsoOf(d), lang);
+  return d.getFullYear() === now.getFullYear() ? base : `${d.getFullYear()}${lang === 'ko' ? '년 ' : ', '}${base}`;
+}
+const todayIsoOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/** Guide booking FSM → traveler-facing milestone titles (English API reasons are dropped). */
+export const GUIDE_MILESTONE: Record<string, [string, string]> = {
+  REQUESTED: ['요청 보냄', 'Request sent'],
+  OFFERED: ['제안 도착', 'Offer received'],
+  ACCEPTED: ['제안 수락', 'Offer accepted'],
+  PAYMENT_PENDING: ['결제 대기', 'Awaiting payment'],
+  CONFIRMED: ['일정 확정', 'Confirmed'],
+  SCHEDULED: ['일정 확정', 'Scheduled'],
+  IN_PROGRESS: ['진행 중', 'In progress'],
+  COMPLETED: ['진행 완료', 'Completed'],
+  REVIEWED: ['후기 작성 완료', 'Reviewed'],
+  CANCELLED: ['일정 취소', 'Cancelled'],
+  NO_SHOW: ['노쇼', 'No-show'],
+  DISPUTED: ['분쟁 접수', 'Disputed'],
+};
+
+/** "10:00 성수역 집합 → 카페 2곳 → 서울숲 산책" → ['10:00 성수역 집합', '카페 2곳', '서울숲 산책']. */
+export function itinerarySteps(text: string): string[] {
+  return (text || '')
+    .split(/\s*(?:→|->|\n|·)\s*/)
+    .map((x) => x.trim())
+    .filter(Boolean);
 }

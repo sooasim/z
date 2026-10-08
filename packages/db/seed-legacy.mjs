@@ -244,7 +244,7 @@ async function seed() {
     { type: 'STORY', slug: 'jetpool-charter-story', pool: plan.assignments.charter, i: 1 },
     { type: 'STORY', slug: 'local-life-exchange', pool: plan.assignments.exchange },
     { type: 'STORY', slug: 'seoul-busan-month-swap', pool: plan.assignments.exchange, i: 1 },
-    ...Object.entries(CITY_SLUG).map(([slug, city]) => ({ type: 'DESTINATION', slug, pool: media.filter((m) => m.eligible && m.cities.includes(city)).map((m) => m.assetId), city })),
+    ...Object.entries(CITY_SLUG).map(([slug, city]) => ({ type: 'DESTINATION', slug, pool: media.filter((m) => m.eligible && m.cities.includes(city)).sort((a, b) => (b.cityScores?.[city] ?? 0) - (a.cityScores?.[city] ?? 0)).map((m) => m.assetId), city })),
   ];
   for (const c of curated) {
     const row = await one(`SELECT id, data, seo, hero_media_id FROM cms_entries WHERE entry_type = $1 AND slug = $2 AND locale = 'ko-KR'`, [c.type, c.slug]);

@@ -63,6 +63,8 @@ if (!existsSync(FIXTURES)) {
 }
 const fx = JSON.parse(await readFile(FIXTURES, 'utf8'));
 const uniq = (...lists) => [...new Set(lists.flat().filter(Boolean))];
+// Top-level public/ directories (art, placeholder, icons, fonts, legacy, …): API data may point at them root-relatively.
+const PUBLIC_DIRS = uniq(['art', 'placeholder', 'icons', 'legacy'], existsSync(path.join(WEB, 'public')) ? (await readdir(path.join(WEB, 'public'), { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name) : []);
 const pool = (k) => fx.idPool?.[k] ?? [];
 
 /** Route (segments before the dynamic param) → values for generateStaticParams. */
@@ -95,7 +97,8 @@ function startFixtureServer() {
     if (!byPath.has(p)) byPath.set(p, []);
     byPath.get(p).push({ params: new URLSearchParams(q < 0 ? '' : rest.slice(q + 1)), r });
   }
-  const prefix = (v) => (typeof v === 'string' ? (/^\/(placeholder|art|icons)\//.test(v) ? BASE + v : v) : Array.isArray(v) ? v.map(prefix) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, prefix(x)])) : v);
+  const assetRe = new RegExp(`^/(${PUBLIC_DIRS.map((d) => d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})/`);
+  const prefix = (v) => (typeof v === 'string' ? (assetRe.test(v) ? BASE + v : v) : Array.isArray(v) ? v.map(prefix) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, prefix(x)])) : v);
   const server = createServer((req, res) => {
     const u = new URL(req.url, 'http://x');
     const cands = byPath.get(u.pathname) ?? [];
@@ -234,7 +237,7 @@ log(`generateStaticParams added to ${pages.length} dynamic pages (${prerender} p
 const layoutPath = ['layout.tsx', 'layout.jsx', 'layout.js'].map((x) => path.join(appDir, x)).find((x) => existsSync(x));
 let layout = await readFile(layoutPath, 'utf8');
 // Cache-busting: GitHub Pages serves with max-age=600, so a redeploy must not mix an old runtime with new fixtures.
-const fixturesJson = JSON.stringify(fx);
+const fixturesJson = JSON.stringify({ ...fx, publicDirs: PUBLIC_DIRS });
 const runtimeJs = await readFile(path.join(DEMO, 'dist/demo-backend.js'), 'utf8');
 const ver = createHash('sha256').update(runtimeJs).update(fixturesJson).digest('hex').slice(0, 10);
 const runtimeSrc = `${BASE}/demo-backend.js?v=${ver}`;

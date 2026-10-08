@@ -17,7 +17,8 @@ export let F: Fixtures = null as any;
 /** persona|path → [{ params, key }] */
 const index = new Map<string, Array<{ params: URLSearchParams; key: string }>>();
 
-const ASSET = /^\/(placeholder|art|icons)\//;
+let ASSET = /^\/(placeholder|art|icons|legacy|fonts)\//;
+const escapeRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** Root-relative asset URLs recorded from the API (e.g. '/placeholder/1.svg') must live under the Pages basePath. */
 function rewriteAssets(v: any, base: string): any {
@@ -77,6 +78,9 @@ export async function loadFixtures(url: string, base: string): Promise<void> {
   const res = await nativeFetch(url);
   if (!res.ok) throw new Error(`demo fixtures: HTTP ${res.status}`);
   F = await res.json();
+  // The build lists public/'s top-level directories; API data may reference any of them root-relatively.
+  const dirs = (F as any).publicDirs as string[] | undefined;
+  if (Array.isArray(dirs) && dirs.length) ASSET = new RegExp('^/(' + dirs.map(escapeRe).join('|') + ')/');
   shiftDays = Math.max(0, Math.floor((Date.now() - Date.parse(F.recordedAt)) / 86400000));
   for (const k of Object.keys(F.bodies)) F.bodies[k] = rewriteAssets(shiftDays ? shiftDates(F.bodies[k], shiftDays) : F.bodies[k], base);
   F.templates = rewriteAssets(shiftDays ? shiftDates(F.templates || {}, shiftDays) : F.templates || {}, base);

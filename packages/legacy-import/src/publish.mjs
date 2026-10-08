@@ -33,11 +33,18 @@ export async function runPublish(ctx) {
   const prefix = cfg.urlPrefix.replace(/^\//, '');
   const pub = (relInPublic) => (prefix ? `${prefix}/${relInPublic}` : relInPublic);
   await ensureDir(cfg.publicDir);
+  const foreign = await foreignPublisherDirs(cfg.publicDir);
+  if (foreign.length) {
+    log.warn(
+      `publish: ${cfg.publicDir} also holds ${foreign.length} asset dir(s) of another publisher (<sha12>/original.<ext> layout, e.g. scripts/legacy/optimize.mjs). ` +
+        'A publisher that prunes unknown entries can delete these files — publish to a directory you own (--public-dir … --url-prefix …) or let one pipeline own this one.',
+    );
+  }
 
   const assetsOut = {};
   const idOf = (sha) => sha12(sha);
   let copied = 0;
-  const pagesOk = (inv.pages ?? []).filter((p) => p.ok && !p.aliasOf);
+  const pagesOk = (inv.pages ?? []).filter((p) => p.ok && !p.aliasOf && !p.template);
   const nPages = pagesOk.length;
   for (const sha of st.order) {
     const a = st.assets[sha];
@@ -71,10 +78,9 @@ export async function runPublish(ctx) {
     }
     // site chrome: icons, theme-CSS / header / footer-only images, or content repeated on most pages (logos, banners)
     const mainPages = a.mainPageUrls ?? a.pageUrls;
-    const headOnlyContent = a.roles.includes('og') || a.roles.includes('poster');
     const chrome =
       a.roles.every((r) => r === 'icon') ||
-      (!mainPages.length && !headOnlyContent) ||
+      (!mainPages.length && !a.roles.includes('poster')) ||
       (nPages >= 3 && mainPages.length / nPages >= BOILERPLATE_SHARE);
     assetsOut[id] = {
       id,
@@ -97,6 +103,8 @@ export async function runPublish(ctx) {
       chrome,
       sourceUrls: a.sourceUrls,
       pageUrls: a.pageUrls,
+      /** pages that show it as content (not only via theme CSS / header / footer) */
+      contentPageUrls: mainPages,
       ...(a.posterSha256 ? { posterAssetId: idOf(a.posterSha256) } : {}),
       ...(a.posterFor?.length ? { posterFor: a.posterFor.map(idOf) } : {}),
       ...(a.mime === 'image/svg+xml' ? { svgSafe: o.svgSafe !== false } : {}),
@@ -227,6 +235,21 @@ export async function runPublish(ctx) {
   if (orphans.length) log.warn(`publish: ${orphans.length} directory(ies) in ${cfg.publicDir} are not in the manifest (kept; review): ${orphans.slice(0, 5).join(', ')}`);
   log.info(`publish: ${Object.keys(assetsOut).length} asset(s), ${copied} file(s) copied → ${cfg.publicDir}; manifest → ${paths.manifest}`);
   return manifest;
+}
+
+/**
+ * Directories written by a different publisher (layout `<sha12>/original.<ext>` — this tool never writes that name).
+ * Such a publisher may prune entries it does not know, including ours, so the operator is warned.
+ */
+export async function foreignPublisherDirs(publicDir) {
+  if (!existsSync(publicDir)) return [];
+  const out = [];
+  for (const e of await readdir(publicDir, { withFileTypes: true })) {
+    if (!e.isDirectory() || !/^[0-9a-f]{12}$/.test(e.name)) continue;
+    const files = await readdir(path.join(publicDir, e.name)).catch(() => []);
+    if (files.some((f) => /^original\.[a-z0-9]+$/i.test(f))) out.push(e.name);
+  }
+  return out;
 }
 
 export async function findOrphans(publicDir, ids) {

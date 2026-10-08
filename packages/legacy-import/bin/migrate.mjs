@@ -27,8 +27,11 @@ const USAGE = `usage: migrate [${COMMANDS.join('|')}] [options]        (default 
   --concurrency <n>        parallel requests (default 2)    --delay <ms>      per-host delay (default 500)
   --timeout <ms>           page timeout (default 30000)     --retries <n>     retries with backoff (default 3)
   --widths <list>          webp widths (default 480,960,1600,2400)
+  --max-image-mb <n>       per-file image cap (default 30)    --max-video-mb <n>   video cap (default 300)
   --cdn-originals <mode>   both | prefer | off — fetch un-resized CDN originals (default both)
   --exclude <regex>        extra URL exclusion pattern (repeatable)
+  --extra-media <file>     HAR / JSON / CSV list of media seen in a real browser (JS-loaded), merged at crawl/extract
+  --include-template-pages also migrate Sixshop's default "사용 설명서" editor-manual pages (skipped by default)
   --ignore-robots-for-assets   media hosts only (owner-authorised CDN); page crawling always obeys robots.txt
   --no-video-posters       do not extract poster frames with ffmpeg
   --no-proxy               ignore HTTP(S)_PROXY
@@ -37,7 +40,7 @@ const USAGE = `usage: migrate [${COMMANDS.join('|')}] [options]        (default 
 Exit codes: 0 ok · 1 error · 2 usage · 3 coverage < 100 % (without --allow-partial)`;
 
 const REPEAT = new Set(['start', 'host', 'asset-host', 'exclude']);
-const FLAGS = new Set(['resume', 'retry-failed', 'allow-partial', 'ignore-robots-for-assets', 'no-video-posters', 'no-proxy', 'quiet', 'json', 'help', 'no-ffprobe', 'no-ffmpeg']);
+const FLAGS = new Set(['resume', 'retry-failed', 'allow-partial', 'ignore-robots-for-assets', 'include-template-pages', 'no-video-posters', 'no-proxy', 'quiet', 'json', 'help', 'no-ffprobe', 'no-ffmpeg']);
 
 export function parseArgs(argv) {
   const out = { _: [] };
@@ -97,7 +100,9 @@ async function main() {
     process.exit(2);
   }
   const defaults = buildConfig({});
-  const cfg = buildConfig({
+  let cfg;
+  try {
+    cfg = buildConfig({
     startUrls: args.start,
     siteHosts: args.host ? [...defaults.siteHosts, ...args.host] : undefined,
     assetHosts: args['asset-hosts'] ? args['asset-hosts'].split(',').map((s) => s.trim()).filter(Boolean) : args['asset-host'] ? [...defaults.assetHosts, ...args['asset-host']] : undefined,
@@ -115,7 +120,13 @@ async function main() {
     retries: num(args.retries, 'retries'),
     widths: args.widths ? args.widths.split(',').map((w) => num(w.trim(), 'widths')).filter(Boolean) : undefined,
     cdnOriginals: args['cdn-originals'],
+    caps: {
+      ...(args['max-image-mb'] ? { image: num(args['max-image-mb'], 'max-image-mb') * 1024 * 1024 } : {}),
+      ...(args['max-video-mb'] ? { video: num(args['max-video-mb'], 'max-video-mb') * 1024 * 1024 } : {}),
+    },
     exclude: args.exclude,
+    extraMedia: args['extra-media'] ? resolveUserPath(args['extra-media']) : undefined,
+    includeTemplatePages: !!args['include-template-pages'],
     assetsRespectRobots: !args['ignore-robots-for-assets'],
     videoPosters: !args['no-video-posters'],
     useProxy: !args['no-proxy'],
@@ -123,7 +134,11 @@ async function main() {
     ffmpeg: args['no-ffmpeg'] ? false : undefined,
     userAgent: args['user-agent'],
     quiet: !!args.quiet,
-  });
+    });
+  } catch (err) {
+    console.error(`${err.message}\n\n${USAGE}`);
+    process.exit(2);
+  }
   const log = createLogger({ quiet: cfg.quiet });
   log.info(`${command}: start=${cfg.startUrls.join(' ')} out=${cfg.outDir} public=${cfg.publicDir}${cfg.resume ? ' (resume)' : ''}`);
   const { code, results } = await runPipeline(command, cfg, { log });

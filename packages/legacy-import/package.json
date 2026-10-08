@@ -9,8 +9,9 @@
   },
   "scripts": {
     "migrate": "node ./bin/migrate.mjs",
+    "seed:legacy": "node ../db/seed-legacy.mjs",
     "fixture-site": "node ./test/fixture-server.mjs",
-    "test": "node --test --test-concurrency=1 test/",
+    "test": "node --test --test-concurrency=1 \"test/*.test.mjs\"",
     "typecheck": "node ./scripts/check-syntax.mjs",
     "build": "echo 'no build'"
   },

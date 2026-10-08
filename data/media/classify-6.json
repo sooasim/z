@@ -1,0 +1,1807 @@
+[
+  {
+    "sha": "06612171a9f26475b1c9302d4778f18bec0398c6c27ff3fce5e62ed44f16100e",
+    "index": 5,
+    "batch": 6,
+    "src": "/legacy/06612171a9f2/960.webp",
+    "original": "/legacy/06612171a9f2/original.jpg",
+    "width": 1000,
+    "height": 710,
+    "format": "jpeg",
+    "roles": [
+      "img"
+    ],
+    "category": "letter-illustration",
+    "isMostlyText": false,
+    "quality": "medium",
+    "subject": "마음편지 09 매거진 지면(46·48쪽): 스페인 아트투어(톨레도·빌바오·바르셀로나)와 도야마 단풍투어(구로베 협곡 붉은 철교)",
+    "subjectEn": "Heart Letter 09 magazine spread (pp. 46/48): Spain Art Tour (Toledo, Bilbao, Barcelona) and Toyama autumn tour with the red Kurobe Gorge railway bridge",
+    "tags": [
+      "heart-letter",
+      "magazine-spread",
+      "spain",
+      "toledo",
+      "bilbao",
+      "barcelona",
+      "japan",
+      "toyama",
+      "kurobe",
+      "autumn-foliage"
+    ],
+    "suggestedUsages": [
+      "heart-letter:heart_letter_09",
+      "city:toledo",
+      "city:toyama",
+      "brand-archive"
+    ],
+    "pages": [
+      "/blogPost/heart_letter_09"
+    ],
+    "pageTitles": [
+      "[마음편지 09] 2013년 부활호"
+    ],
+    "notes": "Last image of the heart_letter_09 post (JETPOOL magazine pages 46 and 48). Body copy lists the old JETPOOL travel-division phone 02-6325-0055; photos are credited to tourism boards, so keep as an archive page only."
+  },
+  {
+    "sha": "0939b3d70b9fdedf69060b248bae7c51d5cb4ac19710da198ed4537bc1d1d797",
+    "index": 11,
+    "batch": 6,
+    "src": "/legacy/0939b3d70b9f/480.webp",
+    "original": "/legacy/0939b3d70b9f/original.jpg",
+    "width": 480,
+    "height": 360,
+    "format": "jpeg",
+    "roles": [
+      "youtube-thumbnail"
+    ],
+    "category": "award-press",
+    "isMostlyText": false,
+    "quality": "low",
+    "subject": "KNN 「거창 외국인 팸투어」(2013) 방송 장면: 한옥 정자 마루에서 다과상을 받은 외국인 참가자",
+    "subjectEn": "YouTube thumbnail of the KNN 2013 Geochang fam-tour report: foreign guests at Korean snack tables in a hanok pavilion",
+    "tags": [
+      "youtube-thumbnail",
+      "tv",
+      "knn",
+      "2013",
+      "geochang",
+      "fam-tour",
+      "foreigners",
+      "video:UJtI-b0bMLY"
+    ],
+    "suggestedUsages": [
+      "about-ceo",
+      "city:geochang",
+      "brand-archive"
+    ],
+    "pages": [
+      "/about_ceo"
+    ],
+    "pageTitles": [
+      "CEO 원치승"
+    ],
+    "notes": "hqdefault thumbnail (480x360, letterboxed) of embed UJtI-b0bMLY on /about_ceo; same frame as 61bf4353a034 (sddefault, 640x480), which is the better copy. Broadcaster footage; use the embed itself."
+  },
+  {
+    "sha": "0cb502c824e83b82be62271c0bf6d01bca02acc36e303273265513903e6599a3",
+    "index": 17,
+    "batch": 6,
+    "src": "/legacy/0cb502c824e8/960.webp",
+    "original": "/legacy/0cb502c824e8/original.jpg",
+    "width": 1000,
+    "height": 1413,
+    "format": "jpeg",
+    "roles": [
+      "img"
+    ],
+    "category": "letter-illustration",
+    "isMostlyText": true,
+    "quality": "medium",
+    "subject": "마음편지 01 셋째 장: 옛 원여행클럽 레터헤드 위 타자 수기 – 고객 1,225명에게 보낸 마지막 편지와 그 뒤 걸려온 전화",
+    "subjectEn": "Heart Letter 01, page 3: typed memoir on the old Won Travel Club letterhead about mailing a farewell letter to 1,225 customers and the calls that followed",
+    "tags": [
+      "heart-letter",
+      "letter-scan",
+      "letterhead",
+      "old-logo",
+      "imf-era",
+      "memoir",
+      "korean-text"
+    ],
+    "suggestedUsages": [
+      "heart-letter:heat_letter_01",
+      "about-ceo",
+      "won-story",
+      "brand-archive"
+    ],
+    "pages": [
+      "/blogPost/heat_letter_01"
+    ],
+    "pageTitles": [
+      "[마음편지 01] MBC 체험수기 공모전 '금상' 수상작"
+    ],
+    "notes": "Third of four letter-page scans in the post (slug spelled \"heat_letter_01\"). The letterhead shows the historical Seongdong-gu address, Tel 463-0055 and wontc@unitel.co.kr. Quote it as live text rather than reusing the scan."
+  },
+  {
+    "sha": "118b1c44366b1b8a9e8067c544bf8bdd1a5d980531d96f83a51466100216b42b",
+    "index": 23,
+    "batch": 6,
+    "src": "/legacy/118b1c44366b/960.webp",
+    "original": "/legacy/118b1c44366b/original.png",
+    "width": 1000,
+    "height": 676,
+    "format": "png",
+    "roles": [],
+    "category": "tour-product",
+    "isMostlyText": false,
+    "quality": "high",
+    "subject": "\"달콤한 아드리아해 & 에게해 여행\" 프로그램 카드 – 산토리니 이아 마을의 파란 돔 교회와 에게해",
+    "subjectEn": "Program card \"Sweet Adriatic & Aegean trip\" (Croatia, Slovenia, Bosnia, Montenegro, Greece, Dubai) over the blue-domed churches of Oia, Santorini",
+    "tags": [
+      "greece",
+      "santorini",
+      "oia",
+      "aegean",
+      "adriatic",
+      "croatia",
+      "montenegro",
+      "program-card",
+      "title-overlay"
+    ],
+    "suggestedUsages": [
+      "local-life-exchange",
+      "tour-consulting",
+      "city:santorini",
+      "brand-archive"
+    ],
+    "pages": [
+      "/local_life"
+    ],
+    "pageTitles": [
+      "한달살기 맞교환 여행"
+    ],
+    "notes": "1000px card on /local_life captioned \"죽기 전에 에게해를 여행할 행운을 누리는 사람은 복이 있다\"; 983f34628790 is the 500px copy. Korean/English title text is baked in."
+  },
+  {
+    "sha": "153d436c72d99afe746823d58e436357cf5c636fb3b1dd92c1d2b3cf83af10d6",
+    "index": 29,
+    "batch": 6,
+    "src": "/legacy/153d436c72d9/900.webp",
+    "original": "/legacy/153d436c72d9/original.jpg",
+    "width": 900,
+    "height": 700,
+    "format": "jpeg",
+    "roles": [
+      "img"
+    ],
+    "category": "destination-scenery",
+    "isMostlyText": false,
+    "quality": "high",
+    "subject": "드레스덴 성모교회(프라우엔키르헤) 돔 앞에 선 마르틴 루터 동상",
+    "subjectEn": "Martin Luther statue in front of the dome of the Frauenkirche, Dresden, against a blue sky",
+    "tags": [
+      "germany",
+      "dresden",
+      "frauenkirche",
+      "martin-luther",
+      "reformation",
+      "statue",
+      "pilgrimage"
+    ],
+    "suggestedUsages": [
+      "travel-product:past_pilgrimage",
+      "city:dresden",
+      "brand-archive"
+    ],
+    "pages": [
+      "/product/past_pilgrimage"
+    ],
+    "pageTitles": [
+      "[종교] 마틴루터 종교개혁 성지순례"
+    ],
+    "notes": "Product-description image of \"[종교] 마틴루터 종교개혁 성지순례\"."
+  },
+  {
+    "sha": "1aa134dbc13c939c8e070d79942b074a20ceffdc5a34358ec941989ab03c7f25",
+    "index": 35,
+    "batch": 6,
+    "src": "/legacy/1aa134dbc13c/893.webp",
+    "original": "/legacy/1aa134dbc13c/original.jpg",
+    "width": 893,
+    "height": 386,
+    "format": "jpeg",
+    "roles": [],
+    "category": "infographic",
+    "isMostlyText": true,
+    "quality": "medium",
+    "subject": "젯풀호스트 수익사업 3가지: 항공산업(전세기 운영), 해외여행 플랫폼(한달살기 맞교환여행), 핀테크(외환선불패스카드)",
+    "subjectEn": "JETPOOL Host revenue streams: charter aviation, overseas travel platform (home-swap stays), fintech prepaid FX card",
+    "tags": [
+      "jetpool-host",
+      "franchise",
+      "revenue-model",
+      "charter",
+      "fintech",
+      "korean-text"
+    ],
+    "suggestedUsages": [
+      "about-jetpool",
+      "charter-page",
+      "brand-archive"
+    ],
+    "pages": [
+      "/jetpool"
+    ],
+    "pageTitles": [
+      "젯풀호스트 프랜차이즈"
+    ],
+    "notes": "Under \"젯풀호스트 수익사업\" on /jetpool. Larger (893px) copy of 4e04c4f10ff8. Rebuild as live text."
+  },
+  {
+    "sha": "1d2a2ae510345415d7e392e0dde4945fef9400a6aa0f2c501a98eea8d825edf5",
+    "index": 41,
+    "batch": 6,
+    "src": "/legacy/1d2a2ae51034/960.webp",
+    "original": "/legacy/1d2a2ae51034/original.jpg",
+    "width": 1000,
+    "height": 750,
+    "format": "jpeg",
+    "roles": [],
+    "category": "person",
+    "isMostlyText": false,
+    "quality": "medium",
+    "subject": "라운지 테이블에서 발리 지도가 띄워진 노트북을 앞에 두고 파트너와 셀카를 찍은 원치승 대표",
+    "subjectEn": "CEO Won selfie with a partner at a lounge table, laptop showing a Bali location map",
+    "tags": [
+      "ceo",
+      "partner",
+      "selfie",
+      "bali",
+      "hanging-gardens",
+      "lounge",
+      "meeting"
+    ],
+    "suggestedUsages": [
+      "about-ceo",
+      "member-stay",
+      "city:bali",
+      "brand-archive"
+    ],
+    "pages": [
+      "/untitled-6"
+    ],
+    "pageTitles": [
+      "Hanginggardensofbali"
+    ],
+    "notes": "1000px copy of f4475872432f on /untitled-6, below the announcement that WONTC became the exclusive agency for Hanging Gardens of Bali. Identifiable third party: check consent."
+  },
+  {
+    "sha": "2497b6070c00ca539e8aa740910a583542027c9160268b556d633480605d5a5e",
+    "index": 47,
+    "batch": 6,
+    "src": "/legacy/2497b6070c00/960.webp",
+    "original": "/legacy/2497b6070c00/original.jpg",
+    "width": 1000,
+    "height": 710,
+    "format": "jpeg",
+    "roles": [
+      "img"
+    ],
+    "category": "letter-illustration",
+    "isMostlyText": false,
+    "quality": "medium",
+    "subject": "마음편지 09 매거진 지면: \"Uluru – 세상의 중심에서 사랑을 외치다\" 컬처투어, 울룰루와 노을 속 야외 만찬 테이블",
+    "subjectEn": "Heart Letter 09 magazine spread \"Uluru – Crying out love in the centre of the world\": Ayers Rock and an outback sunset dinner table",
+    "tags": [
+      "heart-letter",
+      "magazine-spread",
+      "australia",
+      "uluru",
+      "outback",
+      "culture-tour",
+      "korean-text"
+    ],
+    "suggestedUsages": [
+      "heart-letter:heart_letter_09",
+      "city:uluru",
+      "brand-archive"
+    ],
+    "pages": [
+      "/blogPost/heart_letter_09"
+    ],
+    "pageTitles": [
+      "[마음편지 09] 2013년 부활호"
+    ],
+    "notes": "Page 21 of the magazine (www.jetpoolworld.com footer). Stock and tourism-board photos inside the layout; archive only."
+  },
+  {
+    "sha": "2ddb45719da3f67bef982e4216810c7dedaff7cf17426b5d6b9233a2ed467dcd",
+    "index": 53,
+    "batch": 6,
+    "src": "/legacy/2ddb45719da3/960.webp",
+    "original": "/legacy/2ddb45719da3/original.jpg",
+    "width": 1000,
+    "height": 692,
+    "format": "jpeg",
+    "roles": [
+      "img"
+    ],
+    "category": "tour-product",
+    "isMostlyText": true,
+    "quality": "high",
+    "subject": "\"나도 時人이다\" 작시 프로그램 안내 – 눈 덮인 숲 배경과 미소 짓는 나태주 시인",
+    "subjectEn": "\"I am a poet too\" poetry-writing panel: snowy forest backdrop and a smiling portrait of poet Na Tae-ju",
+    "tags": [
+      "sapporo",
+      "na-tae-ju",
+      "poet",
+      "poetry-workshop",
+      "snow",
+      "product-detail",
+      "korean-text"
+    ],
+    "suggestedUsages": [
+      "travel-product:past_spainbest-30-31",
+      "city:sapporo",
+      "brand-archive"
+    ],
+    "pages": [
+      "/product/past_spainbest-30-31"
+    ],
+    "pageTitles": [
+      "[종료] 나태주선생과 함께하는 삿포로 눈축제"
+    ],
+    "notes": "Sapporo product detail: each traveller writes two poems on the theme 雪(눈) for a joint anthology with the poet. Identifiable public figure; check portrait rights."
+  },
+  {
+    "sha": "31158180d3fc2693d8a25ecf7107e863272cdcde27a2d50e5a7e4ae79336a8e9",
+    "index": 59,
+    "batch": 6,
+    "src": "/legacy/31158180d3fc/960.webp",
+    "original": "/legacy/31158180d3fc/original.jpg",
+    "width": 1000,
+    "height": 692,
+    "format": "jpeg",
+    "roles": [
+      "img"
+    ],
+    "category": "tour-product",
+    "isMostlyText": true,
+    "quality": "high",
+    "subject": "바르셀로나 인문학 여행 일정표 Day 7–8(7/18–19): 가이드 자전거 투어, 플라멩코 워크숍, 유영만 교수 그룹 토론, OZ0512 귀국",
+    "subjectEn": "Barcelona humanities trip itinerary, Day 7–8 (Jul 18–19): guided bike tour, flamenco workshop, group talk with Prof. Yu, OZ0512 home to Incheon",
+    "tags": [
+      "barcelona",
+      "itinerary",
+      "schedule",
+      "flamenco",
+      "bike-tour",
+      "korean-text",
+      "product-detail"
+    ],
+    "suggestedUsages": [
+      "travel-product:past_spainbest-30-31-32",
+      "city:barcelona",
+      "brand-archive"
+    ],
+    "pages": [
+      "/product/past_spainbest-30-31-32"
+    ],
+    "pageTitles": [
+      "[모집] 유영만 교수와 함께 떠나는 8일간의 바르셀로나 문화 인문학 여행"
+    ],
+    "notes": "Last itinerary table of the product; rebuild as structured itinerary data."
+  },
+  {
+    "sha": "3984f831d081f60995ecd7c4ec620e12520e9cf9310e32248a6b4534b2221f12",
+    "index": 65,
+    "batch": 6,
+    "src": "/legacy/3984f831d081/960.webp",
+    "original": "/legacy/3984f831d081/original.jpg",
+    "width": 1000,
+    "height": 710,
+    "format": "jpeg",
+    "roles": [
+      "img"
+    ],
+    "category": "letter-illustration",
+    "isMostlyText": false,
+    "quality": "medium",
+    "subject": "마음편지 09 매거진 지면 \"거창韓거창\": 한류팬클럽 고고코리아 녹색농촌문화체험 팸투어 – 한옥 앞 단체사진 등",
+    "subjectEn": "Heart Letter 09 magazine spread \"Geochang\": GoGo Korea Hallyu fan-club green rural-culture fam tour, group photos at hanok houses",
+    "tags": [
+      "heart-letter",
+      "magazine-spread",
+      "geochang",
+      "fam-tour",
+      "gogo-korea",
+      "hanok",
+      "group-photo",
+      "korean-text"
+    ],
+    "suggestedUsages": [
+      "heart-letter:heart_letter_09",
+      "about-ceo",
+      "city:geochang",
+      "brand-archive"
+    ],
+    "pages": [
+      "/blogPost/heart_letter_09"
+    ],
+    "pageTitles": [
+      "[마음편지 09] 2013년 부활호"
+    ],
+    "notes": "Same 2013 Geochang foreigner fam tour as the KNN video on /about_ceo. Many identifiable participants; archive only."
+  },
+  {
+    "sha": "3ceca999e636474dc4ef016df27acd9f575a1c7b88c1d498cae7d7d59ed60fbe",
+    "index": 71,
+    "batch": 6,
+    "src": "/legacy/3ceca999e636/960.webp",
+    "original": "/legacy/3ceca999e636/original.jpg",
+    "width": 1000,
+    "height": 692,
+    "format": "jpeg",
+    "roles": [
+      "img"
+    ],
+    "category": "tour-product",
+    "isMostlyText": false,
+    "quality": "high",
+    "subject": "삿포로 상품 상세 \"HOKKAIDO 도야호(Lake Toya)\" 소개 글과 유람선이 떠 있는 도야호 사진",
+    "subjectEn": "Sapporo product detail: \"HOKKAIDO Lake Toya\" description text above a photo of a sightseeing ferry on the lake",
+    "tags": [
+      "japan",
+      "hokkaido",
+      "lake-toya",
+      "ferry",
+      "product-detail",
+      "korean-text"
+    ],
+    "suggestedUsages": [
+      "travel-product:past_spainbest-30-31",
+      "city:hokkaido",
+      "brand-archive"
+    ],
+    "pages": [
+      "/product/past_spainbest-30-31"
+    ],
+    "pageTitles": [
+      "[종료] 나태주선생과 함께하는 삿포로 눈축제"
+    ],
+    "notes": "Top 40% is Korean destination copy; crop to the lower photo if reused as an image."
+  },
+  {
+    "sha": "46f564ce9b2b1632987767727c3adbb60bdd04686404b0e46802444e0a9a0f47",
+    "index": 77,
+    "batch": 6,
+    "src": "/legacy/46f564ce9b2b/960.webp",
+    "original": "/legacy/46f564ce9b2b/original.jpg",
+    "width": 1000,
+    "height": 692,
+    "format": "jpeg",
+    "roles": [
+      "img"
+    ],
+    "category": "tour-product",
+    "isMostlyText": true,
+    "quality": "high",
+    "subject": "게스트 유영만 교수(지식생태학자, 한양대 교육공학과) 소개 글과 흑백 인물사진 3장",
+    "subjectEn": "Guest profile of Prof. Yu Young-man (knowledge ecologist, Hanyang University) with three B&W portraits",
+    "tags": [
+      "barcelona",
+      "guest-lecturer",
+      "yu-young-man",
+      "profile",
+      "portrait",
+      "korean-text",
+      "product-detail"
+    ],
+    "suggestedUsages": [
+      "travel-product:past_spainbest-30-31-32",
+      "brand-archive"
+    ],
+    "pages": [
+      "/product/past_spainbest-30-31-32"
+    ],
+    "pageTitles": [
+      "[모집] 유영만 교수와 함께 떠나는 8일간의 바르셀로나 문화 인문학 여행"
+    ],
+    "notes": "Identifiable public figure; check portrait rights. 8624aef2 is a separate portrait of the same lecturer."
+  },
+  {
+    "sha": "4cad0bb5d1be81c4db3aec05185f8481fb2a29f907ef45814024ab3d6bd08fee",
+    "index": 83,
+    "batch": 6,
+    "src": "/legacy/4cad0bb5d1be/700.webp",
+    "original": "/legacy/4cad0bb5d1be/original.jpg",
+    "width": 700,
+    "height": 480,
+    "format": "jpeg",
+    "roles": [],
+    "category": "ceo-portrait",
+    "isMostlyText": false,
+    "quality": "medium",
+    "subject": "유럽 골목 돌벽 앞에서 캠코더로 촬영하는 원치승 대표(흑백, 빨간 주차금지 표지), \"여행전문가 CEO 원치승\" 문구",
+    "subjectEn": "CEO Won Chi-seung filming with a camcorder by a stone wall on a European street (B&W with a red no-parking sign), captioned \"Travel expert CEO Won Chi-seung\"",
+    "tags": [
+      "ceo",
+      "won-chi-seung",
+      "camcorder",
+      "europe",
+      "black-and-white",
+      "text-overlay",
+      "about-card"
+    ],
+    "suggestedUsages": [
+      "about-ceo",
+      "won-story",
+      "brand-archive"
+    ],
+    "pages": [
+      "/",
+      "/home",
+      "/won_story"
+    ],
+    "pageTitles": [
+      "전세계 살아보기, 비행기공유플랫폼",
+      "전세계 살아보기, 비행기공유플랫폼",
+      "원스토리"
+    ],
+    "notes": "\"성장스토리\" card on the home page and \"CEO 원치승\" card on /won_story. 700px copy of 1a0acbc100a5; f7d9cd7e9a93 is the same photo without the caption."
+  },
+  {
+    "sha": "59f4a9fdce04f2c5752f1b6ee72b2c4395d65c29b6b99b6d500941802db3c74e",
+    "index": 89,
+    "batch": 6,
+    "src": "/legacy/59f4a9fdce04/960.webp",
+    "original": "/legacy/59f4a9fdce04/original.png",
+    "width": 1500,
+    "height": 206,
+    "format": "png",
+    "roles": [
+      "img"
+    ],
+    "category": "infographic",
+    "isMostlyText": true,
+    "quality": "medium",
+    "subject": "식스샵 템플릿 도움말 카드(페이지 / 후기·질문 게시판 / 게시판) – 질문 게시판·게시판 카드 강조",
+    "subjectEn": "Sixshop template help cards on adding pages, review/Q&A boards and boards (Q&A and board cards highlighted)",
+    "tags": [
+      "sixshop-template",
+      "help-card",
+      "qna-guide",
+      "korean-text",
+      "no-content"
+    ],
+    "suggestedUsages": [
+      "brand-archive"
+    ],
+    "pages": [
+      "/qna_guide"
+    ],
+    "pageTitles": [
+      "Q&A - 사용 설명서"
+    ],
+    "notes": "Sixshop template asset from store 137352 (\"LIFE FOR US\" demo) on /qna_guide; 1500px copy of ea84248ebec1. Not WONTC content."
+  },
+  {
+    "sha": "6193466ccf6113025ae5bee1f00d1df6ca5ac4544bbe11efdf0acd10fd509d13",
+    "index": 95,
+    "batch": 6,
+    "src": "/legacy/6193466ccf61/960.webp",
+    "original": "/legacy/6193466ccf61/original.jpg",
+    "width": 1000,
+    "height": 692,
+    "format": "jpeg",
+    "roles": [
+      "img"
+    ],
+    "category": "destination-scenery",
+    "isMostlyText": false,
+    "quality": "medium",
+    "subject": "연못에 비친 요테이산과 신록의 숲, 붉은 지붕 정자(후키다시 공원 추정), 홋카이도",
+    "subjectEn": "Mt. Yotei mirrored in a still pond with fresh green woods and a red-roofed gazebo, probably Fukidashi Park, Hokkaido",
+    "tags": [
+      "japan",
+      "hokkaido",
+      "mount-yotei",
+      "fukidashi-park",
+      "reflection",
+      "summer",
+      "pond"
+    ],
+    "suggestedUsages": [
+      "travel-product:past_spainbest-30-31",
+      "city:hokkaido",
+      "brand-archive"
+    ],
+    "pages": [
+      "/product/past_spainbest-30-31"
+    ],
+    "pageTitles": [
+      "[종료] 나태주선생과 함께하는 삿포로 눈축제"
+    ],
+    "notes": "Photo-gallery image near the end of the Sapporo product detail. Summer scene in a winter product; slightly soft (upscaled)."
+  },
+  {
+    "sha": "66fc751afd83709e5dc4f487e5d043d221b643296883298347a1ec15004fff4d",
+    "index": 101,
+    "batch": 6,
+    "src": "/legacy/66fc751afd83/300.webp",
+    "original": "/legacy/66fc751afd83/original.png",
+    "width": 300,
+    "height": 387,
+    "format": "png",
+    "roles": [
+      "img"
+    ],
+    "category": "award-press",
+    "isMostlyText": true,
+    "quality": "low",
+    "subject": "젯풀 지적재산권 자료: 대만 지앙췬 특허사무소의 중국 PCT 특허출원 비용 청구서(출원인 원치승), 300px",
+    "subjectEn": "JETPOOL IP evidence: Jianq Chyun IP Office (Taipei) invoice for a Chinese PCT patent application, applicant Won Chi-seung (300px copy)",
+    "tags": [
+      "patent",
+      "intellectual-property",
+      "invoice",
+      "pct",
+      "china",
+      "jetpool",
+      "document-scan"
+    ],
+    "suggestedUsages": [
+      "charter-page",
+      "about-jetpool",
+      "brand-archive"
+    ],
+    "pages": [
+      "/untitled-1"
+    ],
+    "pageTitles": [
+      "전세기공유플랫폼"
+    ],
+    "notes": "Under \"젯풀 지적 재산권\" on /untitled-1; 300px copy of 8a585df6fdf5. Contains fees and bank/SWIFT details: do not republish as is."
+  },
+  {
+    "sha": "6d0142c854497dd5073854457938b1c5b70257e95dca82204fd6558928719246",
+    "index": 107,
+    "batch": 6,
+    "src": "/legacy/6d0142c85449/original.gif",
+    "original": "/legacy/6d0142c85449/original.gif",
+    "width": 600,
+    "height": 433,
+    "format": "gif",
+    "roles": [
+      "img"
+    ],
+    "kind": "animated",
+    "category": "screenshot-text",
+    "isMostlyText": false,
+    "quality": "low",
+    "subject": "식스샵 편집기 사용자 편집 섹션(1단) 편집 시연 애니메이션 GIF(데모 사이트 \"SYLT\")",
+    "subjectEn": "Animated GIF (60 frames) of the Sixshop editor editing a one-column custom section on the \"SYLT\" demo site",
+    "tags": [
+      "sixshop-template",
+      "editor-guide",
+      "animated-gif",
+      "screenshot",
+      "no-content"
+    ],
+    "suggestedUsages": [
+      "brand-archive"
+    ],
+    "pages": [
+      "/guide"
+    ],
+    "pageTitles": [
+      "사용 설명서"
+    ],
+    "notes": "Builder help animation (uploadedFiles/113) above \"1단 섹션\" on /guide; not WONTC content."
+  },
+  {
+    "sha": "6ff7f17a4c74ea5267bb4a32a7fb1c1eca3935809b537fb484a985ae55b7fdda",
+    "index": 113,
+    "batch": 6,
+    "src": "/legacy/6ff7f17a4c74/480.webp",
+    "original": "/legacy/6ff7f17a4c74/original.jpg",
+    "width": 500,
+    "height": 375,
+    "format": "jpeg",
+    "roles": [
+      "background"
+    ],
+    "category": "award-press",
+    "isMostlyText": false,
+    "quality": "low",
+    "subject": "1998년 MBC 특별 생방송에서 마이크를 들고 웃는 젊은 원치승 대표(방송 화면 캡처)",
+    "subjectEn": "Young CEO Won Chi-seung smiling with a microphone on the 1998 MBC live special (broadcast frame grab)",
+    "tags": [
+      "ceo",
+      "won-chi-seung",
+      "mbc",
+      "tv",
+      "1998",
+      "gold-prize",
+      "video-still",
+      "card-thumbnail"
+    ],
+    "suggestedUsages": [
+      "heart-letter:heat_letter_01",
+      "about-ceo",
+      "brand-archive"
+    ],
+    "pages": [
+      "/about_letter"
+    ],
+    "pageTitles": [
+      "마음편지"
+    ],
+    "notes": "[마음편지 01] card thumbnail on /about_letter; 500px copy of 23580d54bfcc. Background face is pixelated; soft video frame with broadcaster rights."
+  },
+  {
+    "sha": "79dc00851b22b20d749687072f9863db82ac6f7bf47e2b140274aa5d029e7583",
+    "index": 119,
+    "batch": 6,
+    "src": "/legacy/79dc00851b22/480.webp",
+    "original": "/legacy/79dc00851b22/original.jpg",
+    "width": 500,
+    "height": 342,
+    "format": "jpeg",
+    "roles": [
+      "background"
+    ],
+    "category": "aircraft-charter",
+    "isMostlyText": false,
+    "quality": "medium",
+    "subject": "구름 위 비행기 창밖으로 보이는 날개",
+    "subjectEn": "Airplane wing above the clouds seen through a cabin window",
+    "tags": [
+      "airplane",
+      "window-seat",
+      "clouds",
+      "flight",
+      "wing"
+    ],
+    "suggestedUsages": [
+      "charter-page",
+      "about-jetpool",
+      "won-story",
+      "brand-archive"
+    ],
+    "pages": [
+      "/won_story"
+    ],
+    "pageTitles": [
+      "원스토리"
+    ],
+    "notes": "\"젯풀플랫폼\" card on /won_story (500px). Same photo as bae3ba27cd43 (home, 500px) and 9107e073b330 (700px)."
+  },
+  {
+    "sha": "810dd708495998e843353d0370cb7d1e909bb717873b59929a3a86db96ff9f01",
+    "index": 125,
+    "batch": 6,
+    "src": "/legacy/810dd7084959/600.webp",
+    "original": "/legacy/810dd7084959/original.jpg",
+    "width": 600,
+    "height": 600,
+    "format": "jpeg",
+    "roles": [
+      "img",
+      "background"
+    ],
+    "category": "ui-element",
+    "isMostlyText": false,
+    "quality": "low",
+    "subject": "단색 회색(#d5d5d5) 빈 이미지 – 젯풀인터내셔날 페이지의 자리표시 이미지",
+    "subjectEn": "Solid light-grey (#d5d5d5) blank image used as a placeholder on the JETPOOL International page",
+    "tags": [
+      "placeholder",
+      "blank",
+      "grey",
+      "no-content"
+    ],
+    "suggestedUsages": [
+      "brand-archive"
+    ],
+    "pages": [
+      "/about_jetpool"
+    ],
+    "pageTitles": [
+      "젯풀인터내셔날"
+    ],
+    "notes": "Fills three slots on /about_jetpool (charter group-buy service, travel add-on sales, patent registration no. 0891917), whose copy is still \"설명글\" filler. No content value, do not use."
+  },
+  {
+    "sha": "84d72daaeeb011f84b1afbac7012548da7616e02b76ae8981558524da44b3853",
+    "index": 131,
+    "batch": 6,
+    "src": "/legacy/84d72daaeeb0/960.webp",
+    "original": "/legacy/84d72daaeeb0/original.jpg",
+    "width": 1000,
+    "height": 692,
+    "format": "jpeg",
+    "roles": [
+      "img"
+    ],
+    "category": "tour-product",
+    "isMostlyText": false,
+    "quality": "high",
+    "subject": "\"문화몰입 & 예술적 탐구\" 8곳: 사그라다 파밀리아, 구엘 공원, 피카소 박물관, 카탈루냐 음악당, 호안 미로 재단, 카사 바트요, 지로나, 자전거 투어",
+    "subjectEn": "\"Cultural immersion & artistic exploration\" grid of 8 highlights: Sagrada Familia, Park Guell, Picasso Museum, Palau de la Musica, Miro Foundation, Casa Batllo, Girona, bike tour",
+    "tags": [
+      "barcelona",
+      "girona",
+      "gaudi",
+      "highlights-grid",
+      "sagrada-familia",
+      "park-guell",
+      "picasso-museum",
+      "product-detail"
+    ],
+    "suggestedUsages": [
+      "travel-product:past_spainbest-30-31-32",
+      "city:barcelona",
+      "city:girona",
+      "brand-archive"
+    ],
+    "pages": [
+      "/product/past_spainbest-30-31-32"
+    ],
+    "pageTitles": [
+      "[모집] 유영만 교수와 함께 떠나는 8일간의 바르셀로나 문화 인문학 여행"
+    ],
+    "notes": "Product detail grid with Korean captions under each photo; rebuild as a live card grid."
+  },
+  {
+    "sha": "8960b9ad9b6fc75ec76d2076583f15e32c678e16edf627fbbceb2d4d3c940edc",
+    "index": 137,
+    "batch": 6,
+    "src": "/legacy/8960b9ad9b6f/300.webp",
+    "original": "/legacy/8960b9ad9b6f/original.png",
+    "width": 300,
+    "height": 168,
+    "format": "png",
+    "roles": [
+      "background"
+    ],
+    "category": "icon",
+    "isMostlyText": false,
+    "quality": "medium",
+    "subject": "연필 라인 아이콘(후기 작성) – 식스샵 리뷰 가이드 템플릿",
+    "subjectEn": "Line-art pencil icon (\"write a review\") from the Sixshop review-guide template",
+    "tags": [
+      "icon",
+      "line-art",
+      "pencil",
+      "review",
+      "sixshop-template"
+    ],
+    "suggestedUsages": [
+      "brand-archive"
+    ],
+    "pages": [
+      "/review_guide"
+    ],
+    "pageTitles": [
+      "REVIEW - 사용 설명서"
+    ],
+    "notes": "Template icon on /review_guide (store 137352); replace with the app icon set."
+  },
+  {
+    "sha": "8cdae7d6f29e2f38bba431d2a1bcd158d685de1cb919d630b45b8d7ec5be99e0",
+    "index": 143,
+    "batch": 6,
+    "src": "/legacy/8cdae7d6f29e/960.webp",
+    "original": "/legacy/8cdae7d6f29e/original.jpg",
+    "width": 1200,
+    "height": 810,
+    "format": "jpeg",
+    "roles": [
+      "background"
+    ],
+    "category": "brand-hero",
+    "isMostlyText": false,
+    "quality": "high",
+    "subject": "여행 컨설팅 대표 이미지: 지도 위 카메라·부츠·커피·필름 플랫레이, 돋보기 속 원여행클럽 로고",
+    "subjectEn": "Tour-consulting hero: travel flat lay on a map (cameras, boots, coffee, film boxes) with the Won Travel Club logo inside a magnifier",
+    "tags": [
+      "tour-consulting",
+      "flat-lay",
+      "map",
+      "camera",
+      "won-travel-club-logo",
+      "brand"
+    ],
+    "suggestedUsages": [
+      "tour-consulting",
+      "about-wontc",
+      "brand-archive"
+    ],
+    "pages": [
+      "/tour_consulting"
+    ],
+    "pageTitles": [
+      "여행 컨설팅"
+    ],
+    "notes": "Background above the consultation form on /tour_consulting; 1200px, the larger copy of a20b230536bd. Stock flat lay with the WTC logo composited in."
+  },
+  {
+    "sha": "927c775c73d006b2fddb32c01ca7392401d4a9f1b1bb45fca42a67d0ca722b7d",
+    "index": 149,
+    "batch": 6,
+    "src": "/legacy/927c775c73d0/480.webp",
+    "original": "/legacy/927c775c73d0/original.jpg",
+    "width": 500,
+    "height": 666,
+    "format": "jpeg",
+    "roles": [
+      "background"
+    ],
+    "category": "destination-scenery",
+    "isMostlyText": false,
+    "quality": "medium",
+    "subject": "몬테네그로 페라스트의 돌 아치 너머로 보이는 코토르만과 크루즈선",
+    "subjectEn": "Stone arches framing the Bay of Kotor and a cruise ship, Perast, Montenegro",
+    "tags": [
+      "montenegro",
+      "kotor",
+      "perast",
+      "arches",
+      "bay",
+      "cruise"
+    ],
+    "suggestedUsages": [
+      "about-wontc",
+      "city:kotor",
+      "brand-archive"
+    ],
+    "pages": [
+      "/about_wontc"
+    ],
+    "pageTitles": [
+      "원여행클럽 소개"
+    ],
+    "notes": "\"이색 지역 & 이색 테마 전문\" card on /about_wontc; 500px copy of bb7977c0d0b4."
+  },
+  {
+    "sha": "943d1bd2c0185a6d607acc6dcfd342b59ebb8812f732b0cf94960a556e0b6e93",
+    "index": 155,
+    "batch": 6,
+    "src": "/legacy/943d1bd2c018/960.webp",
+    "original": "/legacy/943d1bd2c018/original.jpg",
+    "width": 1500,
+    "height": 820,
+    "format": "jpeg",
+    "roles": [
+      "background"
+    ],
+    "category": "brand-hero",
+    "isMostlyText": false,
+    "quality": "high",
+    "subject": "알록달록한 별무늬 타일 벽에 줄지어 선 주황색 우편함",
+    "subjectEn": "Row of orange mailboxes set into a colourful star-patterned tile wall",
+    "tags": [
+      "mailbox",
+      "letters",
+      "tiles",
+      "pattern",
+      "stock",
+      "page-hero"
+    ],
+    "suggestedUsages": [
+      "won-story",
+      "about-wontc",
+      "brand-archive"
+    ],
+    "pages": [
+      "/about_letter"
+    ],
+    "pageTitles": [
+      "마음편지"
+    ],
+    "notes": "Hero of /about_letter (\"원여행클럽의 소식지, 마음편지\"); 1500px, the larger copy of 6a42dd51c1cb. Good fit for a newsletter/letters section hero."
+  },
+  {
+    "sha": "98d6d53dff13465b239ba06bc8b83d95047750e7a0be49a1db08b14938575128",
+    "index": 161,
+    "batch": 6,
+    "src": "/legacy/98d6d53dff13/480.webp",
+    "original": "/legacy/98d6d53dff13/original.jpg",
+    "width": 500,
+    "height": 375,
+    "format": "jpeg",
+    "roles": [
+      "og:image"
+    ],
+    "category": "letter-illustration",
+    "isMostlyText": false,
+    "quality": "medium",
+    "subject": "펼친 매거진 목업: 마음편지 09의 \"ITALY\" 지면(포지타노·아말피 해안)",
+    "subjectEn": "Open-magazine mockup showing the Heart Letter 09 \"ITALY\" spread (Positano, Amalfi Coast)",
+    "tags": [
+      "heart-letter",
+      "magazine-mockup",
+      "italy",
+      "positano",
+      "amalfi-coast",
+      "og-image"
+    ],
+    "suggestedUsages": [
+      "heart-letter:heart_letter_09",
+      "city:positano",
+      "brand-archive"
+    ],
+    "pages": [
+      "/blogPost/heart_letter_09"
+    ],
+    "pageTitles": [
+      "[마음편지 09] 2013년 부활호"
+    ],
+    "notes": "og:image of heart_letter_09 (500x375); same pixels as b2006f4b41c9, the /about_letter card thumbnail."
+  },
+  {
+    "sha": "a062095d7891859e9fb912af9d6e0d99d679e874a63b3963abf8b2cb6abf1e2d",
+    "index": 167,
+    "batch": 6,
+    "src": "/legacy/a062095d7891/480.webp",
+    "original": "/legacy/a062095d7891/original.png",
+    "width": 500,
+    "height": 338,
+    "format": "png",
+    "roles": [
+      "background"
+    ],
+    "category": "tour-product",
+    "isMostlyText": false,
+    "quality": "medium",
+    "subject": "\"동화와 예술의 오스트리아 & 체코\" 프로그램 카드 – 할슈타트 호수 마을 풍경",
+    "subjectEn": "Program card \"Austria & Czech – fairy tales and art\" over the Hallstatt lakeside village",
+    "tags": [
+      "austria",
+      "czech",
+      "hallstatt",
+      "lake",
+      "village",
+      "program-card",
+      "title-overlay"
+    ],
+    "suggestedUsages": [
+      "local-life-exchange",
+      "tour-consulting",
+      "city:hallstatt",
+      "brand-archive"
+    ],
+    "pages": [
+      "/local_life"
+    ],
+    "pageTitles": [
+      "한달살기 맞교환 여행"
+    ],
+    "notes": "Card on /local_life; 500px copy of a808ee39d976 (prefer the 1000px one)."
+  },
+  {
+    "sha": "a3fd5cd17ea29653fac319829954808a1a5f80b9483b03a20f22ab362778081a",
+    "index": 173,
+    "batch": 6,
+    "src": "/legacy/a3fd5cd17ea2/original.gif",
+    "original": "/legacy/a3fd5cd17ea2/original.gif",
+    "width": 400,
+    "height": 400,
+    "format": "gif",
+    "roles": [],
+    "kind": "animated",
+    "category": "ui-element",
+    "isMostlyText": false,
+    "quality": "low",
+    "subject": "식스샵 기본 로딩 스피너 애니메이션 GIF",
+    "subjectEn": "Sixshop default loading-spinner animated GIF (12 frames)",
+    "tags": [
+      "loading",
+      "spinner",
+      "animated-gif",
+      "sixshop-platform",
+      "no-content"
+    ],
+    "suggestedUsages": [
+      "brand-archive"
+    ],
+    "pages": [
+      "/",
+      "/about_ceo",
+      "/about_jetpool",
+      "/about_letter",
+      "/about_wontc",
+      "/blogPost/heart_letter_02",
+      "/blogPost/heart_letter_03",
+      "/blogPost/heart_letter_04",
+      "/blogPost/heart_letter_05",
+      "/blogPost/heart_letter_06",
+      "/blogPost/heart_letter_07",
+      "/blogPost/heart_letter_08",
+      "/blogPost/heart_letter_09",
+      "/blogPost/heat_letter_01",
+      "/cs",
+      "/guide",
+      "/home",
+      "/jetpool",
+      "/local_life",
+      "/member_stay",
+      "/notice_guide",
+      "/product/past_operafestival",
+      "/product/past_operafestival-28",
+      "/product/past_pilgrimage",
+      "/product/past_spainbest",
+      "/product/past_spainbest-30",
+      "/product/past_spainbest-30-31",
+      "/product/past_spainbest-30-31-32",
+      "/qna_guide",
+      "/review_guide",
+      "/signup",
+      "/tour_consulting",
+      "/tour_ticket",
+      "/untitled-1",
+      "/untitled-6",
+      "/untitled-7",
+      "/won_story"
+    ],
+    "pageTitles": [
+      "전세계 살아보기, 비행기공유플랫폼",
+      "CEO 원치승",
+      "젯풀인터내셔날",
+      "마음편지",
+      "원여행클럽 소개",
+      "[마음편지 02] 한국관광의 기본개념부터 바꾸어야한다.",
+      "[마음편지 03] 서울관광마케팅 주식 회사의 설립에 부쳐...",
+      "[마음편지 04] 4일간의 빛 축제로 400만명의 관광객을 유치하는 리옹시",
+      "[마음편지 05] 화제의 편지 - 답신",
+      "[마음편지 06] 극동패키지 초안",
+      "[마음편지 07] 20세기의 마지막 편",
+      "[마음편지 08] 첫 마음편지를 띄운지 3년 후...",
+      "[마음편지 09] 2013년 부활호",
+      "[마음편지 01] MBC 체험수기 공모전 '금상' 수상작",
+      "고객센터",
+      "사용 설명서",
+      "전세계 살아보기, 비행기공유플랫폼",
+      "젯풀호스트 프랜차이즈",
+      "한달살기 맞교환 여행",
+      "멤버 스테이",
+      "NOTICE - 사용 설명서",
+      "[축제] 오페라 페스티벌",
+      "[축제] 오페라 페스티벌의 사본",
+      "[종교] 마틴루터 종교개혁 성지순례",
+      "[푸드] 미식과 미학의 베스트 스페인",
+      "[힐링] 캐나다여행",
+      "[종료] 나태주선생과 함께하는 삿포로 눈축제",
+      "[모집] 유영만 교수와 함께 떠나는 8일간의 바르셀로나 문화 인문학 여행",
+      "Q&A - 사용 설명서",
+      "REVIEW - 사용 설명서",
+      "전세계 살아보기, 비행기공유플랫폼",
+      "여행 컨설팅",
+      "투어&티켓",
+      "전세기공유플랫폼",
+      "Hanginggardensofbali",
+      "프리미엄 라운지",
+      "원스토리"
+    ],
+    "notes": "Platform asset (static.sixshop.com loading-default-mall.gif) loaded on every page; replace with the app's own loading indicator."
+  },
+  {
+    "sha": "a783f9a33dd679d8ffe748b597677d0610c102ba26b35cd497ba493102ab0c90",
+    "index": 179,
+    "batch": 6,
+    "src": "/legacy/a783f9a33dd6/480.webp",
+    "original": "/legacy/a783f9a33dd6/original.jpg",
+    "width": 500,
+    "height": 375,
+    "format": "jpeg",
+    "roles": [
+      "background"
+    ],
+    "category": "map",
+    "isMostlyText": false,
+    "quality": "medium",
+    "subject": "극동패키지 초안: 동북아 흑백 지도 위에 손으로 그린 비행기·배 이동 경로 화살표",
+    "subjectEn": "Far-East Package draft: hand-drawn flight and ferry route arrows over a B&W map of Northeast Asia (Seoul, Tokyo, northern China)",
+    "tags": [
+      "heart-letter",
+      "map",
+      "route",
+      "far-east-package",
+      "northeast-asia",
+      "hand-drawn",
+      "black-and-white"
+    ],
+    "suggestedUsages": [
+      "heart-letter:heart_letter_06",
+      "brand-archive"
+    ],
+    "pages": [
+      "/about_letter"
+    ],
+    "pageTitles": [
+      "마음편지"
+    ],
+    "notes": "[마음편지 06] 극동패키지 초안 card thumbnail on /about_letter; same image as 0f541c4ae76a (that post's og:image)."
+  },
+  {
+    "sha": "a93e582fa66c2f7aa3c24e70a504ad42e07a16b7ad1da5602ed7edd711e708cc",
+    "index": 185,
+    "batch": 6,
+    "src": "/legacy/a93e582fa66c/480.webp",
+    "original": "/legacy/a93e582fa66c/original.jpg",
+    "width": 500,
+    "height": 346,
+    "format": "jpeg",
+    "roles": [
+      "background"
+    ],
+    "category": "destination-scenery",
+    "isMostlyText": false,
+    "quality": "medium",
+    "subject": "눈 덮인 홋카이도 노보리베츠 지옥계곡의 증기와 나무 산책로를 걷는 두 사람",
+    "subjectEn": "Two walkers on the boardwalk through steaming, snowy Noboribetsu Jigokudani (Hell Valley), Hokkaido",
+    "tags": [
+      "hokkaido",
+      "noboribetsu",
+      "jigokudani",
+      "onsen",
+      "winter",
+      "snow",
+      "boardwalk",
+      "card-thumbnail"
+    ],
+    "suggestedUsages": [
+      "local-life-exchange",
+      "travel-product:past_spainbest-30-31",
+      "city:hokkaido",
+      "brand-archive"
+    ],
+    "pages": [
+      "/",
+      "/home"
+    ],
+    "pageTitles": [
+      "전세계 살아보기, 비행기공유플랫폼",
+      "전세계 살아보기, 비행기공유플랫폼"
+    ],
+    "notes": "Home card \"[모집중] 나태주시인과 함께 삿포로 살아보기 (삿포로 | 15일)\"; 500px copy of f0cb05249c16 / f3a4e626d6a4."
+  },
+  {
+    "sha": "b2006f4b41c9eca9b998aaae94bcee029269dbbb755fe16f01c8b4d37eda799c",
+    "index": 191,
+    "batch": 6,
+    "src": "/legacy/b2006f4b41c9/480.webp",
+    "original": "/legacy/b2006f4b41c9/original.jpg",
+    "width": 500,
+    "height": 375,
+    "format": "jpeg",
+    "roles": [
+      "background"
+    ],
+    "category": "letter-illustration",
+    "isMostlyText": false,
+    "quality": "medium",
+    "subject": "펼친 매거진 목업: 마음편지 09의 \"ITALY\" 지면(포지타노·아말피 해안)",
+    "subjectEn": "Open-magazine mockup showing the Heart Letter 09 \"ITALY\" spread (Positano, Amalfi Coast)",
+    "tags": [
+      "heart-letter",
+      "magazine-mockup",
+      "italy",
+      "positano",
+      "amalfi-coast",
+      "card-thumbnail"
+    ],
+    "suggestedUsages": [
+      "heart-letter:heart_letter_09",
+      "city:positano",
+      "brand-archive"
+    ],
+    "pages": [
+      "/about_letter"
+    ],
+    "pageTitles": [
+      "마음편지"
+    ],
+    "notes": "[마음편지 09] card thumbnail on /about_letter; same pixels as 98d6d53dff13 (the post's og:image)."
+  },
+  {
+    "sha": "b89fc2d2b9aabd2c18dcee7059ec333dda3935aefbdf907ccd89d13c28bbbef8",
+    "index": 197,
+    "batch": 6,
+    "src": "/legacy/b89fc2d2b9aa/960.webp",
+    "original": "/legacy/b89fc2d2b9aa/original.jpg",
+    "width": 1040,
+    "height": 720,
+    "format": "jpeg",
+    "roles": [
+      "og:image"
+    ],
+    "category": "destination-scenery",
+    "isMostlyText": false,
+    "quality": "high",
+    "subject": "가우디의 카사 바트요 파사드 야경: 뼈 모양 기둥과 스테인드글라스 창(HDR)",
+    "subjectEn": "Gaudi's Casa Batllo facade lit at dusk: bone-like columns and stained-glass bay window, Barcelona (HDR)",
+    "tags": [
+      "barcelona",
+      "spain",
+      "gaudi",
+      "casa-batllo",
+      "architecture",
+      "modernisme",
+      "night",
+      "og-image"
+    ],
+    "suggestedUsages": [
+      "travel-product:past_spainbest-30-31-32",
+      "tour-ticket",
+      "city:barcelona",
+      "brand-archive"
+    ],
+    "pages": [
+      "/product/past_spainbest-30-31-32"
+    ],
+    "pageTitles": [
+      "[모집] 유영만 교수와 함께 떠나는 8일간의 바르셀로나 문화 인문학 여행"
+    ],
+    "notes": "og:image of the Barcelona humanities tour (un-resized uploadedFiles original image_1748305277907); same photo as 4a3c8c8bbd9c and 263710b58281. Heavy HDR processing."
+  },
+  {
+    "sha": "bd25483742740157efcbf5b7078d66521cc923a5ba03ada96434f24bd22c4976",
+    "index": 203,
+    "batch": 6,
+    "src": "/legacy/bd2548374274/480.webp",
+    "original": "/legacy/bd2548374274/original.jpg",
+    "width": 500,
+    "height": 666,
+    "format": "jpeg",
+    "roles": [
+      "background"
+    ],
+    "category": "accommodation",
+    "isMostlyText": false,
+    "quality": "medium",
+    "subject": "에펠탑이 보이는 파리 아파트 발코니의 노을, 라운지 체어와 펼친 책",
+    "subjectEn": "Paris apartment balcony at sunset with Eiffel Tower view, lounge chair and open book",
+    "tags": [
+      "paris",
+      "france",
+      "eiffel-tower",
+      "balcony",
+      "apartment",
+      "sunset",
+      "home-stay"
+    ],
+    "suggestedUsages": [
+      "about-wontc",
+      "local-life-exchange",
+      "member-stay",
+      "city:paris",
+      "brand-archive"
+    ],
+    "pages": [
+      "/about_wontc"
+    ],
+    "pageTitles": [
+      "원여행클럽 소개"
+    ],
+    "notes": "\"일상을 여행으로 만드는 힘!\" card on /about_wontc; 500px copy of b2ca3f9720b6."
+  },
+  {
+    "sha": "c4faa2c679b7627c5ef6e1554d71cae15ecddf5e47bd9869f9eb0322d68a2876",
+    "index": 209,
+    "batch": 6,
+    "src": "/legacy/c4faa2c679b7/960.webp",
+    "original": "/legacy/c4faa2c679b7/original.jpg",
+    "width": 1000,
+    "height": 692,
+    "format": "jpeg",
+    "roles": [
+      "img"
+    ],
+    "category": "tour-product",
+    "isMostlyText": true,
+    "quality": "high",
+    "subject": "삿포로 눈축제 일정표 Day 0(2/6): 나태주 선생과 함께하는 \"雪國時車\" 오리엔테이션, 드림공화국 로고",
+    "subjectEn": "Sapporo Snow Festival itinerary Day 0 (Feb 6): \"雪國時車\" orientation with poet Na Tae-ju, Dream Republic logo",
+    "tags": [
+      "sapporo",
+      "itinerary",
+      "schedule",
+      "orientation",
+      "na-tae-ju",
+      "dream-republic",
+      "korean-text"
+    ],
+    "suggestedUsages": [
+      "travel-product:past_spainbest-30-31",
+      "city:sapporo",
+      "brand-archive"
+    ],
+    "pages": [
+      "/product/past_spainbest-30-31"
+    ],
+    "pageTitles": [
+      "[종료] 나태주선생과 함께하는 삿포로 눈축제"
+    ],
+    "notes": "First itinerary table of the Sapporo product; 드림공화국 (marketing consulting group) is the planning partner. Rebuild as structured itinerary data."
+  },
+  {
+    "sha": "ca3b09523473cf08f1aac647e5a90499ce616341a63791316a5c4503a0c2f2a1",
+    "index": 215,
+    "batch": 6,
+    "src": "/legacy/ca3b09523473/960.webp",
+    "original": "/legacy/ca3b09523473/original.jpg",
+    "width": 1000,
+    "height": 692,
+    "format": "jpeg",
+    "roles": [
+      "img"
+    ],
+    "category": "tour-product",
+    "isMostlyText": false,
+    "quality": "high",
+    "subject": "삿포로 상품 상세 \"HOKKAIDO 기타이치 가라스 공방 거리\" 소개 글과 유리공예품 가게 내부 사진",
+    "subjectEn": "Sapporo product detail: \"HOKKAIDO Kitaichi Glass Atelier Street\" description above a photo of a glassware shop interior, Otaru",
+    "tags": [
+      "japan",
+      "hokkaido",
+      "otaru",
+      "kitaichi-glass",
+      "glass-craft",
+      "shopping",
+      "product-detail",
+      "korean-text"
+    ],
+    "suggestedUsages": [
+      "travel-product:past_spainbest-30-31",
+      "city:otaru",
+      "city:hokkaido",
+      "brand-archive"
+    ],
+    "pages": [
+      "/product/past_spainbest-30-31"
+    ],
+    "pageTitles": [
+      "[종료] 나태주선생과 함께하는 삿포로 눈축제"
+    ],
+    "notes": "Top 45% is Korean destination copy; the shop photo has a Totoro sign, so crop carefully if reused."
+  },
+  {
+    "sha": "ce23c640d6cf530d314bbf7d150a7019d06211e4e306c5568e5987f9f181788c",
+    "index": 221,
+    "batch": 6,
+    "src": "/legacy/ce23c640d6cf/960.webp",
+    "original": "/legacy/ce23c640d6cf/original.png",
+    "width": 1500,
+    "height": 1500,
+    "format": "png",
+    "roles": [
+      "img"
+    ],
+    "category": "screenshot-text",
+    "isMostlyText": false,
+    "quality": "medium",
+    "subject": "식스샵 편집기 메뉴 화면: 게시판 추가 전/후 비교(REVIEW 메뉴 강조)",
+    "subjectEn": "Sixshop editor menu before and after adding a board (REVIEW entry highlighted)",
+    "tags": [
+      "sixshop-template",
+      "editor-guide",
+      "screenshot",
+      "review-guide",
+      "no-content"
+    ],
+    "suggestedUsages": [
+      "brand-archive"
+    ],
+    "pages": [
+      "/review_guide"
+    ],
+    "pageTitles": [
+      "REVIEW - 사용 설명서"
+    ],
+    "notes": "Sixshop help asset (static-sixshop2 guide/lifeforus/review1.png) on /review_guide; same image as fa7a346ff43d on /notice_guide. Not WONTC content."
+  },
+  {
+    "sha": "d1c89d28b22debe653ab953205ef3e75eebc9f3130acce5b46c4ee8f364b3fcd",
+    "index": 227,
+    "batch": 6,
+    "src": "/legacy/d1c89d28b22d/68.webp",
+    "original": "/legacy/d1c89d28b22d/original.jpg",
+    "width": 68,
+    "height": 68,
+    "format": "jpeg",
+    "roles": [],
+    "category": "icon",
+    "isMostlyText": false,
+    "quality": "low",
+    "subject": "YouTube 기본 문자 아바타(분홍 바탕에 \"j\"), 68px",
+    "subjectEn": "YouTube default letter avatar (white \"j\" on pink), 68px",
+    "tags": [
+      "youtube-avatar",
+      "letter-avatar",
+      "tiny",
+      "third-party"
+    ],
+    "suggestedUsages": [
+      "brand-archive"
+    ],
+    "pages": [
+      "/about_ceo"
+    ],
+    "pageTitles": [
+      "CEO 원치승"
+    ],
+    "notes": "yt3.ggpht.com channel avatar fetched by one of the /about_ceo video embeds; not WONTC content, do not reuse."
+  },
+  {
+    "sha": "d51d0b27a6a511020200cfe2174ec9b49cd2a9bcd7bdd1d85c920b0dd905e78b",
+    "index": 233,
+    "batch": 6,
+    "src": "/legacy/d51d0b27a6a5/960.webp",
+    "original": "/legacy/d51d0b27a6a5/original.png",
+    "width": 979,
+    "height": 666,
+    "format": "png",
+    "roles": [],
+    "category": "tour-product",
+    "isMostlyText": false,
+    "quality": "high",
+    "subject": "\"Premium Taiwan Odyssey – 오감만족 대만 일주 프리미엄 9일\" 카드 – 타이루거 협곡의 절벽 도로와 옥빛 계곡",
+    "subjectEn": "Card \"Premium Taiwan Odyssey – 9-day premium round-Taiwan tour\" over the cliff road and turquoise river of Taroko Gorge",
+    "tags": [
+      "taiwan",
+      "taroko-gorge",
+      "hualien",
+      "canyon",
+      "program-card",
+      "title-overlay"
+    ],
+    "suggestedUsages": [
+      "local-life-exchange",
+      "tour-consulting",
+      "city:hualien",
+      "brand-archive"
+    ],
+    "pages": [
+      "/",
+      "/home"
+    ],
+    "pageTitles": [
+      "전세계 살아보기, 비행기공유플랫폼",
+      "전세계 살아보기, 비행기공유플랫폼"
+    ],
+    "notes": "Home card \"[모집중] 오감만족 대만 살아보기 (대만 | 15일)\", although the image says 9 days. 74e726023cf6 is the 500px copy. Title text is baked in."
+  },
+  {
+    "sha": "dced481110d90dd20b0817d010c76796b97c4d705964982407b0004b33704675",
+    "index": 239,
+    "batch": 6,
+    "src": "/legacy/dced481110d9/700.webp",
+    "original": "/legacy/dced481110d9/original.jpg",
+    "width": 700,
+    "height": 525,
+    "format": "jpeg",
+    "roles": [
+      "background"
+    ],
+    "category": "destination-scenery",
+    "isMostlyText": false,
+    "quality": "medium",
+    "subject": "네카어 강의 하이델베르크 옛 다리(카를 테오도르 다리)와 언덕 위 하이델베르크 성",
+    "subjectEn": "Heidelberg Old Bridge over the Neckar with the old town and Heidelberg Castle on the hillside",
+    "tags": [
+      "germany",
+      "heidelberg",
+      "old-bridge",
+      "castle",
+      "neckar",
+      "old-town"
+    ],
+    "suggestedUsages": [
+      "travel-product:past_pilgrimage",
+      "city:heidelberg",
+      "brand-archive"
+    ],
+    "pages": [
+      "/product/past_pilgrimage"
+    ],
+    "pageTitles": [
+      "[종교] 마틴루터 종교개혁 성지순례"
+    ],
+    "notes": "Gallery image (5th) of the Martin Luther pilgrimage product. Only a 700px capture exists although the source also had a 2500px thumbnail URL."
+  },
+  {
+    "sha": "e8bfcc612626e2f20a8fa0841e4ce3627f47b65dd0474a73fe7c01c41eb12149",
+    "index": 245,
+    "batch": 6,
+    "src": "/legacy/e8bfcc612626/300.webp",
+    "original": "/legacy/e8bfcc612626/original.png",
+    "width": 300,
+    "height": 168,
+    "format": "png",
+    "roles": [
+      "background"
+    ],
+    "category": "icon",
+    "isMostlyText": false,
+    "quality": "medium",
+    "subject": "별이 그려진 방패(배지) 라인 아이콘 – 식스샵 리뷰 가이드 템플릿",
+    "subjectEn": "Line-art shield badge with a star (\"best review\") from the Sixshop review-guide template",
+    "tags": [
+      "icon",
+      "line-art",
+      "badge",
+      "star",
+      "review",
+      "sixshop-template"
+    ],
+    "suggestedUsages": [
+      "brand-archive"
+    ],
+    "pages": [
+      "/review_guide"
+    ],
+    "pageTitles": [
+      "REVIEW - 사용 설명서"
+    ],
+    "notes": "Template icon on /review_guide (store 137352); replace with the app icon set."
+  },
+  {
+    "sha": "ec05a5c68968eea4ec850f8a9c92f3863404560cbfeb62698a2de55a6563933f",
+    "index": 251,
+    "batch": 6,
+    "src": "/legacy/ec05a5c68968/700.webp",
+    "original": "/legacy/ec05a5c68968/original.jpg",
+    "width": 700,
+    "height": 400,
+    "format": "jpeg",
+    "roles": [
+      "img"
+    ],
+    "category": "map",
+    "isMostlyText": false,
+    "quality": "medium",
+    "subject": "북미와 동아시아(한국)를 잇는 왕복 항로가 그려진 세계 지도 일러스트",
+    "subjectEn": "World map illustration with a round-trip flight route between North America and East Asia",
+    "tags": [
+      "world-map",
+      "route",
+      "exchange",
+      "round-trip",
+      "illustration",
+      "home-swap"
+    ],
+    "suggestedUsages": [
+      "local-life-exchange",
+      "charter-page",
+      "brand-archive"
+    ],
+    "pages": [
+      "/local_life"
+    ],
+    "pageTitles": [
+      "한달살기 맞교환 여행"
+    ],
+    "notes": "Illustration beside \"한 달살기 맞교환 여행? 우리나라 국민과 외국인이 우리집을 맞교환합니다\" on /local_life; same image as b25248719d93 on /tour_ticket."
+  },
+  {
+    "sha": "f3a8af84cb56fcbbcf212ec41ef41a6b2422a9e9426d006f109412e7bfc42b8a",
+    "index": 257,
+    "batch": 6,
+    "src": "/legacy/f3a8af84cb56/583.webp",
+    "original": "/legacy/f3a8af84cb56/original.jpg",
+    "width": 583,
+    "height": 828,
+    "format": "jpeg",
+    "roles": [
+      "img"
+    ],
+    "category": "letter-illustration",
+    "isMostlyText": false,
+    "quality": "high",
+    "subject": "마음편지(Letter of Heart) 시즌2 01호 \"부활호\"(2013년 7월) 표지 – 세이셸 화강암 바위 해변, JETPOOL 로고",
+    "subjectEn": "Cover of \"Letter of Heart\" Season 2 No. 01, the July 2013 revival issue: Seychelles granite-boulder beach with the JETPOOL masthead",
+    "tags": [
+      "heart-letter",
+      "magazine-cover",
+      "seychelles",
+      "beach",
+      "jetpool-logo",
+      "2013",
+      "brand-history"
+    ],
+    "suggestedUsages": [
+      "heart-letter:heart_letter_09",
+      "won-story",
+      "about-jetpool",
+      "city:seychelles",
+      "brand-archive"
+    ],
+    "pages": [
+      "/blogPost/heart_letter_09"
+    ],
+    "pageTitles": [
+      "[마음편지 09] 2013년 부활호"
+    ],
+    "notes": "First image of the heart_letter_09 post. Strong brand-history asset (newsletter masthead and early JETPOOL logo); the beach looks like Anse Source d'Argent, La Digue (not confirmed)."
+  },
+  {
+    "sha": "f6683c484813775f361d5309b0c61a708de6b3f0c39fc6a56c53bade67387a9d",
+    "index": 263,
+    "batch": 6,
+    "src": "/legacy/f6683c484813/960.webp",
+    "original": "/legacy/f6683c484813/original.jpg",
+    "width": 1000,
+    "height": 692,
+    "format": "jpeg",
+    "roles": [
+      "img"
+    ],
+    "category": "tour-product",
+    "isMostlyText": true,
+    "quality": "high",
+    "subject": "\"雪國時車\" 기획 의도 안내문 – 삿포로 눈축제 눈조각 배경, 드림공화국 기획·원여행클럽 협력",
+    "subjectEn": "\"雪國時車\" concept panel over Sapporo Snow Festival sculptures: planned by Dream Republic, partner Won Travel Club",
+    "tags": [
+      "sapporo",
+      "snow-festival",
+      "snow-sculpture",
+      "na-tae-ju",
+      "dream-republic",
+      "korean-text",
+      "product-detail"
+    ],
+    "suggestedUsages": [
+      "travel-product:past_spainbest-30-31",
+      "city:sapporo",
+      "brand-archive"
+    ],
+    "pages": [
+      "/product/past_spainbest-30-31"
+    ],
+    "pageTitles": [
+      "[종료] 나태주선생과 함께하는 삿포로 눈축제"
+    ],
+    "notes": "Second detail image of the Sapporo product. Footer has a personal mobile number (010-4457-4520) next to WONTC's 02-6672-0055: strip it if the panel is reused."
+  },
+  {
+    "sha": "fc9219bc8dc6a7fa85b04c6e258a98ca881f2677600a79e4a9a06f6351358a74",
+    "index": 269,
+    "batch": 6,
+    "src": "/legacy/fc9219bc8dc6/960.webp",
+    "original": "/legacy/fc9219bc8dc6/original.jpg",
+    "width": 1000,
+    "height": 692,
+    "format": "jpeg",
+    "roles": [
+      "img"
+    ],
+    "category": "tour-product",
+    "isMostlyText": false,
+    "quality": "high",
+    "subject": "\"체험형 워크숍 & 문화 체험\" 4가지: 스케치 워크숍, 카탈루냐 음악당 단독 공연, 모자이크 워크숍, 플라멩코 워크숍",
+    "subjectEn": "\"Hands-on workshops & cultural experiences\" grid: sketch workshop, private concert at Palau de la Musica, mosaic (trencadis) workshop, flamenco workshop",
+    "tags": [
+      "barcelona",
+      "workshop",
+      "flamenco",
+      "mosaic",
+      "picasso-style",
+      "palau-de-la-musica",
+      "product-detail"
+    ],
+    "suggestedUsages": [
+      "travel-product:past_spainbest-30-31-32",
+      "city:barcelona",
+      "brand-archive"
+    ],
+    "pages": [
+      "/product/past_spainbest-30-31-32"
+    ],
+    "pageTitles": [
+      "[모집] 유영만 교수와 함께 떠나는 8일간의 바르셀로나 문화 인문학 여행"
+    ],
+    "notes": "Product detail grid with Korean captions under each photo; rebuild as a live card grid."
+  }
+]

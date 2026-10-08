@@ -289,8 +289,7 @@ export function extractPage(html, pageUrl, opts = {}) {
         break;
       }
       case 'style': {
-        recurse = false;
-        inlineCss.push($(node).text());
+        recurse = false; // collected document-wide below (head + body)
         break;
       }
       case 'link': {
@@ -456,7 +455,11 @@ export function extractPage(html, pageUrl, opts = {}) {
   for (const c of body.children ?? []) walk(c, { zone: 'main', block: 'div', noText: false });
   flush('div', 'main');
 
-  for (const css of inlineCss) addCssRefs(css, base, { via: 'css', zone: 'main' });
+  // page-level <style> blocks (head or body) belong to this page, unlike shared linked stylesheets
+  $('style').each((_, el) => {
+    inlineCss.push($(el).text());
+  });
+  for (const css of inlineCss) addCssRefs(css, base, { via: 'style', zone: 'main' });
   for (const u of scriptUrls) {
     if (!isAssetHost(u)) continue;
     if (media.some((m) => m.url === u)) continue;

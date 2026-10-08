@@ -1,5 +1,4 @@
 'use client';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { useI18n } from '@/lib/i18n';
@@ -7,37 +6,36 @@ import { useAuth } from '@/lib/auth';
 import { useApi } from '@/lib/hooks';
 import { post } from '@/lib/api';
 import { str, num } from '@/lib/shape';
-import { formatRange } from '@/lib/format';
+import { formatDate, formatRange, validRange } from '@/lib/format';
+import { ApiError } from '@/lib/errors';
 import { RequireAuth } from '@/components/gate';
-import { StateView } from '@/components/states';
-import { Alert, ErrorText, Kv, Section, StatusPill, Timeline, ButtonLink } from '@/components/ui';
+import { StateView, NotFoundState } from '@/components/states';
+import { Alert, Button, ButtonLink, DateRangeField, ErrorText, Kv, Section, Textarea, Timeline, useConfirm } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
-import { ExchangeHeader, exchangeView } from '../shared';
+import { ExchangeHeader, NEXT_ACTION, exchangeView, homeTitle, offerLabel, termRows } from '../shared';
+import s from '@/components/public/public.module.css';
 
-const NEXT_ACTION: Record<string, [string, string]> = {
-  RESPOND: ['상대의 제안에 응답할 차례예요.', 'It’s your turn to respond.'],
-  AWAIT_RESPONSE: ['상대방의 응답을 기다리는 중이에요.', 'Waiting for the other member.'],
-  SAFETY_ACK: ['안전 수칙 확인이 필요해요.', 'Please acknowledge the safety guidelines.'],
-  AWAIT_VERIFICATION: ['양측 검증을 진행 중이에요.', 'Verification in progress.'],
-  SIGN_AGREEMENT: ['계약서에 서명해 주세요.', 'Please sign the agreement.'],
-  AWAIT_COUNTERPARTY_SIGNATURE: ['상대방의 서명을 기다리는 중이에요.', 'Waiting for the other signature.'],
-  CONFIRM: ['양측 서명 완료! 맞교환을 확정하세요.', 'Both signed — confirm the exchange.'],
-  PREPARE_TRIP: ['확정되었어요. 여행을 준비하세요!', 'Confirmed — get ready!'],
-  COMPLETE_AFTER_STAY: ['머문 뒤 완료 처리해 주세요.', 'Mark complete after your stays.'],
-  LEAVE_REVIEW: ['후기를 남겨 주세요.', 'Leave a review.'],
-};
+export { NEXT_ACTION };
+
+const AFTER_ACCEPT = ['MUTUAL_ACCEPTED', 'VERIFICATION_PENDING', 'AGREEMENT_PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'REVIEWED'];
 
 export default function ExchangeDetailView() {
   const { id } = useParams<{ id: string }>();
   const { L, lang } = useI18n();
   const { user } = useAuth();
   const toast = useToast();
+  const { confirm, dialog } = useConfirm();
   const st = useApi<any>(`/v1/exchanges/${id}`, { auth: true });
   const [err, setErr] = useState<unknown>(null);
   const [counter, setCounter] = useState(false);
-  const [c, setC] = useState({ aStart: '', aEnd: '', bStart: '', bEnd: '', message: '' });
+  const [busy, setBusy] = useState('');
+  const [mine, setMine] = useState({ start: '', end: '' });
+  const [theirs, setTheirs] = useState({ start: '', end: '' });
+  const [cMsg, setCMsg] = useState('');
+  const [cErr, setCErr] = useState('');
   const act = async (path: string, body: any, idem?: string, msg?: string) => {
     setErr(null);
+    setBusy(path);
     try {
       await post(`/v1/exchanges/${id}/${path}`, body, idem ? { idempotencyKey: idem } : {});
       setCounter(false);
@@ -45,91 +43,205 @@ export default function ExchangeDetailView() {
       st.reload();
     } catch (e) {
       setErr(e);
+    } finally {
+      setBusy('');
     }
   };
   return (
     <RequireAuth>
-      <StateView state={st} skeleton="detail">
-        {(d) => {
-          const x = exchangeView(d, user?.id);
-          const negotiating = ['REQUESTED', 'COUNTERED'].includes(x.status);
-          const myTurn = x.nextAction === 'RESPOND';
-          const na = NEXT_ACTION[x.nextAction];
-          return (
-            <>
-              <ExchangeHeader x={x} />
-              {na && <Alert tone={['RESPOND', 'SAFETY_ACK', 'SIGN_AGREEMENT', 'CONFIRM'].includes(x.nextAction) ? 'warn' : 'info'}>{na[lang === 'ko' ? 0 : 1]}</Alert>}
-              <Section title={L(`현재 조건 (v${x.version})`, `Current terms (v${x.version})`)}>
-                <div className="card">
-                  <Kv
-                    rows={[
-                      [L('집 A 사용 기간', 'Home A occupied'), x.datesA.start ? formatRange(x.datesA.start, x.datesA.end, lang) : '—'],
-                      [L('집 B 사용 기간', 'Home B occupied'), x.datesB.start ? formatRange(x.datesB.start, x.datesB.end, lang) : '—'],
-                      [L('인원 (A집 / B집)', 'Guests (A / B)'), `${x.guestsA ?? '—'} / ${x.guestsB ?? '—'}`],
-                      [L('메시지', 'Message'), x.message || '—'],
-                      [L('상태', 'Status'), <StatusPill key="s" status={x.status} />],
-                    ]}
-                  />
-                </div>
-              </Section>
-              <ErrorText error={err} />
-              {negotiating && myTurn && (
-                <Section title={L('응답', 'Respond')}>
-                  <div className="card stack">
-                    <p className="small muted" style={{ margin: 0 }}>{L(`수락은 현재 버전(v${x.version})에만 적용됩니다. 그 사이 조건이 바뀌면 서버가 거부하고 다시 확인을 요청합니다.`, `Accepting binds v${x.version} only; if terms changed meanwhile the server rejects it and you re-confirm.`)}</p>
-                    <div className="row">
-                      <button className="btn accent" onClick={() => act('accept', { offerVersion: x.version }, `xaccept-${id}-v${x.version}`, L('수락했어요', 'Accepted'))}>{L(`v${x.version} 조건 수락`, `Accept v${x.version}`)}</button>
-                      <button className="btn" onClick={() => setCounter(!counter)} aria-expanded={counter}>{L('조건 변경 제안', 'Counter-offer')}</button>
-                      <button className="btn ghost" onClick={() => act('decline', { reason: null }, undefined, L('거절했어요', 'Declined'))}>{L('거절', 'Decline')}</button>
+      {dialog}
+      {st.error instanceof ApiError && (st.error.kind === 'not_found' || st.error.kind === 'validation') ? (
+        <NotFoundState as="h1" title={L('맞교환을 찾을 수 없어요', 'We can’t find that exchange')} body={L('취소되었거나 참여하지 않은 맞교환일 수 있어요.', 'It may have been cancelled, or you are not part of it.')} back={{ href: '/trips?tab=exchanges', label: L('내 맞교환 보기', 'My exchanges') }} />
+      ) : (
+        <StateView state={st} skeleton="detail">
+          {(d) => {
+            const x = exchangeView(d, user?.id);
+            const negotiating = ['REQUESTED', 'COUNTERED'].includes(x.status);
+            const myTurn = x.nextAction === 'RESPOND';
+            const na = NEXT_ACTION[x.nextAction];
+            const iAmA = x.role === 'REQUESTER';
+            const myHomeT = homeTitle(x.myHome, L('내 집', 'my home'));
+            const theirHomeT = homeTitle(x.theirHome, L('상대 집', 'their home'));
+            const agreementOpen = ['AGREEMENT_PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'REVIEWED'].includes(x.status);
+            const tripOpen = ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'REVIEWED'].includes(x.status);
+            const terms = termRows(x.terms, L);
+            const openCounter = () => {
+              setMine(x.myStay);
+              setTheirs(x.theirStay);
+              setCMsg('');
+              setCErr('');
+              setCounter(true);
+            };
+            const sendCounter = () => {
+              if (!validRange(mine.start, mine.end) || !validRange(theirs.start, theirs.end)) {
+                setCErr(L('두 기간 모두 체크인과 체크아웃 날짜를 골라 주세요.', 'Choose both dates for each stay.'));
+                return;
+              }
+              setCErr('');
+              // datesB = when home B is used; datesA = when home A is used.
+              const myAsB = iAmA ? { datesB: mine, datesA: theirs } : { datesA: mine, datesB: theirs };
+              void act('counter', { expectedVersion: x.version, ...myAsB, message: cMsg.trim() || null }, undefined, L('새 제안을 보냈어요', 'Counter-offer sent'));
+            };
+            const decline = () =>
+              confirm({
+                title: L('이 제안을 거절할까요?', 'Decline this proposal?'),
+                body: L('거절하면 이 맞교환은 종료되고 다시 열 수 없어요. 날짜만 맞지 않다면 ‘조건 변경 제안’으로 다른 날짜를 제안해 보세요.', 'Declining ends this exchange and it cannot be reopened. If only the dates don’t work, send a counter-offer instead.'),
+                tone: 'danger',
+                confirmLabel: L('거절하기', 'Decline'),
+                requireReason: L('거절 사유 (상대에게 전달돼요)', 'Reason (shared with the other member)'),
+                reasonMinLength: 3,
+                reasonPlaceholder: L('예: 해당 기간에는 집을 비울 수 없어요.', 'e.g. We can’t leave home on those dates.'),
+                run: async (reason) => {
+                  await post(`/v1/exchanges/${id}/decline`, { reason });
+                  toast.show(L('제안을 거절했어요', 'Declined'));
+                  st.reload();
+                },
+              });
+            const withdraw = () =>
+              confirm({
+                title: L('제안을 철회할까요?', 'Withdraw your proposal?'),
+                body: L('철회하면 상대방은 더 이상 이 제안에 응답할 수 없어요.', 'The other member will no longer be able to respond.'),
+                tone: 'danger',
+                confirmLabel: L('철회하기', 'Withdraw'),
+                run: async () => {
+                  await post(`/v1/exchanges/${id}/withdraw`, { reason: null });
+                  toast.show(L('제안을 철회했어요', 'Withdrawn'));
+                  st.reload();
+                },
+              });
+            return (
+              <>
+                <ExchangeHeader x={x} back={false} />
+                {na && (
+                  <Alert tone={['RESPOND', 'SAFETY_ACK', 'SIGN_AGREEMENT', 'CONFIRM'].includes(x.nextAction) ? 'warn' : 'info'}>
+                    <strong>{na[lang === 'ko' ? 0 : 1]}</strong>
+                    {myTurn && x.respondBy && <span className="small" style={{ display: 'block' }}>{L(`${formatDate(x.respondBy, 'ko', true)}까지 응답하지 않으면 제안이 만료돼요.`, `The offer expires if not answered by ${formatDate(x.respondBy, 'en', true)}.`)}</span>}
+                  </Alert>
+                )}
+                <Section title={negotiating ? L(`현재 조건 · ${offerLabel(x.version, L)}`, `Current terms · ${offerLabel(x.version, L)}`) : L('합의한 조건', 'Agreed terms')}>
+                  <div className="card">
+                    <Kv
+                      rows={[
+                        [L(`내가 ${theirHomeT}에 머무는 기간`, `My stay at ${theirHomeT}`), x.myStay.start ? formatRange(x.myStay.start, x.myStay.end, lang, { nights: true }) : '—'],
+                        [L(`상대가 내 집(${myHomeT})에 머무는 기간`, `Their stay at my home (${myHomeT})`), x.theirStay.start ? formatRange(x.theirStay.start, x.theirStay.end, lang, { nights: true }) : '—'],
+                        [L('인원', 'Guests'), L(`우리 ${x.myGuests ?? '—'}명 · 상대 ${x.theirGuests ?? '—'}명`, `Us ${x.myGuests ?? '—'} · them ${x.theirGuests ?? '—'}`)],
+                        ...terms,
+                        ...(x.message ? [[str(x.raw, 'currentOffer.createdBy') === user?.id ? L('내 메시지', 'My message') : L('상대 메시지', 'Their message'), x.message] as [string, string]] : []),
+                      ]}
+                    />
+                  </div>
+                </Section>
+                <ErrorText error={err} />
+                {negotiating && myTurn && (
+                  <Section title={L('응답하기', 'Respond')}>
+                    <div className="card stack">
+                      <p className="small muted" style={{ margin: 0 }}>{L('수락하면 위 조건(최신 제안)으로 다음 단계인 양측 검증이 시작돼요. 그사이 상대가 조건을 바꾸면 다시 확인을 요청드려요.', 'Accepting binds the latest offer above and starts verification. If the terms change meanwhile, we’ll ask you to confirm again.')}</p>
+                      <div className={s.actionsStack}>
+                        <Button variant="accent" loading={busy === 'accept'} onClick={() => act('accept', { offerVersion: x.version }, `xaccept-${id}-v${x.version}`, L('수락했어요', 'Accepted'))}>
+                          {L('이 조건으로 수락', 'Accept these terms')}
+                        </Button>
+                        <Button onClick={() => (counter ? setCounter(false) : openCounter())} aria-expanded={counter} icon="edit">
+                          {L('조건 변경 제안', 'Counter-offer')}
+                        </Button>
+                        <Button variant="ghost" onClick={decline} style={{ color: 'var(--danger)' }}>
+                          {L('거절', 'Decline')}
+                        </Button>
+                      </div>
+                      {counter && (
+                        <form
+                          className="stack"
+                          noValidate
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            sendCounter();
+                          }}
+                          style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}
+                        >
+                          <div className="form-grid cols-2">
+                            <div className="field">
+                              <span>{L(`내가 ${theirHomeT}에 머무는 기간`, `My stay at ${theirHomeT}`)}</span>
+                              <DateRangeField start={mine.start} end={mine.end} onChange={setMine} boxed />
+                            </div>
+                            <div className="field">
+                              <span>{L('상대가 내 집에 머무는 기간', 'Their stay at my home')}</span>
+                              <DateRangeField start={theirs.start} end={theirs.end} onChange={setTheirs} boxed align="right" />
+                            </div>
+                          </div>
+                          <Textarea label={L('메시지', 'Message')} value={cMsg} onChange={(e) => setCMsg(e.target.value)} maxLength={2000} placeholder={L('바꾼 이유를 함께 적어 주면 합의가 빨라져요.', 'Explain the change — it helps you agree faster.')} />
+                          {cErr && <Alert tone="error">{cErr}</Alert>}
+                          <div className="row">
+                            <Button type="submit" variant="primary" loading={busy === 'counter'}>
+                              {L(`${offerLabel(x.version + 1, L)} 보내기`, `Send ${offerLabel(x.version + 1, L).toLowerCase()}`)}
+                            </Button>
+                            <Button variant="ghost" onClick={() => setCounter(false)}>
+                              {L('취소', 'Cancel')}
+                            </Button>
+                          </div>
+                        </form>
+                      )}
                     </div>
-                    {counter && (
-                      <form
-                        className="stack"
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          void act('counter', {
-                            expectedVersion: x.version,
-                            datesA: { start: c.aStart || x.datesA.start, end: c.aEnd || x.datesA.end },
-                            datesB: { start: c.bStart || x.datesB.start, end: c.bEnd || x.datesB.end },
-                            message: c.message || null,
-                          }, undefined, L('역제안을 보냈어요', 'Counter sent'));
-                        }}
-                      >
-                        <div className="form-grid cols-4">
-                          <label className="field"><span>{L('A집 시작', 'Home A from')}</span><input type="date" defaultValue={x.datesA.start} onChange={(e) => setC({ ...c, aStart: e.target.value })} /></label>
-                          <label className="field"><span>{L('A집 종료', 'Home A to')}</span><input type="date" defaultValue={x.datesA.end} onChange={(e) => setC({ ...c, aEnd: e.target.value })} /></label>
-                          <label className="field"><span>{L('B집 시작', 'Home B from')}</span><input type="date" defaultValue={x.datesB.start} onChange={(e) => setC({ ...c, bStart: e.target.value })} /></label>
-                          <label className="field"><span>{L('B집 종료', 'Home B to')}</span><input type="date" defaultValue={x.datesB.end} onChange={(e) => setC({ ...c, bEnd: e.target.value })} /></label>
-                        </div>
-                        <label className="field"><span>{L('메시지', 'Message')}</span><textarea onChange={(e) => setC({ ...c, message: e.target.value })} /></label>
-                        <button className="btn primary" style={{ justifySelf: 'start' }}>{L(`v${x.version + 1} 제안 보내기`, `Send v${x.version + 1}`)}</button>
-                      </form>
+                  </Section>
+                )}
+                {negotiating && !myTurn && x.role === 'REQUESTER' && (
+                  <p style={{ marginTop: 16 }}>
+                    <Button variant="ghost" size="sm" onClick={withdraw} style={{ color: 'var(--danger)' }}>
+                      {L('제안 철회', 'Withdraw request')}
+                    </Button>
+                  </p>
+                )}
+                <Section title={L('다음 단계', 'Next steps')}>
+                  <div className={s.actionsStack}>
+                    {x.conversationId && (
+                      <ButtonLink href={`/messages?c=${x.conversationId}`} variant="primary" icon="chat">
+                        {L('상대와 메시지', 'Message them')}
+                      </ButtonLink>
+                    )}
+                    {AFTER_ACCEPT.includes(x.status) && (
+                      <ButtonLink href={`/exchange/${id}/verification`} variant={x.nextAction === 'SAFETY_ACK' ? 'accent' : 'default'} icon="shield">
+                        {L('검증 체크리스트', 'Verification')}
+                      </ButtonLink>
+                    )}
+                    {agreementOpen ? (
+                      <ButtonLink href={`/exchange/${id}/agreement`} variant={['SIGN_AGREEMENT', 'CONFIRM'].includes(x.nextAction) ? 'accent' : 'default'} icon="doc">
+                        {L('계약서 · 서명', 'Agreement')}
+                      </ButtonLink>
+                    ) : (
+                      <Button icon="doc" disabled title={L('양측 검증이 끝나면 열려요', 'Opens after verification')}>
+                        {L('계약서 (검증 후 열림)', 'Agreement (after verification)')}
+                      </Button>
+                    )}
+                    {tripOpen && (
+                      <ButtonLink href={`/exchange/${id}/trip`} icon="home">
+                        {L('여행 정보 · 주소', 'Trip & address')}
+                      </ButtonLink>
                     )}
                   </div>
                 </Section>
-              )}
-              {negotiating && x.role === 'REQUESTER' && !myTurn && (
-                <button className="btn ghost sm" onClick={() => act('withdraw', { reason: null }, undefined, L('제안을 철회했어요', 'Withdrawn'))}>{L('제안 철회', 'Withdraw request')}</button>
-              )}
-              <Section title={L('다음 단계', 'Next steps')}>
-                <div className="row">
-                  <ButtonLink href={`/exchange/${id}/verification`} variant={x.nextAction === 'SAFETY_ACK' ? 'accent' : 'default'} icon="shield">{L('검증 체크리스트', 'Verification')}</ButtonLink>
-                  <ButtonLink href={`/exchange/${id}/agreement`} variant={['SIGN_AGREEMENT', 'CONFIRM'].includes(x.nextAction) ? 'accent' : 'default'} icon="doc">{L('계약서 · 서명', 'Agreement')}</ButtonLink>
-                  <ButtonLink href={`/exchange/${id}/trip`} icon="home">{L('맞교환 여행', 'Trip')}</ButtonLink>
-                  {x.conversationId && <Link className="btn ghost" href={`/messages?c=${x.conversationId}`}>{L('메시지', 'Messages')}</Link>}
-                </div>
-              </Section>
-              {x.offers.length > 0 && (
-                <Section title={L('제안 이력 (버전)', 'Offer history (versions)')}>
-                  <div className="card">
-                    <Timeline events={[...x.offers].reverse().map((o: any) => ({ title: `v${num(o, 'version')} · ${str(o, 'createdBy') === user?.id ? L('나', 'me') : L('상대', 'them')}`, at: str(o, 'createdAt'), note: str(o, 'message') }))} />
-                  </div>
-                </Section>
-              )}
-            </>
-          );
-        }}
-      </StateView>
+                {x.offers.length > 0 && (
+                  <Section title={L('제안 기록', 'Offer history')}>
+                    <div className="card">
+                      <Timeline
+                        events={[...x.offers].reverse().map((o: any) => {
+                          const v = num(o, 'version') ?? 1;
+                          const byMe = str(o, 'createdBy') === user?.id;
+                          const dA = { start: str(o, 'datesA.start'), end: str(o, 'datesA.end') };
+                          const dB = { start: str(o, 'datesB.start'), end: str(o, 'datesB.end') };
+                          const myS = iAmA ? dB : dA;
+                          return {
+                            title: `${offerLabel(v, L)} · ${byMe ? L('내가 보냄', 'sent by me') : L(`${x.otherName || '상대'} 님이 보냄`, `sent by ${x.otherName || 'them'}`)}${v === x.version ? L(' · 최신', ' · latest') : ''}`,
+                            at: str(o, 'createdAt'),
+                            note: [myS.start ? L(`내 숙박 ${formatRange(myS.start, myS.end, 'ko')}`, `My stay ${formatRange(myS.start, myS.end, 'en')}`) : '', str(o, 'message')].filter(Boolean).join(' — '),
+                          };
+                        })}
+                      />
+                    </div>
+                  </Section>
+                )}
+              </>
+            );
+          }}
+        </StateView>
+      )}
     </RequireAuth>
   );
 }

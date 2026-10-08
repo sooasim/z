@@ -10,9 +10,9 @@ import { f, item, str, num } from '@/lib/shape';
 import { formatRange, parseDateRange } from '@/lib/format';
 import { RequireAuth } from '@/components/gate';
 import { StateView } from '@/components/states';
-import { Alert, DateText, ErrorText, Section, Button, Kv } from '@/components/ui';
+import { Alert, DateText, ErrorText, Section, Button, Kv, Icon } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
-import { ExchangeHeader, exchangeView } from '../../shared';
+import { ExchangeHeader, exchangeView, homeTitle } from '../../shared';
 
 const CLAUSES: Array<[string, string]> = [
   ['제1조 (목적) 양 당사자는 아래 조건에 따라 각자의 주거를 상호 교환하여 사용한다. 본 교환에는 금전 대가가 수반되지 않는다.', 'Art. 1 (Purpose) The parties exchange the use of their homes on the terms below. No rent is paid.'],
@@ -70,46 +70,75 @@ export default function ExchangeAgreementView() {
                     return out.join(' · ');
                   };
                   const platformTerms = f<any>(snap, 'platformTerms');
+                  // Perspective: my home vs. the home I stay at (A = requester's home, B = responder's).
+                  const iAmA = x.role === 'REQUESTER';
+                  const mySnap = iAmA ? homeA : homeB;
+                  const theirSnap = iAmA ? homeB : homeA;
+                  const myTitle = str(mySnap, 'title') || homeTitle(x.myHome, L('내 집', 'my home'));
+                  const theirTitle = str(theirSnap, 'title') || homeTitle(x.theirHome, L('상대 집', 'their home'));
+                  const myDates = iAmA ? dB : dA;
+                  const theirDates = iAmA ? dA : dB;
+                  const myG = num(offer, iAmA ? 'guestsB' : 'guestsA') ?? x.myGuests;
+                  const theirG = num(offer, iAmA ? 'guestsA' : 'guestsB') ?? x.theirGuests;
+                  // Show the platform terms by name only — never draft markers or version codes.
+                  const termsTitle = (t: string) => (t || L('홈 맞교환 이용 약정', 'Home Exchange terms')).replace(/\s*\((초안|draft)\)\s*/gi, '').trim();
                   return (
                     <>
                       <Section title={L('맞교환 계약서', 'Exchange agreement')}>
                         <article className="card stack" tabIndex={0} aria-label={L('계약서 본문', 'Agreement text')} style={{ maxHeight: 460, overflowY: 'auto' }}>
                           {CLAUSES.map((c, i) => <p key={i} style={{ margin: 0 }}>{c[lang === 'ko' ? 0 : 1]}</p>)}
                           <hr />
-                          <h3>{L('조건 요약', 'Terms summary')} (v{num(a, 'offerVersion') ?? x.version})</h3>
+                          <h3>{L('합의한 조건', 'Agreed terms')}</h3>
                           <Kv
                             rows={[
-                              [L('집 A', 'Home A'), `${str(homeA, 'title') || str(x.propertyA, 'title')} · ${dA.start ? formatRange(dA.start, dA.end, lang) : '—'}`],
-                              [L('집 B', 'Home B'), `${str(homeB, 'title') || str(x.propertyB, 'title')} · ${dB.start ? formatRange(dB.start, dB.end, lang) : '—'}`],
-                              [L('인원 (A/B)', 'Guests (A/B)'), `${num(offer, 'guestsA') ?? x.guestsA ?? '—'} / ${num(offer, 'guestsB') ?? x.guestsB ?? '—'}`],
-                              ...(times(homeA) || times(homeB) ? [[L('입·퇴실 (A / B)', 'Check-in/out (A / B)'), `${times(homeA) || '—'} / ${times(homeB) || '—'}`] as [string, string]] : []),
-                              ...(rules(homeA) ? [[L('집 A 규칙', 'Home A rules'), rules(homeA)] as [string, string]] : []),
-                              ...(rules(homeB) ? [[L('집 B 규칙', 'Home B rules'), rules(homeB)] as [string, string]] : []),
-                              ...(platformTerms ? [[L('플랫폼 약관', 'Platform terms'), `${str(platformTerms, 'title')} (${str(platformTerms, 'version') || str(a, 'termsVersion')})`] as [string, string]] : []),
+                              [L(`내가 머무는 집 · ${theirTitle}`, `I stay at ${theirTitle}`), myDates.start ? formatRange(myDates.start, myDates.end, lang, { nights: true }) : '—'],
+                              [L(`상대가 머무는 내 집 · ${myTitle}`, `They stay at ${myTitle}`), theirDates.start ? formatRange(theirDates.start, theirDates.end, lang, { nights: true }) : '—'],
+                              [L('인원', 'Guests'), L(`우리 ${myG ?? '—'}명 · 상대 ${theirG ?? '—'}명`, `Us ${myG ?? '—'} · them ${theirG ?? '—'}`)],
+                              ...(times(theirSnap) ? [[L('내가 머무는 집 입·퇴실', 'Check-in/out where I stay'), times(theirSnap)] as [string, string]] : []),
+                              ...(rules(theirSnap) ? [[L('내가 머무는 집 규칙', 'House rules where I stay'), rules(theirSnap)] as [string, string]] : []),
+                              ...(rules(mySnap) ? [[L('내 집 규칙', 'My house rules'), rules(mySnap)] as [string, string]] : []),
+                              ...(platformTerms ? [[L('플랫폼 약관', 'Platform terms'), termsTitle(str(platformTerms, 'title'))] as [string, string]] : []),
                             ]}
                           />
                         </article>
-                        <div className="card flat stack" style={{ background: 'var(--surface-2)' }}>
-                          <p style={{ margin: 0 }}><strong>{L('조건 해시 (SHA-256)', 'Terms hash (SHA-256)')}</strong></p>
+                        <p className="small muted row" style={{ gap: 6, flexWrap: 'nowrap', alignItems: 'flex-start', margin: '12px 0 0' }}>
+                          <Icon name="lock" size={14} style={{ flex: '0 0 auto', marginTop: 3 }} /> {L('최종 합의 내용은 계약서에 안전하게 기록돼 변경할 수 없어요. 조건이 바뀌면 새 계약서에 다시 서명해요.', 'The final terms are recorded securely and cannot be changed. If the terms change, you sign a new agreement.')}
+                        </p>
+                        <details className="card flat" style={{ background: 'var(--surface-2)', marginTop: 8 }}>
+                          <summary className="small" style={{ cursor: 'pointer', fontWeight: 700 }}>{L('계약 무결성 정보', 'Agreement integrity details')}</summary>
+                          <p className="small muted" style={{ margin: '8px 0 4px' }}>{L('서명은 아래 지문(SHA-256)이 가리키는 조건에만 유효해요.', 'Signatures bind only the terms with this fingerprint (SHA-256).')}</p>
                           <p className="mono" style={{ margin: 0 }}>{hash || '—'}</p>
-                          <p className="small muted" style={{ margin: 0 }}>{L('서명은 이 해시가 가리키는 조건에만 유효합니다. 조건이 바뀌면 해시가 달라지며 다시 서명해야 합니다.', 'Your signature binds only the terms with this hash. If the terms change, the hash changes and you must sign again.')}</p>
-                        </div>
+                        </details>
                       </Section>
                       <Section title={L('서명 현황', 'Signatures')}>
                         <div className="grid-2 even">
-                          {[[L('요청자 (A)', 'Requester (A)'), sigReq, x.requesterName], [L('응답자 (B)', 'Responder (B)'), sigRes, x.responderName]].map(([label, sig, name]) => (
+                          {(x.role === 'RESPONDER' ? [[L('나', 'Me'), sigRes, ''], [x.requesterName || L('상대', 'Them'), sigReq, '']] : [[L('나', 'Me'), sigReq, ''], [x.responderName || L('상대', 'Them'), sigRes, '']]).map(([label, sig]) => (
                             <div key={String(label)} className="card flat row between">
-                              <span><strong>{String(label)}</strong> <span className="muted small">{String(name || '')}</span></span>
-                              {str(sig, 'signedAt') ? <span className="badge ok">✓ <DateText value={str(sig, 'signedAt')} time /></span> : <span className="badge warn">{L('서명 대기', 'Pending')}</span>}
+                              <strong>{String(label)}</strong>
+                              {str(sig, 'signedAt') ? (
+                                <span className="badge ok">
+                                  <Icon name="check" size={14} /> <DateText value={str(sig, 'signedAt')} time />
+                                </span>
+                              ) : (
+                                <span className="badge warn">{L('서명 대기', 'Not signed yet')}</span>
+                              )}
                             </div>
                           ))}
                         </div>
                       </Section>
+                      {signedByMe && !bothSigned && (
+                        <div style={{ marginTop: 16 }}>
+                          <Alert tone="info">
+                            <strong>{L('상대방의 서명을 기다리고 있어요', 'Waiting for the other signature')}</strong>
+                            <span className="small" style={{ display: 'block' }}>{L('상대가 서명하면 알림을 보내드려요. 그다음 확정하면 두 집 일정이 함께 잡혀요.', 'We’ll notify you when they sign. Then confirming books both homes together.')}</span>
+                          </Alert>
+                        </div>
+                      )}
                       {!signedByMe && hash && (
                         <div className="card stack" style={{ marginTop: 16 }}>
                           <label className="check">
                             <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
-                            <span>{L('위 계약 내용과 조건 해시를 확인했으며, 전자적 방식으로 서명하는 데 동의합니다.', 'I have reviewed the agreement and terms hash and consent to sign electronically.')}</span>
+                            <span>{L('위 계약 내용을 확인했으며, 전자적 방식으로 서명하는 데 동의합니다.', 'I have reviewed the agreement and consent to sign electronically.')}</span>
                           </label>
                           <Button
                             variant="accent"
@@ -137,7 +166,7 @@ export default function ExchangeAgreementView() {
                       )}
                       {bothSigned && x.status === 'AGREEMENT_PENDING' && (
                         <div className="card stack" style={{ marginTop: 16 }}>
-                          <p style={{ margin: 0 }}>{L('양측 서명이 완료되었습니다. 확정하면 두 집의 일정이 동시에 잠기며, 한쪽이라도 실패하면 모두 취소됩니다.', 'Both signed. Confirming locks both calendars atomically — or neither.')}</p>
+                          <p style={{ margin: 0 }}>{L('양측 서명이 끝났어요. 확정하면 두 집 일정이 함께 잡혀요 — 한쪽이 취소되면 모두 취소돼요.', 'Both signed. Confirming books both homes together — if one side cancels, both are cancelled.')}</p>
                           <Button
                             variant="accent"
                             loading={busy}
@@ -162,7 +191,7 @@ export default function ExchangeAgreementView() {
                       )}
                       {['CONFIRMED', 'IN_PROGRESS'].includes(x.status) && (
                         <Alert tone="ok">
-                          {L('맞교환이 확정되었습니다! 두 집의 일정이 잠겼습니다.', 'Exchange confirmed! Both calendars are locked.')} <Link href={`/exchange/${id}/trip`}>{L('여행 정보 보기', 'Trip details')}</Link>
+                          {L('맞교환이 확정됐어요! 두 집 일정이 함께 잡혔어요.', 'Exchange confirmed! Both homes are booked.')} <Link href={`/exchange/${id}/trip`}>{L('여행 정보 보기', 'Trip details')}</Link>
                         </Alert>
                       )}
                       <ErrorText error={err} />

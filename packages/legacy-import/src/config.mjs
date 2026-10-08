@@ -17,7 +17,9 @@ export const REPO_ROOT = (() => {
 export const DEFAULTS = Object.freeze({
   startUrls: ['https://www.wontc.co.kr/', 'https://www.wontc.co.kr/about_jetpool'],
   siteHosts: ['www.wontc.co.kr', 'wontc.co.kr'],
-  assetHosts: ['www.wontc.co.kr', 'wontc.co.kr', '*.sixshop.com', '*.sixshop.kr', '*.sixshop.io'],
+  // Sixshop serves uploads from contents.sixshop.com, resizes via thumb.sixshop.kr and theme files from
+  // static.sixshop.com + its S3 bucket (observed on www.wontc.co.kr)
+  assetHosts: ['www.wontc.co.kr', 'wontc.co.kr', '*.sixshop.com', '*.sixshop.kr', '*.sixshop.io', 'static-sixshop2.s3.ap-northeast-2.amazonaws.com'],
   maxPages: 500,
   maxDepth: 10,
   concurrency: 2,
@@ -38,6 +40,7 @@ export const DEFAULTS = Object.freeze({
     /\/(login|logout|signin|signout|signup|sign-up|join|register|cart|basket|order|orders|checkout|payment|pay|mypage|my-page|myshop|member|members|account|password|wishlist|admin)(\/|$|\?|\.)/i,
     /\/search(\/|$|\?)/i,
     /[?&](q|keyword|keywords|search|query|sort|redirect|returnUrl|return_url)=/i,
+    /(\{\{|%7B%7B)/i, // unrendered template tokens in links (e.g. /{{SITEURI}}club_past)
   ],
 });
 
@@ -75,6 +78,10 @@ export function buildConfig(opts = {}) {
     respectRobots: opts.respectRobots ?? true,
     assetsRespectRobots: opts.assetsRespectRobots ?? true,
     videoPosters: opts.videoPosters ?? true,
+    /** Sixshop's default "사용 설명서" editor-manual pages (sample content of shop 113) are skipped unless asked */
+    includeTemplatePages: !!opts.includeTemplatePages,
+    /** HAR / URL list of media observed in a real browser (runtime-loaded images a static crawl cannot see) */
+    extraMedia: opts.extraMedia ?? null,
     resume: !!opts.resume,
     allowPartial: !!opts.allowPartial,
   };

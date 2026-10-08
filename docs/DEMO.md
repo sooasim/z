@@ -52,7 +52,7 @@
 
 ### 픽스처 다시 녹화하기 / 로컬 빌드
 ```bash
-# 1) 깨끗한 격리 DB(jetpool_demo)에 시드 + 데모 활동(실제 API로 예약·MOCK 결제·메시지·맞교환·가이드·주문)을 만든 뒤 녹화
+# 1) 깨끗한 격리 DB(jetpool_demo)에 seed-dev(+ 있으면 seed-legacy) + 데모 활동(실제 API로 예약·MOCK 결제·메시지·맞교환·가이드·주문)을 만든 뒤 녹화
 bash scripts/pages/record.sh            # 개발용 'jetpool' DB는 건드리지 않습니다 (PostgreSQL :5432 필요)
 #    또는 이미 떠 있는 API를 그대로 녹화:  node scripts/pages/record-fixtures.mjs --api http://localhost:4000 --no-admin-mfa
 #    (--no-admin-mfa 없이 실행하면 그 DB의 admin@ 계정에 TOTP가 등록됩니다 — 공유 개발 DB에서는 꼭 붙이세요)
