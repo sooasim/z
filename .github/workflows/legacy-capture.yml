@@ -1,0 +1,68 @@
+# MIG-01 (owner-authorised): capture every image/video of the legacy WONT Travel Club site (www.wontc.co.kr)
+# and openly-licensed real photos for listings, then store the raw originals on the `legacy-assets` branch.
+# The optimisation and platform wiring happen in packages/legacy-import (see docs/runbooks/legacy-media-import.md).
+name: legacy-capture
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_pages:
+        description: Maximum legacy pages to crawl
+        default: '400'
+      photos:
+        description: Also fetch openly-licensed real photos (Openverse)
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: legacy-capture
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright (isolated, does not touch the workspace lockfile)
+        run: |
+          mkdir -p /tmp/pw && cd /tmp/pw && npm init -y >/dev/null && npm i playwright@1.56.1 >/dev/null
+          /tmp/pw/node_modules/.bin/playwright install --with-deps chromium
+      - name: Capture legacy site (pages, images, videos, embeds)
+        env:
+          PLAYWRIGHT_MODULE: /tmp/pw/node_modules/playwright/index.mjs
+        run: node scripts/legacy/capture-site.mjs --out out/legacy-raw --max-pages "${{ inputs.max_pages }}" --start https://www.wontc.co.kr/ --start https://www.wontc.co.kr/about_jetpool
+      - name: Fetch openly-licensed real photos
+        if: ${{ inputs.photos }}
+        run: node scripts/legacy/fetch-photos.mjs --out out/photos-raw --queries scripts/legacy/photo-queries.json
+      - name: Summary
+        run: |
+          node -e "const m=require('./out/legacy-raw/manifest.json');console.log('legacy',JSON.stringify(m.summary))" | tee -a "$GITHUB_STEP_SUMMARY"
+          test -f out/photos-raw/manifest.json && node -e "const m=require('./out/photos-raw/manifest.json');console.log('photos',JSON.stringify(m.summary))" | tee -a "$GITHUB_STEP_SUMMARY" || true
+          du -sh out/* | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: legacy-capture
+          path: out
+          retention-days: 30
+      - name: Commit raw originals to the legacy-assets branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          # GitHub rejects files > 100 MB: keep them in the artifact only and list them
+          find out -type f -size +95M -print > out/too-large.txt || true
+          while read -r f; do [ -n "$f" ] && rm -f "$f"; done < out/too-large.txt
+          cd out
+          git init -q -b legacy-assets
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "Legacy capture from www.wontc.co.kr + licensed photos (run ${GITHUB_RUN_ID})"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" legacy-assets

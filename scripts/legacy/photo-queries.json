@@ -1,0 +1,27 @@
+{
+  "note": "Openly-licensed real photos (Openverse: Wikimedia Commons, Flickr CC). Only licenses that allow commercial use; attribution is stored per photo and shown on /credits.",
+  "perQuery": 12,
+  "groups": {
+    "city": [
+      "Bukchon Hanok Village Seoul", "Seoul skyline night", "Gyeongbokgung palace", "Namsan Seoul tower", "Seongsu-dong Seoul street",
+      "Haeundae beach Busan", "Gwangalli bridge Busan", "Gamcheon culture village Busan", "Jeju island coast", "Aewol Jeju sea",
+      "Seongsan Ilchulbong", "Hallasan mountain Jeju", "Gangneung beach", "Gyeongju Bulguksa temple", "Gyeongju Hwangnidan-gil",
+      "Jeonju hanok village", "Seoraksan Sokcho", "Yeosu night sea", "Chiang Mai old city", "Tokyo street", "Lisbon tram"
+    ],
+    "stay": [
+      "hanok interior room", "hanok courtyard", "modern apartment living room", "bedroom interior bright", "kitchen interior modern",
+      "villa swimming pool", "ocean view balcony", "cozy studio apartment", "guesthouse room", "bathroom interior modern",
+      "traditional korean house", "apartment interior city view"
+    ],
+    "guide": [
+      "Seoul street food market", "Gwangjang market", "temple stay Korea", "hiking mountain Korea", "cafe interior Seoul",
+      "night market Korea", "walking tour old town", "Korean palace hanbok"
+    ],
+    "travel": [
+      "sunrise hike mountain", "kayak sea Korea", "surfing beach Korea", "Jeju oreum", "cycling coastal road", "boat tour harbor"
+    ],
+    "charter": [
+      "private jet airplane", "airplane window clouds", "airport runway sunset", "business jet interior"
+    ]
+  }
+}
