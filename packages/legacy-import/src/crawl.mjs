@@ -301,9 +301,13 @@ async function writeInventory(cfg, st) {
   const paths = outPaths(cfg);
   const pages = await loadPages(cfg);
   // redirect aliases: a URL that redirected to an already-crawled page is kept as an alias of that page
-  const byKey = new Map(pages.filter((p) => p.ok).map((p) => [p.finalKey ?? p.key, p]));
+  // (a page fetched at its own URL wins; otherwise the first page that redirected there)
+  const byKey = new Map();
+  for (const p of pages) if (p.ok && (p.finalKey ?? p.key) === p.key) byKey.set(p.key, p);
+  for (const p of pages) if (p.ok && p.finalKey && !byKey.has(p.finalKey)) byKey.set(p.finalKey, p);
   for (const p of pages) {
-    if (p.ok && p.finalKey && p.finalKey !== p.key && byKey.get(p.finalKey) && byKey.get(p.finalKey) !== p) p.aliasOf = byKey.get(p.finalKey).url;
+    const target = p.ok && p.finalKey ? byKey.get(p.finalKey) : null;
+    if (target && target !== p) p.aliasOf = target.url;
   }
   const inv = {
     version: 1,

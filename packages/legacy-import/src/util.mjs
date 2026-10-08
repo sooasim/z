@@ -69,7 +69,7 @@ export function toCsv(rows, columns) {
   };
   const lines = [columns.join(',')];
   for (const r of rows) lines.push(columns.map((c) => esc(r[c])).join(','));
-  return '﻿' + lines.join('\r\n') + '\r\n';
+  return '\ufeff' + lines.join('\r\n') + '\r\n';
 }
 
 /** Same slug rules as apps/api migration/parse.ts slugify (keeps Hangul). */

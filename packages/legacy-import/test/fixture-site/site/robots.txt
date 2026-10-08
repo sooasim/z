@@ -1,0 +1,7 @@
+# fixture robots.txt (Sixshop sites publish one at the domain root)
+User-agent: *
+Disallow: /private/
+Disallow: /*?view=
+Allow: /
+
+Sitemap: {{SITE}}/sitemap.xml

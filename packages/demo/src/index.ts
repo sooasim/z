@@ -85,25 +85,37 @@ declare global {
   window.__JETPOOL_DEMO__ = { base: BASE, ready, version: '1' };
 
   /**
-   * Resolves once React has hydrated the prerendered page (every element in <main> carries a fiber; max 4 s). Demo answers
+   * Resolves once React has hydrated the prerendered page (every element in <main> carries a fiber). Demo answers
    * arrive in ~40ms — much faster than a real network — so the first ones wait for this; otherwise a state update
    * can reach a Suspense boundary that is still dehydrated and React re-renders it on the client (error #418).
    */
   const hasFiber = (el: Element) => Object.keys(el).some((k) => k.startsWith('__reactFiber'));
-  const isHydrated = () => {
-    if (document.readyState === 'loading') return false;
+  /** Elements in <main> not yet claimed by React (-1 = hydration has not reached <main>). */
+  const unhydrated = () => {
+    if (document.readyState === 'loading') return -1;
     const main = document.querySelector('main');
-    if (!main) return document.readyState === 'complete';
-    if (!hasFiber(main)) return false;
-    for (const el of Array.from(main.querySelectorAll('*'))) if (!hasFiber(el) && !el.closest('.maplibregl-map, [data-demo]')) return false;
-    return true;
+    if (!main) return document.readyState === 'complete' ? 0 : -1;
+    if (!hasFiber(main)) return -1;
+    let n = 0;
+    for (const el of Array.from(main.querySelectorAll('*'))) if (!hasFiber(el) && !el.closest('.maplibregl-map, [data-demo]')) n++;
+    return n;
   };
   const hydration: Promise<void> = (async () => {
-    for (let i = 0; i < 80; i++) {
-      if (isHydrated()) return;
+    // Done when every element is hydrated — or when a remainder (non-React DOM) stays unchanged for ~0.6 s after load.
+    // Hard cap 8 s so a slow, busy device still gets its data.
+    let last = -2;
+    let stable = 0;
+    for (let i = 0; i < 160; i++) {
+      const n = unhydrated();
+      if (n === 0) return;
+      if (n > 0 && n === last && document.readyState === 'complete') {
+        if (++stable >= 12) return;
+      } else stable = 0;
+      last = n;
       await sleep(50);
     }
   })();
+
   const abortError = () => new DOMException('The operation was aborted.', 'AbortError');
   async function readBody(input: RequestInfo | URL, init?: RequestInit): Promise<any> {
     let raw: any = init?.body;

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>{{SITE}}/</loc><lastmod>2025-11-01</lastmod></url>
+  <url><loc>{{SITE}}/about_jetpool</loc><lastmod>2025-10-20</lastmod></url>
+  <url><loc>{{SITE}}/localLife</loc></url>
+  <url><loc>{{SITE}}/tour_ticket</loc></url>
+  <url><loc>{{SITE}}/board/story/1</loc><lastmod>2024-05-12</lastmod></url>
+  <url><loc>{{SITE}}/guide</loc></url>
+  <url><loc>{{SITE}}/private/secret</loc></url>
+</urlset>

@@ -41,7 +41,7 @@ const SHARP_INPUT = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif
 
 async function renditions(file, a, dir, name, cfg, rel) {
   const animated = !!a.animated;
-  const input = () => sharp(file, { failOn: 'none', animated, density: a.mime === 'image/svg+xml' ? 192 : undefined, limitInputPixels: 268_402_689 });
+  const input = () => sharp(file, { failOn: 'none', animated, limitInputPixels: 268_402_689 });
   const meta = await input().metadata();
   const rotated = (meta.orientation ?? 1) >= 5;
   const h0 = animated && meta.pageHeight ? meta.pageHeight : meta.height;
@@ -56,7 +56,7 @@ async function renditions(file, a, dir, name, cfg, rel) {
     const m = await sharp(out, { animated }).metadata();
     webp[String(w)] = { file: rel(out), width: m.width, height: animated && m.pageHeight ? m.pageHeight : m.height, bytes: await fileSize(out) };
   }
-  const ph = await sharp(file, { failOn: 'none', density: a.mime === 'image/svg+xml' ? 72 : undefined }).rotate().resize({ width: 16, height: 16, fit: 'inside' }).webp({ quality: 40 }).toBuffer();
+  const ph = await sharp(file, { failOn: 'none' }).rotate().resize({ width: 16, height: 16, fit: 'inside' }).webp({ quality: 40 }).toBuffer();
   const { dominant } = await sharp(file, { failOn: 'none' }).rotate().resize({ width: 64, height: 64, fit: 'inside' }).stats();
   const hex = (n) => n.toString(16).padStart(2, '0');
   return {

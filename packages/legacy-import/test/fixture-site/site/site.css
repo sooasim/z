@@ -1,0 +1,11 @@
+@import url("/css/extra.css");
+/* site-wide styles (Sixshop theme) */
+@font-face {
+  font-family: 'NanumSquare';
+  src: url('/fonts/nanum.woff') format('woff');
+}
+body { font-family: 'NanumSquare', sans-serif; }
+.sixshop-footer { background-image: url(../img/pattern.png); background-repeat: repeat; }
+.hero-mobile { background: url("{{CDN}}/thumbnails/uploadedFiles/56465/background/image_1000_1600.jpg") center / cover; }
+.icon-sprite { background-image: image-set("/img/sprite.png" 1x, "/img/sprite@2x.png" 2x); }
+.inline-data { background-image: url("data:image/png;base64,iVBORw0KGgo="); }

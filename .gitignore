@@ -13,3 +13,4 @@ test-results/
 reports/
 dist-pages/
 .pages-build/
+.legacy/

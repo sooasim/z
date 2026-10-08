@@ -34,7 +34,7 @@ export function sniff(buf) {
   if (ascii(0, 5) === '%PDF-') return { mime: 'application/pdf', ext: 'pdf', kind: 'document' };
   // text formats
   let text = b.subarray(0, Math.min(b.length, 2048)).toString('utf8');
-  text = text.replace(/^﻿/, '').trimStart();
+  text = text.replace(/^\ufeff/, '').trimStart();
   if (/^(<\?xml[^>]*>\s*)?(<!--[\s\S]*?-->\s*)*(<!DOCTYPE svg[^>]*>\s*)?<svg[\s>]/i.test(text) || (/^<\?xml/i.test(text) && /<svg[\s>]/i.test(text))) return { mime: 'image/svg+xml', ext: 'svg', kind: 'image' };
   if (/^<(!doctype html|html|head|body)/i.test(text)) return { mime: 'text/html', ext: 'html', kind: 'text' };
   if (/^[{[]/.test(text)) return { mime: 'application/json', ext: 'json', kind: 'text' };

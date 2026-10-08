@@ -125,7 +125,7 @@ export const RESIZE_PARAMS = ['w', 'h', 'width', 'height', 'resize', 'size', 'qu
  *  - Sixshop thumbnails: //contents.sixshop.com/thumbnails/uploadedFiles/<shop>/.../image_<ts>_<w>.<ext>
  *    → //contents.sixshop.com/uploadedFiles/<shop>/.../image_<ts>.<ext>
  */
-export function originalCandidates(url, { stripParams = RESIZE_PARAMS, sixshopHosts = ['*.sixshop.com', '*.sixshop.kr', '*.sixshop.io'] } = {}) {
+export function originalCandidates(url, { stripParams = RESIZE_PARAMS } = {}) {
   const out = [];
   let u;
   try {
@@ -141,8 +141,9 @@ export function originalCandidates(url, { stripParams = RESIZE_PARAMS, sixshopHo
     for (const [k, val] of u.searchParams.entries()) if (!strip.has(k.toLowerCase())) v.searchParams.append(k, val);
     out.push(v.toString());
   }
-  if (hostMatches(u.host, sixshopHosts) || /sixshop/i.test(u.hostname)) {
-    const m = /^\/thumbnails\/(.+?)(?:_(\d{2,4}))?(\.[a-z0-9]{2,5})$/i.exec(u.pathname);
+  {
+    // path shape is specific enough to apply on any allowed CDN host (Sixshop also serves via custom domains)
+    const m = /^\/thumbnails\/(uploadedFiles\/.+?)(?:_(\d{2,4}))?(\.[a-z0-9]{2,5})$/i.exec(u.pathname);
     if (m) {
       const v = new URL(u.toString());
       v.pathname = `/${m[1]}${m[3]}`;

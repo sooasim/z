@@ -154,7 +154,7 @@ export async function buildAssets(inv, downloads, cfg, paths) {
       sha256: d.sha256, kind: d.kind, mime: d.mime, ext: d.ext, bytes: d.bytes, staging: d.staging,
       width: probe.width ?? null, height: probe.height ?? null, durationMs: probe.durationMs ?? null,
       animated: probe.animated ?? false, codec: probe.codec ?? null, probe: { sharp: probe.sharp ?? null, ffprobe: probe.probed ?? null },
-      sourceUrls: [], pageUrls: [], alts: [], captions: [], contexts: [], titles: [], roles: [], vias: [], declared: [], posterFor: [],
+      sourceUrls: [], pageUrls: [], mainPageUrls: [], alts: [], captions: [], contexts: [], titles: [], roles: [], vias: [], declared: [], posterFor: [],
     };
     assets[d.sha256] = rec;
     order.push(d.sha256);
@@ -183,6 +183,8 @@ export async function buildAssets(inv, downloads, cfg, paths) {
       for (const sha of [best.sha256, ...variants]) {
         const a = assets[sha];
         a.pageUrls.push(r.pageUrl);
+        // page content (not theme CSS, not header/nav/footer chrome, not <head>)
+        if (r.zone === 'main' && r.via !== 'css') a.mainPageUrls.push(r.pageUrl);
         if (r.alt) a.alts.push(r.alt);
         if (r.caption) a.captions.push(r.caption);
         if (r.title) a.titles.push(r.title);
@@ -196,17 +198,17 @@ export async function buildAssets(inv, downloads, cfg, paths) {
       if (!cur || area(best) > (assets[cur].width ?? 0) * (assets[cur].height ?? 0)) groupPrimary.set(gk, best.sha256);
     }
   }
-  // poster ↔ video links (poster group is "<videoGroup>:poster")
-  for (const [gk, sha] of groupPrimary) {
-    if (!gk.endsWith(':poster')) continue;
-    const vid = groupPrimary.get(gk.slice(0, -':poster'.length));
-    if (vid && assets[vid]?.kind === 'video') {
-      assets[vid].posterSha256 = sha;
-      assets[sha].posterFor.push(vid);
+  // poster ↔ video links: every source of a <video> (mp4 + webm) gets the poster of its element
+  for (const r of resolved) {
+    if (!r.sha256 || assets[r.sha256].kind !== 'video') continue;
+    const poster = groupPrimary.get(`${r.pageUrl}#${r.group}:poster`);
+    if (poster && !assets[r.sha256].posterSha256) {
+      assets[r.sha256].posterSha256 = poster;
+      assets[poster].posterFor.push(r.sha256);
     }
   }
   for (const a of Object.values(assets)) {
-    for (const k of ['sourceUrls', 'pageUrls', 'roles', 'vias', 'posterFor']) a[k] = uniq(a[k]).sort();
+    for (const k of ['sourceUrls', 'pageUrls', 'mainPageUrls', 'roles', 'vias', 'posterFor']) a[k] = uniq(a[k]).sort();
   }
   const embeds = {};
   for (const p of inv.pages ?? []) {

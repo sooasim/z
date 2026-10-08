@@ -69,7 +69,13 @@ export async function runPublish(ctx) {
         files.poster.webp[w] = pub(`${id}/${b}`);
       }
     }
-    const pageShare = a.pageUrls.length / Math.max(1, nPages);
+    // site chrome: icons, theme-CSS / header / footer-only images, or content repeated on most pages (logos, banners)
+    const mainPages = a.mainPageUrls ?? a.pageUrls;
+    const headOnlyContent = a.roles.includes('og') || a.roles.includes('poster');
+    const chrome =
+      a.roles.every((r) => r === 'icon') ||
+      (!mainPages.length && !headOnlyContent) ||
+      (nPages >= 3 && mainPages.length / nPages >= BOILERPLATE_SHARE);
     assetsOut[id] = {
       id,
       kind: a.kind,
@@ -88,7 +94,7 @@ export async function runPublish(ctx) {
       caption: mostCommon(a.captions) ?? mostCommon(a.titles),
       context: mostCommon(a.contexts),
       roles: a.roles,
-      chrome: a.roles.every((r) => r === 'icon') || (nPages >= 3 && pageShare >= BOILERPLATE_SHARE),
+      chrome,
       sourceUrls: a.sourceUrls,
       pageUrls: a.pageUrls,
       ...(a.posterSha256 ? { posterAssetId: idOf(a.posterSha256) } : {}),
@@ -98,12 +104,16 @@ export async function runPublish(ctx) {
       ...(o.note ? { note: o.note } : {}),
     };
   }
-  // CDN renditions of the same picture: link the smaller ones to the primary asset
+  // CDN renditions of the same picture (?w=480, /thumbnails/…_1600): linked to the primary (largest) asset;
+  // an asset that never resolves as a primary is an alternate and stays out of page image lists
+  const primaries = new Set(st.refs.filter((r) => r.sha256).map((r) => idOf(r.sha256)));
   for (const r of st.refs) {
     if (!r.sha256 || !r.variants?.length) continue;
     const primary = assetsOut[idOf(r.sha256)];
-    primary.alternates = uniq([...(primary.alternates ?? []), ...r.variants.map(idOf)]).sort();
+    primary.alternates = uniq([...(primary.alternates ?? []), ...r.variants.map(idOf).filter((v) => !primaries.has(v))]).sort();
+    for (const v of r.variants.map(idOf)) if (!primaries.has(v)) assetsOut[v].alternateOf = primary.id;
   }
+  for (const a of Object.values(assetsOut)) if (a.alternates && !a.alternates.length) delete a.alternates;
   for (const e of Object.values(st.embeds ?? {})) {
     assetsOut[e.id] = {
       id: e.id, kind: 'embed', provider: e.provider, videoId: e.videoId, embedUrl: e.embedUrl, watchUrl: e.watchUrl,
@@ -151,7 +161,7 @@ export async function runPublish(ctx) {
     const ordered = uniq([...blocks.filter((x) => x.type === 'image' || x.type === 'video').flatMap((x) => [x.assetId, x.posterAssetId]), ...(p.media ?? []).map((_, i) => shaOfRef(i)).filter(Boolean).map(idOf)]);
     for (const id of ordered) {
       const a = assetsOut[id];
-      if (!a) continue;
+      if (!a || a.alternateOf) continue;
       if (a.kind === 'video') videos.push(id);
       else images.push(id);
     }

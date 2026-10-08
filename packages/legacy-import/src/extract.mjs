@@ -17,8 +17,8 @@ const ZONE_TOKENS = { nav: ['nav', 'gnb', 'lnb', 'menu', 'navigation', 'navbar']
 
 const collapse = (s) =>
   String(s ?? '')
-    .replace(/[\s ​﻿]+/g, ' ')
-    .replace(/ ?  ?/g, '\n')
+    .replace(/[\s\u00a0\u200b\ufeff]+/g, ' ')
+    .replace(/ ?\u0001 ?/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
@@ -263,7 +263,7 @@ export function extractPage(html, pageUrl, opts = {}) {
     const isBlock = BLOCK.has(name);
     if (isBlock) flush(ctx.block, ctx.zone);
     if (name === 'br') {
-      if (!ctx.noText) state.buf += ' ';
+      if (!ctx.noText) state.buf += '\u0001';
       return;
     }
     const hidden = a.hidden !== undefined || /display\s*:\s*none/i.test(a.style ?? '') || a['aria-hidden'] === 'true';

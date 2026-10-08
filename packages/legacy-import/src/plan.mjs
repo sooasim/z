@@ -195,7 +195,8 @@ export function buildImportPlan(manifest) {
       posterAssetId: a.posterAssetId ?? null,
       contexts: [...contexts].sort(),
       cities: [...cities].sort(),
-      eligible: big && !a.chrome && !(a.roles ?? []).every((r) => r === 'icon'),
+      alternateOf: a.alternateOf ?? null,
+      eligible: big && !a.chrome && !a.alternateOf && !(a.roles ?? []).every((r) => r === 'icon'),
     });
   }
   const mediaById = new Map(media.map((m) => [m.assetId, m]));
@@ -329,10 +330,13 @@ export function buildImportPlan(manifest) {
     }
   }
 
-  // same-host legacy media URLs → new public paths (hotlinked images keep working after DNS cutover)
+  // same-host legacy content media URLs → new public paths (hotlinked images keep working after DNS cutover);
+  // site chrome (favicon, logo, theme sprites) is never redirected — JETPOOL serves its own
   const siteHosts = new Set((manifest.source?.siteHosts ?? []).map((h) => h.toLowerCase()));
   for (const m of media) {
+    if (assets[m.assetId]?.chrome || m.alternateOf) continue;
     for (const u of m.sourceUrls) {
+      if (/^\/(favicon|apple-touch-icon|robots\.txt|sitemap)/i.test(new URL(u).pathname)) continue;
       try {
         const x = new URL(u);
         if (siteHosts.has(x.host.toLowerCase()) || siteHosts.has(x.hostname.toLowerCase())) addRedirect(x.pathname + x.search, m.kind === 'video' ? m.originalPath : m.publicUrl, 'media');
