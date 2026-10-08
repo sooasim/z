@@ -66,6 +66,13 @@ export function TossPayment({ subjectType, subjectId, onPrepared }: { subjectTyp
 
   const pay = async () => {
     if (!prep) return;
+    // After a real payment attempt the next visit must prepare a fresh attempt (a failed/abandoned PG order
+    // cannot be replayed); plain revisits before paying keep replaying the same prepare.
+    try {
+      sessionStorage.removeItem(`jp_idem_prepare_${subjectType}:${subjectId}`);
+    } catch {
+      /* storage blocked */
+    }
     setPaying(true);
     setErr(null);
     try {

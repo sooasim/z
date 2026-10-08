@@ -276,28 +276,40 @@ async function runScenario() {
   const guides = (await must('anon', 'GET', '/v1/search/guides?limit=50')).items.map((g) => g.guide ?? g);
   const gid = (userKey) => guides.find((g) => g.guideId === me(userKey))?.guideId;
   const at = (days, hour) => `${addDays(TODAY, days)}T${String(hour).padStart(2, '0')}:00:00+09:00`;
+  // Seeded guide availability covers roughly the next 60 days, 07:00–17:00 KST.
+  const guideFlow = async (traveler, guideKey, hours, offer, accept) => {
+    for (const off of [24, 25, 26, 31, 33, 38]) {
+      const req = await must(traveler, 'POST', '/v1/guide-requests', { guideId: gid(guideKey), startAt: at(off, hours[0]), endAt: at(off, hours[1]), ...offer.request });
+      const rid = req.item.id;
+      const o = await call(guideKey, 'POST', `/v1/guide-requests/${rid}/offers`, { body: { startAt: at(off, hours[0]), endAt: at(off, hours[1]), ...offer.offer } });
+      if (o.status === 409) {
+        await call(traveler, 'POST', `/v1/guide-requests/${rid}/cancel`, { body: {} });
+        continue;
+      }
+      if (o.status >= 300) throw new Error(`${o.status} ${JSON.stringify(o.body).slice(0, 200)}`);
+      if (!accept) return { req };
+      const g = await must(traveler, 'GET', `/v1/guide-requests/${rid}`);
+      const offerVersion = g.item?.current_offer_version ?? g.item?.currentOfferVersion ?? 1;
+      const acc = await must(traveler, 'POST', `/v1/guide-requests/${rid}/accept`, { offerVersion }, idem(`demo-accept-${rid}`));
+      return { req, offer: o.body, accept: acc };
+    }
+    throw new Error('guide unavailable on all tried days');
+  };
   if (gid('guide')) {
     await step('guide request (free) → offer → accept', async () => {
-      const req = await must('guest', 'POST', '/v1/guide-requests', {
-        guideId: gid('guide'), startAt: at(160, 10), endAt: at(160, 13), partySize: 2, city: 'Seoul', languages: ['ko', 'en'], interests: ['cafe', 'food', 'walking'],
-        message: '성수동 카페 골목과 서울숲 근처를 현지인처럼 걸어보고 싶어요!',
-      });
-      templates.guideRequest = req;
-      const rid = req.item.id;
-      templates.guideOffer = await must('guide', 'POST', `/v1/guide-requests/${rid}/offers`, { startAt: at(160, 10), endAt: at(160, 13), paid: false, itinerary: '10:00 성수역 3번 출구 → 카페 골목 → 수제화 거리 → 서울숲 산책 → 13:00 브런치' });
-      const g = await must('guest', 'GET', `/v1/guide-requests/${rid}`);
-      const offerVersion = g.item?.current_offer_version ?? g.item?.currentOfferVersion ?? 1;
-      templates.guideAccept = await must('guest', 'POST', `/v1/guide-requests/${rid}/accept`, { offerVersion }, idem(`demo-accept-${rid}`));
+      const r = await guideFlow('guest', 'guide', [10, 13], {
+        request: { partySize: 2, city: 'Seoul', languages: ['ko', 'en'], interests: ['cafe', 'food', 'walking'], message: '성수동 카페 골목과 서울숲 근처를 현지인처럼 걸어보고 싶어요!' },
+        offer: { paid: false, itinerary: '10:00 성수역 3번 출구 → 카페 골목 → 수제화 거리 → 서울숲 산책 → 13:00 브런치' },
+      }, true);
+      Object.assign(templates, { guideRequest: r.req, guideOffer: r.offer, guideAccept: r.accept });
     });
   }
   if (gid('proGuide')) {
-    await step('guide request (paid) → offer pending', async () => {
-      const req = await must('guest', 'POST', '/v1/guide-requests', {
-        guideId: gid('proGuide'), startAt: at(167, 9), endAt: at(167, 13), partySize: 2, city: 'Seoul', languages: ['ko'], interests: ['history', 'palace'],
-        message: '경복궁과 창덕궁 후원을 역사 해설과 함께 둘러보고 싶습니다.',
-      });
-      await must('proGuide', 'POST', `/v1/guide-requests/${req.item.id}/offers`, { startAt: at(167, 9), endAt: at(167, 13), paid: true, priceMinor: 200000, itinerary: '09:00 광화문 → 경복궁 해설 → 북촌 점심 → 창덕궁 후원 특별관람' });
-    });
+    await step('guide request (paid) → offer pending', () =>
+      guideFlow('guest', 'proGuide', [9, 13], {
+        request: { partySize: 2, city: 'Seoul', languages: ['ko'], interests: ['history', 'palace'], message: '경복궁과 창덕궁 후원을 역사 해설과 함께 둘러보고 싶습니다.' },
+        offer: { paid: true, priceMinor: 200000, itinerary: '09:00 광화문 → 경복궁 해설 → 북촌 점심 → 창덕궁 후원 특별관람' },
+      }, false));
   }
 
   // Tour order (MOCK payment).
