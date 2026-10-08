@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { Photo } from '@/components/media';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useI18n } from '@/lib/i18n';
@@ -34,7 +35,7 @@ export default function HostListingsView() {
               const v = propertyView(p);
               return (
                 <li key={v.id} className="card row nowrap" style={{ alignItems: 'stretch', gap: 16 }}>
-                  <img src={v.cover || postcardFor(v.city || v.title, v.id)} alt="" style={{ width: 120, height: 90, objectFit: 'cover', borderRadius: 'var(--r-md)', flex: '0 0 auto' }} />
+                  <Photo src={v.cover || postcardFor(v.city || v.title, v.id)} seed={v.id} alt="" sizes="120px" style={{ width: 120, height: 90, borderRadius: 'var(--r-md)', flex: '0 0 auto' }} />
                   <div className="grow stack" style={{ gap: 6 }}>
                     <div className="row between">
                       <strong>{v.title}</strong>

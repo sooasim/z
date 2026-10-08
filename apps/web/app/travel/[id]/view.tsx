@@ -8,14 +8,16 @@ import { useApi } from '@/lib/hooks';
 import { post } from '@/lib/api';
 import { arr, f, item, items, str, num } from '@/lib/shape';
 import { productView } from '@/lib/domain';
-import { postcardSet } from '@/lib/art';
+import { realize } from '@/lib/art';
+import { useMediaMap } from '@/lib/media';
+import { Photo, PhotoLightbox } from '@/components/media';
 import { formatMoney, formatTimeRange } from '@/lib/format';
 import { placeLabel } from '@/lib/places';
 import { ApiError } from '@/lib/errors';
 import { StateView, NotFoundState } from '@/components/states';
 import { HeartButton } from '@/components/favorites';
-import { realImages } from '@/components/cards';
-import { Alert, Badge, Button, ButtonLink, ErrorText, Icon, Kv, Lightbox, MobileActionBar, PriceBreakdown, Qty, Section, Skeleton } from '@/components/ui';
+import { productImages } from '@/components/cards';
+import { Alert, Badge, Button, ButtonLink, ErrorText, Icon, Kv, MobileActionBar, PriceBreakdown, Qty, Section, Skeleton } from '@/components/ui';
 import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { productKindLabel, refundLines } from '@/components/public/labels';
 import s from '@/components/public/public.module.css';
@@ -34,6 +36,7 @@ export default function TravelDetailView() {
   const [lb, setLb] = useState<number | null>(null);
   const [allDeps, setAllDeps] = useState(false);
   const cardRef = useRef<HTMLElement>(null);
+  useMediaMap();
   if (st.error instanceof ApiError && (st.error.kind === 'not_found' || st.error.kind === 'validation'))
     return <NotFoundState as="h1" title={L('여행 상품을 찾을 수 없어요', 'We can’t find that trip')} body={L('판매가 끝났거나 공급사가 상품을 내렸을 수 있어요.', 'It may have sold out or been withdrawn by the supplier.')} back={{ href: '/travel', label: L('다른 투어·티켓 보기', 'See other tours') }} />;
   return (
@@ -41,8 +44,7 @@ export default function TravelDetailView() {
       {(d) => {
         const p = item(d);
         const v = productView(p);
-        const images = realImages([...arr<any>(p, 'media', 'images').map((m) => (typeof m === 'string' ? m : str(m, 'url'))), v.cover]);
-        const gallery = images.length ? images : postcardSet(v.city || v.title, v.id, 3);
+        const gallery = productImages(p, 3).map((src, i) => realize(src, `${v.id}:${i}`));
         const departures = items(deps.data);
         const sel = departures.find((x: any) => str(x, 'id') === dep);
         const unit = num(sel, 'priceMinor', 'unitPriceMinor') ?? v.priceMinor ?? 0;
@@ -104,11 +106,11 @@ export default function TravelDetailView() {
             <div className="mosaic" style={{ marginTop: 20 }}>
               {gallery.slice(0, 3).map((src, i) => (
                 <button key={i} className={i === 0 ? 'm0' : 'mx'} onClick={() => setLb(i)} aria-label={`${L('사진 크게 보기', 'Open photo')} ${i + 1}`}>
-                  <img src={src} alt={i === 0 ? v.title : ''} />
+                  <Photo src={src} alt={i === 0 ? v.title : ''} eager={i === 0} sizes={i === 0 ? '(max-width: 900px) 100vw, 600px' : '(max-width: 900px) 50vw, 300px'} />
                 </button>
               ))}
             </div>
-            {lb !== null && <Lightbox images={gallery} index={lb} onClose={() => setLb(null)} title={v.title} />}
+            {lb !== null && <PhotoLightbox items={gallery.map((src) => ({ src, alt: v.title }))} index={lb} onClose={() => setLb(null)} title={v.title} />}
             <div className="grid-2" style={{ marginTop: 32 }}>
               <div>
                 {v.description && <p style={{ whiteSpace: 'pre-line', fontSize: 'var(--fs-lg)', lineHeight: 1.7 }}>{v.description}</p>}

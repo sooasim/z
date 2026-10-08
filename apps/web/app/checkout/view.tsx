@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { Photo } from '@/components/media';
 import { useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/hooks';
 import { useI18n } from '@/lib/i18n';
@@ -63,7 +64,7 @@ function Summary({ type, o }: { type: Kind; o: any }) {
   return (
     <section className="card stack" aria-label={L('주문 요약', 'Order summary')}>
       <div className={s.summaryHead}>
-        <img src={thumb} alt="" />
+        <Photo src={thumb} alt="" sizes="120px" />
         <div style={{ minWidth: 0 }}>
           <strong>{title}</strong>
           {meta.map((m) => (

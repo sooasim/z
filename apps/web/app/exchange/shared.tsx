@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { Photo } from '@/components/media';
 import { useI18n } from '@/lib/i18n';
 import { useAuth } from '@/lib/auth';
 import { arr, f, item, str, num } from '@/lib/shape';
@@ -114,7 +115,7 @@ function HomeTile({ home, who, range: r, label }: { home: any; who: string; rang
   return (
     <div className="home">
       <div className="art">
-        <img src={cover} alt="" />
+        <Photo src={cover} seed={str(home, 'id')} alt="" sizes="160px" style={{ width: '100%', height: '100%' }} />
       </div>
       <div style={{ minWidth: 0 }}>
         <span className="xs muted">{who}</span>

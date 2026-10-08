@@ -1,0 +1,796 @@
+[
+  {
+    "sha": "024f3dcb046a569258be0254208a4688068ee3afbc24d6ffaa584fe3ee62309c",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:market"
+    ],
+    "subjectKo": "인파로 붐비는 광장시장 먹자골목",
+    "subjectEn": "Crowds browsing the food stalls of Gwangjang Market",
+    "quality": 3
+  },
+  {
+    "sha": "029e493cc8a37796a31ba14096b1a61ccadf71ce2b6f8598277fce8cde574bb1",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:market",
+      "guide-cover:night",
+      "guide-cover:food",
+      "travel:food"
+    ],
+    "subjectKo": "밤의 광장시장 노점에 둘러앉은 손님들",
+    "subjectEn": "Diners gathered around a lamp-lit stall at Gwangjang Market by night",
+    "quality": 4
+  },
+  {
+    "sha": "04ef36b6826aa18fcefe873f2010d1b03834ef0e70f15017eb4f5e8e0b54b198",
+    "accepted": false,
+    "reason": "Cobbled old-town street in Plovdiv, Bulgaria; not a platform destination, misleading as a walking-guide cover",
+    "roles": [],
+    "subjectKo": "불가리아 플로브디프 구시가지 골목",
+    "subjectEn": "Old-town street in Plovdiv, Bulgaria",
+    "quality": 3
+  },
+  {
+    "sha": "105090b0ba82991ebe176767787976ff5ec5a7cf9d9a504cef4a77855a9f1cc1",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:cafe"
+    ],
+    "subjectKo": "거대한 상어 조형물이 매달린 홍대 aA 디자인 뮤지엄 카페",
+    "subjectEn": "Giant shark sculpture hanging in the aA Design Museum cafe, Hongdae",
+    "quality": 4
+  },
+  {
+    "sha": "18bb843d4fd35b47e6d0cbab0c9e5c94874196dc20abb77250c91f583d853194",
+    "accepted": false,
+    "reason": "Computer kiosks in a dim internet-cafe showroom; not an appealing cafe interior, low quality",
+    "roles": [],
+    "subjectKo": "컴퓨터가 놓인 인터넷 카페 내부",
+    "subjectEn": "Computer kiosks in an internet cafe",
+    "quality": 2
+  },
+  {
+    "sha": "2192593c2d21dad4a25a4805eef96886b4a1bd35477bb951567462525810d033",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:food",
+      "guide-cover:market",
+      "travel:food"
+    ],
+    "subjectKo": "김이 피어오르는 광장시장 먹거리 노점",
+    "subjectEn": "Steaming food stall in Gwangjang Market's food zone",
+    "quality": 4
+  },
+  {
+    "sha": "2446061f5d9f160df062c4ea82f6f542b9670c7ae521c271e7765146258a7f56",
+    "accepted": false,
+    "reason": "Identifiable young man fills the right half of the frame; the stall is secondary",
+    "roles": [],
+    "subjectKo": "광장시장 노점 앞에 선 남성",
+    "subjectEn": "Man standing in front of a Gwangjang Market stall",
+    "quality": 2
+  },
+  {
+    "sha": "29fb3fe0355b416581dd2e644e606f4831fd939c8efa5903c584574f8b6514b5",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:food",
+      "guide-cover:night"
+    ],
+    "subjectKo": "따뜻한 조명 아래 손님들이 식사하는 서울의 식당",
+    "subjectEn": "Diners in a warmly lit Seoul restaurant at night",
+    "quality": 3
+  },
+  {
+    "sha": "2bf1b0cc0a34549b5bf75d6f2b6e4a6daffc24f3d9ce99e34099059e9a300275",
+    "accepted": true,
+    "roles": [
+      "guide-cover:food",
+      "travel:food"
+    ],
+    "subjectKo": "철판 위에 노릇하게 구워진 길거리 간식",
+    "subjectEn": "Golden griddle-baked street snacks at a food stall",
+    "quality": 4
+  },
+  {
+    "sha": "31dd6c607bed6e4ef2eef0e4929657b0626859ac9476005c0ab83c481279d166",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:palace",
+      "guide-cover:culture"
+    ],
+    "subjectKo": "수문장들이 지키는 맑은 날의 광화문",
+    "subjectEn": "Gwanghwamun Gate under clear skies with royal gate guards",
+    "quality": 5
+  },
+  {
+    "sha": "357d8551bc59b6f5d1cc8e2e1354c2b05d0dd22c2f56199333e52e84df2042d9",
+    "accepted": false,
+    "reason": "Shuttered, almost completely dark market arcade at night; gloomy and underexposed",
+    "roles": [],
+    "subjectKo": "문 닫은 어두운 시장 아케이드",
+    "subjectEn": "Closed, dark market arcade at night",
+    "quality": 1
+  },
+  {
+    "sha": "3617260a8aaa6ae1cda0543de1c65a7d21c08b9085d34a7c2472c5d5a1855e21",
+    "accepted": true,
+    "roles": [
+      "city:Jeju"
+    ],
+    "subjectKo": "물결무늬 용암 벽이 이어지는 제주 용암동굴",
+    "subjectEn": "Ribbed lava walls inside a Jeju lava-tube cave",
+    "quality": 4
+  },
+  {
+    "sha": "39356c91bdadb945d3364d9226f072864716321656ccd2c16270543ab36166ce",
+    "accepted": false,
+    "reason": "Identifiable man in the foreground dominates the left of the frame; the market is secondary",
+    "roles": [],
+    "subjectKo": "남대문시장 노점 앞의 남성",
+    "subjectEn": "Man in front of a Namdaemun Market stall",
+    "quality": 2
+  },
+  {
+    "sha": "3affcafcd0d217cf2da232a11ea04903f11838c7000f17b1237438283bcd3fb0",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "guide-cover:culture",
+      "travel:culture"
+    ],
+    "subjectKo": "산방산 아래 돌담과 초가집이 있는 제주 전통 마을",
+    "subjectEn": "Stone walls and thatched-roof houses beneath Sanbangsan, Jeju",
+    "quality": 5
+  },
+  {
+    "sha": "3e081aa86a24b43963b597c13855d4f711a0a1e5880562ba2d3605a27d1317de",
+    "accepted": true,
+    "roles": [
+      "city:Seoul"
+    ],
+    "subjectKo": "서울 도심 위를 오르는 남산 케이블카",
+    "subjectEn": "Namsan cable car gliding above downtown Seoul",
+    "quality": 3
+  },
+  {
+    "sha": "3e569baea89219f8166c381e7e964daefd87c6d299b35bc72fdf39ae9938e121",
+    "accepted": false,
+    "reason": "Antique perfume stills in a French museum; irrelevant to walking tours of platform destinations",
+    "roles": [],
+    "subjectKo": "프랑스 박물관의 옛 향수 증류기",
+    "subjectEn": "Antique perfume stills in a French museum",
+    "quality": 2
+  },
+  {
+    "sha": "4337e760c354c5f713cdc6163de9b2a034860ca0c474f83cb9d743613f39ac69",
+    "accepted": false,
+    "reason": "Identifiable dancers rehearsing indoors at a US base arts festival; unrelated to night markets",
+    "roles": [],
+    "subjectKo": "실내에서 연습하는 댄서들",
+    "subjectEn": "Dancers rehearsing indoors",
+    "quality": 1
+  },
+  {
+    "sha": "43ea959d7e7f1f514f86026b5fbfb0469979cb7902ad542c83820093f0c2867c",
+    "accepted": false,
+    "reason": "Beacon Hill, Boston with a US flag; not a platform destination, misleading as a walking-guide cover",
+    "roles": [],
+    "subjectKo": "미국 보스턴 비컨힐의 자갈 골목",
+    "subjectEn": "Cobbled alley on Beacon Hill, Boston",
+    "quality": 3
+  },
+  {
+    "sha": "43f34c6ea61e53330207509b299dc7ee9717ec6f2a32780aae1e416489643ba0",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:food",
+      "guide-cover:market",
+      "travel:food"
+    ],
+    "subjectKo": "광장시장에서 빈대떡을 부치는 상인",
+    "subjectEn": "Vendor frying bindaetteok on a griddle at Gwangjang Market",
+    "quality": 4
+  },
+  {
+    "sha": "4729653a88646612bcd2105f2ee859094b31302e837818b096dfb800209c730e",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:food",
+      "guide-cover:market",
+      "travel:food"
+    ],
+    "subjectKo": "광장시장 노점에 가득 차린 모둠전",
+    "subjectEn": "Trays of assorted jeon pancakes at a Gwangjang Market stall",
+    "quality": 4
+  },
+  {
+    "sha": "4c4737ea1ab045d69066e82f60ede4790c96ed67a33b5c87e963a3fee915236f",
+    "accepted": false,
+    "reason": "Koreatown in Manhattan, New York, not Korea; misleading for a Korea night-market guide",
+    "roles": [],
+    "subjectKo": "뉴욕 코리아타운의 밤거리",
+    "subjectEn": "Koreatown street in New York at night",
+    "quality": 2
+  },
+  {
+    "sha": "4f726d5c67894d45f3761267fe9f9a94c5f59205b850e9129f0574748234ce71",
+    "accepted": false,
+    "reason": "Identifiable performers on stage at a US base talent show; unrelated",
+    "roles": [],
+    "subjectKo": "무대 위 장기자랑 참가자",
+    "subjectEn": "Talent-show performers on stage",
+    "quality": 1
+  },
+  {
+    "sha": "5037f11056160286aa001635a24a9889abc9be586f66fae4498f683b35395d62",
+    "accepted": false,
+    "reason": "KOREA.net logo watermark in the bottom-right corner",
+    "roles": [],
+    "subjectKo": "사찰 장독대에 늘어선 옹기",
+    "subjectEn": "Rows of onggi crocks at a temple",
+    "quality": 4
+  },
+  {
+    "sha": "57028aaff083c7d21b0a94db449319bd6d884163d15e6a5e840f125aa997fc34",
+    "accepted": false,
+    "reason": "Close-up of identifiable women posing in hanbok as the main subject",
+    "roles": [],
+    "subjectKo": "한복을 입고 사진을 찍는 여성들",
+    "subjectEn": "Women posing in hanbok",
+    "quality": 2
+  },
+  {
+    "sha": "573ff2e82307d16e6ffca423d515e32b32240e277e7b7f495429a80bbb3af476",
+    "accepted": true,
+    "roles": [
+      "guide-cover:hiking",
+      "travel:hiking"
+    ],
+    "subjectKo": "태극기가 꽂힌 화강암 봉우리와 푸른 숲",
+    "subjectEn": "Korean flag on a granite peak above forested slopes",
+    "quality": 4
+  },
+  {
+    "sha": "59451ed08e31df4f37c229fca920984fbfa5e731c2b0a59ad69b91d2c8c6df4e",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "guide-cover:market"
+    ],
+    "subjectKo": "지붕이 덮인 제주 재래시장 통로",
+    "subjectEn": "Covered aisle of a traditional market in Jeju",
+    "quality": 3
+  },
+  {
+    "sha": "63a616a26a550d1b03b167ca18d06279e0aa421e30228e5981832d9b1d2651bd",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "travel:oreum",
+      "guide-cover:hiking",
+      "hero-candidate"
+    ],
+    "subjectKo": "말들이 풀을 뜯는 제주 오름 분화구 초원",
+    "subjectEn": "Horses grazing around a crater oreum on Jeju's grasslands",
+    "quality": 5
+  },
+  {
+    "sha": "63fa96ed75b5e45dfad0d1c446383c34271d1ae621fcfc0d59a14625f000fe00",
+    "accepted": false,
+    "reason": "Old port of Dubrovnik, Croatia; not a platform destination, misleading as a walking-guide cover",
+    "roles": [],
+    "subjectKo": "크로아티아 두브로브니크 구항구",
+    "subjectEn": "Old port of Dubrovnik, Croatia",
+    "quality": 4
+  },
+  {
+    "sha": "66f54395e5d39abe69201ee30439b8df268ba2f816b49836447f417b52c5a07f",
+    "accepted": false,
+    "reason": "Dubrovnik city walls and Pile Gate, Croatia; not a platform destination, misleading as a walking-guide cover",
+    "roles": [],
+    "subjectKo": "크로아티아 두브로브니크 성벽",
+    "subjectEn": "City walls of Dubrovnik, Croatia",
+    "quality": 4
+  },
+  {
+    "sha": "67fb37cdef9d336661a73507b9cd56dbc760e17d7a58131ac88699ed58854494",
+    "accepted": false,
+    "reason": "Identifiable performer in a close medium shot is the main subject",
+    "roles": [],
+    "subjectKo": "창덕궁 달빛기행의 전통 무용수",
+    "subjectEn": "Traditional dancer at the Changdeokgung moonlight tour",
+    "quality": 3
+  },
+  {
+    "sha": "6f0ff65b102f07a5ba73aea28914433b292bbdc02d9bc0b65fa4bf9d71cc29ce",
+    "accepted": false,
+    "reason": "Grape clusters with a KOREA.net watermark; irrelevant to temple stay",
+    "roles": [],
+    "subjectKo": "덩굴에 달린 청포도",
+    "subjectEn": "Green grapes on the vine",
+    "quality": 2
+  },
+  {
+    "sha": "753fbf7ecf398da04d60442d37748052739b87ce9b903ad703a1da98c71508bd",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:palace",
+      "guide-cover:culture",
+      "guide-cover:walking",
+      "travel:culture"
+    ],
+    "subjectKo": "경복궁에서 재현된 왕실 행차 행렬",
+    "subjectEn": "Royal procession re-enactment at Gyeongbokgung Palace",
+    "quality": 5
+  },
+  {
+    "sha": "757392d4bf5300fc8d127d33ace8479e8d5ac54bf194a32dc86852f5ee304b3e",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:food",
+      "guide-cover:market",
+      "travel:food"
+    ],
+    "subjectKo": "광장시장 철판에서 지글지글 익어가는 빈대떡과 전",
+    "subjectEn": "Bindaetteok and jeon sizzling on a Gwangjang Market griddle",
+    "quality": 4
+  },
+  {
+    "sha": "7ba74645a19ecea363636f92c0dc28d3c4359314115ccb31195a6dc6615880c7",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "guide-cover:walking",
+      "hero-candidate"
+    ],
+    "subjectKo": "돌담 사이로 노란 유채꽃이 가득 핀 제주 들판",
+    "subjectEn": "Yellow canola fields and black stone walls in spring, Jeju",
+    "quality": 5
+  },
+  {
+    "sha": "7cac1ca10bd6da838d76440b4f3da8d6f7524a5f65e03a4a9568801c5887dc28",
+    "accepted": false,
+    "reason": "Black-and-white; identifiable customers crowd the frame",
+    "roles": [],
+    "subjectKo": "흑백 번데기 노점",
+    "subjectEn": "Black-and-white silkworm-pupa street stall",
+    "quality": 2
+  },
+  {
+    "sha": "92f1a01280cf3f1f2b8749a11cd8221f885d9624b636f391db63cbd863957219",
+    "accepted": false,
+    "reason": "Black-and-white night fish-market scene; colour expected",
+    "roles": [],
+    "subjectKo": "흑백 야간 수산시장의 어부",
+    "subjectEn": "Black-and-white fisherman at a night fish market",
+    "quality": 3
+  },
+  {
+    "sha": "948da5fd3351e646c00900c5faa54d40507b016fe87692daaa8cee772ea44350",
+    "accepted": false,
+    "reason": "Black-and-white Gwangjang Market; colour expected",
+    "roles": [],
+    "subjectKo": "흑백 광장시장 풍경",
+    "subjectEn": "Black-and-white Gwangjang Market",
+    "quality": 3
+  },
+  {
+    "sha": "94d69f9d32745f0eb936d84df36cd8d31bbe4383a071b553205fa59eae335a27",
+    "accepted": false,
+    "reason": "Cluttered cafe floor with power cables and a floor outlet; unattractive",
+    "roles": [],
+    "subjectKo": "전선이 놓인 카페 바닥",
+    "subjectEn": "Cafe floor with power cables",
+    "quality": 1
+  },
+  {
+    "sha": "95919e788ff3a6ea44cc8171c44ae51d67fcfb3f5f46b45c56f3e6b15b6d08fb",
+    "accepted": true,
+    "roles": [
+      "guide-cover:cafe"
+    ],
+    "subjectKo": "화분과 지구본이 놓인 도심 카페의 창가 자리",
+    "subjectEn": "Window seat with potted flowers and a globe in a city cafe",
+    "quality": 4
+  },
+  {
+    "sha": "97497de6279cf8fbe1bca4fcc977943925ca5b3ce491de28db90b3408c4dfde4",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:market",
+      "guide-cover:food"
+    ],
+    "subjectKo": "전 가게가 늘어선 광장시장 골목의 인파",
+    "subjectEn": "Crowded aisle lined with jeon stalls in Gwangjang Market",
+    "quality": 3
+  },
+  {
+    "sha": "9c2b53ac1b21121df2cb769382277b2ff1cb16fe93477bb84af658154e678705",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:food",
+      "guide-cover:market",
+      "travel:food"
+    ],
+    "subjectKo": "광장시장에서 녹두빈대떡을 굽는 상인",
+    "subjectEn": "Vendor griddling mung-bean bindaetteok in Gwangjang Market",
+    "quality": 4
+  },
+  {
+    "sha": "9cb6f02573b17f26f9ea6234406cd560f289e59ef2f0c2cb0fcf52a530a8064e",
+    "accepted": true,
+    "roles": [
+      "guide-cover:night",
+      "guide-cover:market"
+    ],
+    "subjectKo": "불빛이 켜진 한국 재래시장의 밤 골목",
+    "subjectEn": "Lamp-lit alley of a Korean traditional market at night",
+    "quality": 4
+  },
+  {
+    "sha": "9eb5acd7a1e30d6bef8285fbbbbdec8088568d582d0e2c206debc4e9bd268183",
+    "accepted": false,
+    "reason": "Tourists posing in hanbok; their identifiable faces are the main subject",
+    "roles": [],
+    "subjectKo": "한복 체험 중 포즈를 취한 관광객들",
+    "subjectEn": "Tourists posing in hanbok",
+    "quality": 3
+  },
+  {
+    "sha": "9f36926e36a75d61002f5860b2eb1e3efbb3eae9fd28631040ee360e1dba2116",
+    "accepted": true,
+    "roles": [
+      "guide-cover:food",
+      "guide-cover:market",
+      "travel:food"
+    ],
+    "subjectKo": "시장 노점에 수북이 쌓인 튀김",
+    "subjectEn": "Piles of Korean twigim fritters at a market stall",
+    "quality": 4
+  },
+  {
+    "sha": "a03fab7a0e5c6b4c105a7114d5009bdf93eea722adcbd308573bd26a4c347319",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "travel:sunrise",
+      "travel:oreum",
+      "guide-cover:hiking",
+      "hero-candidate"
+    ],
+    "subjectKo": "하늘에서 내려다본 성산일출봉과 제주 동쪽 해안",
+    "subjectEn": "Aerial view of Seongsan Ilchulbong and Jeju's east coast",
+    "quality": 5
+  },
+  {
+    "sha": "a34bbc9fc796e41b999360c9f3686dcee85b1e5816f2537f1585b0ce1983bf3d",
+    "accepted": false,
+    "reason": "Black-and-white art photo of a dead tree; colour expected",
+    "roles": [],
+    "subjectKo": "흑백으로 찍은 설악산의 고목",
+    "subjectEn": "Black-and-white dead tree on Seoraksan",
+    "quality": 3
+  },
+  {
+    "sha": "a8c60dcd423c0b9e1121a2db64cdfef8c7428caa50f9fa4a0c07793bf22b6ac7",
+    "accepted": false,
+    "reason": "KOREA.net logo watermark in the bottom-left corner",
+    "roles": [],
+    "subjectKo": "사찰 대웅전과 수국",
+    "subjectEn": "Temple main hall with hydrangeas",
+    "quality": 3
+  },
+  {
+    "sha": "a9c91c5d3bf737942033f8422060b1337cbf1311e35a900327b178c3b6e549e9",
+    "accepted": false,
+    "reason": "Posed group portrait of identifiable people with a KOREA.net watermark",
+    "roles": [],
+    "subjectKo": "한복 차림 사람들과 외국인의 기념사진",
+    "subjectEn": "Posed group photo with people in hanbok",
+    "quality": 2
+  },
+  {
+    "sha": "ab22e5e5408d6019dcc46c564482d4ecf3f50b9bd341a391f0f3752e671cb383",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "눈 덮인 삼나무 숲길이 이어지는 제주의 겨울",
+    "subjectEn": "Snow-covered cedar-lined forest road in winter, Jeju",
+    "quality": 4
+  },
+  {
+    "sha": "aef4e4d78d04df625e636a4beb5984003a243e415f926f36b8ab24dd5f35cec5",
+    "accepted": true,
+    "roles": [
+      "guide-cover:food",
+      "travel:food"
+    ],
+    "subjectKo": "철판에서 볶아지는 매콤한 닭갈비",
+    "subjectEn": "Spicy dak-galbi stir-frying on a cast-iron pan",
+    "quality": 4
+  },
+  {
+    "sha": "af6a0c014f346c3d1ff69dc9e5c28c3c655c2fb0bb1507aed45b351b259fe9a9",
+    "accepted": false,
+    "reason": "Black-and-white shopfront at night; colour expected",
+    "roles": [],
+    "subjectKo": "흑백 야간 동네 슈퍼",
+    "subjectEn": "Black-and-white corner shop at night",
+    "quality": 3
+  },
+  {
+    "sha": "b06e68cbcba557ae69c038632e4e2c5ae4ec9ee1a424390de3167270b9b2e611",
+    "accepted": true,
+    "roles": [
+      "guide-cover:market",
+      "guide-cover:night"
+    ],
+    "subjectKo": "밤 시장 좌판에 놓인 말린 생선",
+    "subjectEn": "Dried fish on a market stall in the evening",
+    "quality": 3
+  },
+  {
+    "sha": "b57a134101f6eb574f4845feeb5ccf0d8f9a20a8cee586df11a44527751c9e60",
+    "accepted": false,
+    "reason": "London pub exterior; irrelevant to platform destinations",
+    "roles": [],
+    "subjectKo": "런던의 펍 외관",
+    "subjectEn": "Pub exterior in London",
+    "quality": 3
+  },
+  {
+    "sha": "b63e97971aa492cc015935ebb06aa2e752bcecdc1ef08a1639e4ae2902904843",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "guide-cover:hiking",
+      "travel:hiking",
+      "hero-candidate"
+    ],
+    "subjectKo": "분홍 털진달래가 만발한 한라산 정상부 능선",
+    "subjectEn": "Royal azaleas in full bloom below Hallasan's summit, Jeju",
+    "quality": 5
+  },
+  {
+    "sha": "bf3bca06b2daf33ad7cf0f304a82aee820eb3ed3fcb908dfa6e1df5fac144e02",
+    "accepted": true,
+    "roles": [
+      "guide-cover:culture",
+      "guide-cover:palace"
+    ],
+    "subjectKo": "옷걸이에 걸린 화사한 한복들",
+    "subjectEn": "Colourful hanbok hanging on a rack",
+    "quality": 4
+  },
+  {
+    "sha": "bf8d6ec510aca11141c81e4d3a26ecf8bd5d5f82a22e8443ef3a01fd120248a6",
+    "accepted": false,
+    "reason": "Chichen Itza Maya ruins, Mexico; irrelevant",
+    "roles": [],
+    "subjectKo": "멕시코 치첸이트사 전사의 신전",
+    "subjectEn": "Temple of the Warriors, Chichen Itza",
+    "quality": 2
+  },
+  {
+    "sha": "c609f8a72aa77fd49bf86bbe339e8e94f98eb926966cfcf1b151251c119148c4",
+    "accepted": false,
+    "reason": "Close-up of an illuminated street sign; text is the whole subject",
+    "roles": [],
+    "subjectKo": "먹자골목 안내 표지판",
+    "subjectEn": "Meokjagolmok street sign at night",
+    "quality": 2
+  },
+  {
+    "sha": "ca77931cdafcc60d021e1711989134f5a28330ec20f494985706d3d295b2f58e",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:food",
+      "guide-cover:market",
+      "travel:food"
+    ],
+    "subjectKo": "음식 좌판을 둘러싼 광장시장 먹거리 골목",
+    "subjectEn": "Diners around a laden food counter in Gwangjang Market",
+    "quality": 4
+  },
+  {
+    "sha": "cb112adf929934daf45c32e647833922f8a9d19e5a7de77392f97538fd92f817",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "한글 간판이 빼곡한 종로의 골목 모퉁이",
+    "subjectEn": "Street corner crowded with Hangul shop signs in Jongno, Seoul",
+    "quality": 3
+  },
+  {
+    "sha": "cb4637227fccfd2931e3630abeaee86eca61d1654e7847396d24d3447d4aa8c9",
+    "accepted": false,
+    "reason": "Posed portrait of identifiable people in hanbok",
+    "roles": [],
+    "subjectKo": "한복을 입고 나란히 앉은 사람들",
+    "subjectEn": "People in hanbok seated for a portrait",
+    "quality": 2
+  },
+  {
+    "sha": "cb481f8716260eb2ee082201ed8ab1d72acf4a89e2c9ee153c77feaa5be00d08",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:market",
+      "guide-cover:food"
+    ],
+    "subjectKo": "만국기가 걸린 광장시장 먹자골목",
+    "subjectEn": "Gwangjang Market's food alley under strings of flags",
+    "quality": 4
+  },
+  {
+    "sha": "d00289f7072b300ab75b0a9b5ed2ef59b283eaf9dac6d0941b116ae216615b5b",
+    "accepted": false,
+    "reason": "Posed group portrait of identifiable people with a KOREA.net watermark",
+    "roles": [],
+    "subjectKo": "한복 차림의 단체 기념사진",
+    "subjectEn": "Group photo of people in hanbok",
+    "quality": 2
+  },
+  {
+    "sha": "d071c15158d39ada68cdbebf9da171ffc9d533f00702b867ee2000fb7a7314e6",
+    "accepted": false,
+    "reason": "US Army Corps of Engineers gate with a photographer watermark; irrelevant",
+    "roles": [],
+    "subjectKo": "미 육군 공병단 정문",
+    "subjectEn": "US Army Corps of Engineers gate",
+    "quality": 1
+  },
+  {
+    "sha": "d0ed8b376b727e62976cbc6bc9b6e66311193787c8e0ec1f2605d0e1b5f2a727",
+    "accepted": false,
+    "reason": "Dusk view from Jiufen, Taiwan; not a platform destination and dim",
+    "roles": [],
+    "subjectKo": "대만 지우펀에서 본 해질녘 풍경",
+    "subjectEn": "Dusk view from Jiufen, Taiwan",
+    "quality": 2
+  },
+  {
+    "sha": "d2ec904cbb7af1e6db4e967ef23ba22d6f53f3fe21098f3af596d3a4a3cadc20",
+    "accepted": false,
+    "reason": "Panchgani, India with a photographer watermark; irrelevant",
+    "roles": [],
+    "subjectKo": "인도 판치가니 계곡 전망",
+    "subjectEn": "Valley view at Panchgani, India",
+    "quality": 2
+  },
+  {
+    "sha": "d46542a0e4725f11f11822bb2db600cd9d7386eb8e0f201f7065ce58977ff574",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:cafe"
+    ],
+    "subjectKo": "빈티지 가구가 놓인 홍대 aA 디자인 뮤지엄 카페",
+    "subjectEn": "Vintage furniture in the dim aA Design Museum cafe, Hongdae",
+    "quality": 3
+  },
+  {
+    "sha": "d46a54a5218b638efe3d50edba93a80abce9c67b97bc48d1e4ed6e7b358851f1",
+    "accepted": false,
+    "reason": "Identifiable volunteers in close-up at a kimchi-making event",
+    "roles": [],
+    "subjectKo": "김장 나눔 행사의 봉사자들",
+    "subjectEn": "Volunteers making kimchi",
+    "quality": 2
+  },
+  {
+    "sha": "d5de91fa212bab7a9d0b69e75ad2795c53ef14ad6a141bb29595cc9e65f16a58",
+    "accepted": false,
+    "reason": "Ruined church and bus stop in Dublin with a frame border; irrelevant",
+    "roles": [],
+    "subjectKo": "더블린의 폐허가 된 교회와 버스 정류장",
+    "subjectEn": "Ruined church and bus stop in Dublin",
+    "quality": 1
+  },
+  {
+    "sha": "d9f6b59adb064b15238656a0e72d225162a14e62d1c4ebe8b7be1d95e0932ecb",
+    "accepted": true,
+    "roles": [
+      "guide-cover:cafe"
+    ],
+    "subjectKo": "따스한 조명 아래 커피잔이 놓인 카페 테이블",
+    "subjectEn": "Coffee cup on a cafe table in warm light",
+    "quality": 4
+  },
+  {
+    "sha": "e443c0593012550f49010bd9621d35b16230c771878592ef30b9bd4eb3c333aa",
+    "accepted": false,
+    "reason": "Black-and-white night shot of Jagalchi market; colour expected",
+    "roles": [],
+    "subjectKo": "흑백 자갈치시장의 밤",
+    "subjectEn": "Black-and-white Jagalchi market at night",
+    "quality": 3
+  },
+  {
+    "sha": "e635b9386220ec4df03f3c671c4a7026b1824020790df2bc9dd67549489267f0",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:food",
+      "guide-cover:night",
+      "guide-cover:market",
+      "travel:food"
+    ],
+    "subjectKo": "밤에 꼬치와 해산물을 굽는 서울 길거리 노점",
+    "subjectEn": "Night street stall grilling skewers and seafood in Seoul",
+    "quality": 4
+  },
+  {
+    "sha": "e640fa069504a11564ac529dbad6b3c93f92e7e1b60da7e512b8c530692d2aae",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:cafe"
+    ],
+    "subjectKo": "오렌지색 라운지 체어가 놓인 홍대 aA 디자인 뮤지엄 카페",
+    "subjectEn": "Orange lounge chairs at the aA Design Museum cafe, Hongdae",
+    "quality": 4
+  },
+  {
+    "sha": "ef53fe2bf3212f7ec2f5f2408d2bc2aed2cd17ca7f0b5fdbdc3ae2b3543d3ec6",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:cafe"
+    ],
+    "subjectKo": "천장에 의자 조형물이 매달린 홍대 커피랩",
+    "subjectEn": "Chairs suspended from the ceiling at Coffee Lab, Hongdae",
+    "quality": 4
+  },
+  {
+    "sha": "f076f72b2b605b4df9a52690e64692f95b4fb97016ad9b82b9d80e750de0cd2b",
+    "accepted": false,
+    "reason": "El Castillo pyramid, Chichen Itza, Mexico; irrelevant",
+    "roles": [],
+    "subjectKo": "멕시코 치첸이트사 엘 카스티요",
+    "subjectEn": "El Castillo pyramid, Chichen Itza",
+    "quality": 2
+  },
+  {
+    "sha": "f0b6002a5c33cc40898fcebb4b1eff7427f6f68a5687293569ab2274ce1502be",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "hero-candidate"
+    ],
+    "subjectKo": "흰 파도가 부서지는 제주 남서부 해안과 산방산",
+    "subjectEn": "Waves breaking on Jeju's southwest coast with Sanbangsan beyond",
+    "quality": 5
+  },
+  {
+    "sha": "fdb52f84e9d9af246b52f10fc0a47c16a6ce336de2c7c20c9fe85eab0992d74c",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:cafe",
+      "guide-cover:culture"
+    ],
+    "subjectKo": "커다란 꽃무늬 벽화가 있는 리움미술관 카페",
+    "subjectEn": "Cafe with a giant floral mural at Leeum Museum, Seoul",
+    "quality": 4
+  }
+]

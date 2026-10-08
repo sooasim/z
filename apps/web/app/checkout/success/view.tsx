@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { Photo } from '@/components/media';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
@@ -71,7 +72,7 @@ function Booked({ type, id, payment, amount }: { type: string; id: string; payme
     <div className="stack-lg" style={{ maxWidth: 720, margin: '0 auto' }}>
       <section className="card stack" aria-label={L('예약 요약', 'Booking summary')}>
         <div className={s.summaryHead}>
-          {thumb ? <img src={thumb} alt="" /> : <span className={s.thumb} />}
+          {thumb ? <Photo src={thumb} alt="" sizes="120px" /> : <span className={s.thumb} />}
           <div style={{ minWidth: 0 }}>
             <strong style={{ fontSize: 'var(--fs-lg)' }}>{title || L('불러오는 중…', 'Loading…')}</strong>
             {code && (

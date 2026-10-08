@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { Photo } from '@/components/media';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
@@ -240,7 +241,7 @@ export default function ExchangeDiscoverView() {
           preview={
             <>
               <div className="row nowrap" style={{ gap: 10 }}>
-                <img src="/art/postcards/busan.svg" alt="" style={{ width: 64, height: 64, borderRadius: 12, objectFit: 'cover' }} />
+                <Photo src="/art/postcards/busan.svg" alt="" sizes="64px" style={{ width: 64, height: 64, borderRadius: 12, flex: '0 0 auto' }} />
                 <span style={{ display: 'grid' }}>
                   <strong className="small">{L('해운대 한달살기 집', 'Haeundae month-stay flat')}</strong>
                   <span className="xs muted">{L('부산 · 11월~12월', 'Busan · Nov–Dec')}</span>
@@ -250,7 +251,7 @@ export default function ExchangeDiscoverView() {
                 <Icon name="swap" size={22} style={{ margin: '0 auto' }} />
               </div>
               <div className="row nowrap" style={{ gap: 10 }}>
-                <img src="/art/postcards/seoul.svg" alt="" style={{ width: 64, height: 64, borderRadius: 12, objectFit: 'cover' }} />
+                <Photo src="/art/postcards/seoul.svg" alt="" sizes="64px" style={{ width: 64, height: 64, borderRadius: 12, flex: '0 0 auto' }} />
                 <span style={{ display: 'grid' }}>
                   <strong className="small">{L('북촌 한옥 스테이', 'Bukchon hanok stay')}</strong>
                   <span className="xs muted">{L('서울 · 같은 기간', 'Seoul · same dates')}</span>

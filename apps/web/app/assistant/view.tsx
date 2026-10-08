@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { Photo } from '@/components/media';
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { useAuth } from '@/lib/auth';
@@ -119,7 +120,7 @@ function Chat() {
               <div className={s.sugg}>
                 {m.suggestions.slice(0, 6).map((sg) => (
                   <Link key={sg.href + sg.title} href={sg.href} className={s.suggCard}>
-                    <img src={sg.img} alt="" />
+                    <Photo src={sg.img} alt="" sizes="160px" />
                     <span className={s.t}>
                       <strong>{sg.title}</strong>
                       <span>{[sg.meta, sg.price].filter(Boolean).join(' · ')}</span>
@@ -198,7 +199,7 @@ export default function AssistantView() {
                 <p className="small" style={{ margin: 0 }}>{L('제주 2명 조건으로 7곳을 찾았어요. 협재 해변 5분 거리 돌집이 가장 잘 맞아요.', 'I found 7 places in Jeju for two. A stone house five minutes from Hyeopjae beach fits best.')}</p>
                 <div className={s.sugg}>
                   <span className={s.suggCard}>
-                    <img src="/art/postcards/jeju.svg" alt="" />
+                    <Photo src="/art/postcards/jeju.svg" alt="" sizes="160px" />
                     <span className={s.t}>
                       <strong>{L('한림 돌담 독채', 'Hallim stone house')}</strong>
                       <span>{L('숙소 · 제주 · ₩190,000 / 박', 'Stay · Jeju · ₩190,000 / night')}</span>

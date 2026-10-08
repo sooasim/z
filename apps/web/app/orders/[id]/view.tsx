@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { Photo } from '@/components/media';
 import { useParams } from 'next/navigation';
 import { useI18n } from '@/lib/i18n';
 import { useApi } from '@/lib/hooks';
@@ -97,7 +98,7 @@ function OrderDetail({ o, reload }: { o: any; reload: () => void }) {
                   const dep = deps[str(l, 'sellableId')];
                   return (
                     <li key={str(l, 'id') || i} className={s.summaryHead}>
-                      <img src={postcardFor(dep?.city || str(l, 'title'), str(l, 'sellableId'))} alt="" />
+                      <Photo src={postcardFor(dep?.city || str(l, 'title'), str(l, 'sellableId'))} seed={str(l, 'sellableId')} alt="" sizes="120px" />
                       <div style={{ minWidth: 0 }}>
                         <strong>{dep?.productId ? <Link href={`/travel/${dep.productId}`} style={{ color: 'inherit' }}>{str(l, 'title')}</Link> : str(l, 'title')}</strong>
                         <div className="small" style={{ marginTop: 2 }}>

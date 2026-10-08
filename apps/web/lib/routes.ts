@@ -1,7 +1,7 @@
 /** Known first path segments of this app. Anything else is a candidate legacy URL → `/v1/seo/redirects`. */
 export const KNOWN_PREFIXES = [
   '', 'stay', 'map', 'exchange', 'guide-friends', 'guides', 'guide-requests', 'guide-bookings', 'guide', 'travel', 'trip-planner', 'checkout', 'orders',
-  'jetpool-charter', 'discover', 'stories', 'login', 'signup', 'auth', 'account', 'verification', 'reviews', 'saved', 'trips', 'messages', 'payments',
+  'jetpool-charter', 'discover', 'stories', 'about', 'archive', 'credits', 'login', 'signup', 'auth', 'account', 'verification', 'reviews', 'saved', 'trips', 'messages', 'payments',
   'notifications', 'support', 'assistant', 'host', 'earnings', 'supplier', 'admin', 'api', '_next', 'icons', 'sitemap.xml', 'robots.txt',
   'manifest.webmanifest', 'sw.js', 'offline.html', 'favicon.ico',
 ];

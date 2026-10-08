@@ -1,5 +1,6 @@
 'use client';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { Photo } from '@/components/media';
 import { useState } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { useApi } from '@/lib/hooks';
@@ -251,7 +252,7 @@ export default function SavedView() {
                         <button type="button" className={`card link ${s.collection}`} style={{ width: '100%', textAlign: 'left', font: 'inherit', cursor: 'pointer' }} onClick={() => router.push(`/saved?collection=${str(c, 'id')}`, { scroll: false })}>
                           <div className={s.collectionArt} aria-hidden="true">
                             {imgs.map((src, k) => (
-                              <img key={k} src={src} alt="" />
+                              <Photo key={k} src={src} seed={`${str(c, 'id')}:${k}`} alt="" sizes="120px" />
                             ))}
                           </div>
                           <div className={s.collectionBody}>

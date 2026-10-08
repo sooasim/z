@@ -1,4 +1,12 @@
-/** Local generative "postcard" illustrations (public/art/postcards) used when a listing has no photo. */
+import { cityPhoto, photoPool, pick, prefetchMediaMap } from './media';
+import { canonicalPlace } from './places';
+
+/**
+ * Cover art when an entity has no photo of its own. Once the media map (public/media-map.json) has loaded these
+ * return REAL photos (the city's photo, else a stable pick from the licensed pool); before that — or if the map is
+ * unavailable — the local generative "postcard" illustrations (public/art/postcards) are used.
+ * Components that render the result through <Photo>/<Carousel> upgrade postcards to photos as soon as the map loads.
+ */
 const CITY_ART: Array<[RegExp, string]> = [
   [/서울|seoul|성수|홍대|강남|종로/i, 'seoul'],
   [/제주|jeju|서귀포|애월/i, 'jeju'],
@@ -25,13 +33,49 @@ export function hashString(s: string): number {
   return h >>> 0;
 }
 
+/** Postcard art name → canonical city (for upgrading a postcard URL to that city's photo). */
+const ART_CITY: Record<string, string> = { seoul: 'Seoul', jeju: 'Jeju', busan: 'Busan', gangneung: 'Gangneung', gyeongju: 'Gyeongju', tokyo: 'Tokyo', osaka: 'Osaka', bangkok: 'Bangkok', chiangmai: 'Chiang Mai', lisbon: 'Lisbon', paris: 'Paris', bali: 'Bali', hanoi: 'Hanoi' };
+
+/** A real photo for a place: the city's own photo, else a stable pick from the generic pool (map loaded only). */
+export function placePhoto(place: string, seed = ''): string | undefined {
+  prefetchMediaMap();
+  const art = CITY_ART.find(([re]) => re.test(place || ''))?.[1];
+  return cityPhoto(place, canonicalPlace) ?? (art ? cityPhoto(ART_CITY[art]) : undefined) ?? pick(photoPool(), seed || place || 'jetpool');
+}
+
+const POSTCARD_RE = /\/art\/postcards\/([a-z]+)\.svg(?:$|[?#])/;
+const PLACEHOLDER_RE = /\/placeholder\/(\d+)\.svg(?:$|[?#])/;
+/** True for generated art / seed placeholders (not a real photo). */
+export const isArt = (src: string | null | undefined) => !!src && (POSTCARD_RE.test(src) || PLACEHOLDER_RE.test(src));
+
+/** Upgrades a postcard / seed-placeholder URL to a real photo once the media map is loaded; other URLs unchanged. */
+export function realize(src: string, seed = ''): string {
+  const m = POSTCARD_RE.exec(src || '');
+  if (m) return placePhoto(ART_CITY[m[1]] ?? '', m[1] + seed) ?? src;
+  const p = PLACEHOLDER_RE.exec(src || '');
+  if (p) return pick(photoPool('stay'), 'placeholder' + p[1] + seed) ?? src;
+  return src;
+}
+
 export function postcardFor(place: string, seed = ''): string {
+  const real = placePhoto(place, seed);
+  if (real) return real;
   for (const [re, name] of CITY_ART) if (re.test(place || '')) return `/art/postcards/${name}.svg`;
   return `/art/postcards/${GENERIC[hashString(seed || place || 'jetpool') % GENERIC.length]}.svg`;
 }
 
 /** A small set of postcards for carousels when a listing has no photos. */
 export function postcardSet(place: string, seed: string, n = 3): string[] {
+  const real = placePhoto(place, seed);
+  if (real) {
+    const pool = photoPool().filter((u) => u !== real);
+    const out = [real];
+    for (let i = 1; out.length < n && i < n + 8; i++) {
+      const u = pick(pool, `${seed}:${i}`);
+      if (u && !out.includes(u)) out.push(u);
+    }
+    return out;
+  }
   const first = postcardFor(place, seed);
   const rest = GENERIC.map((g) => `/art/postcards/${g}.svg`).filter((g) => g !== first);
   const start = hashString(seed) % rest.length;

@@ -2,10 +2,10 @@
 import { useI18n } from '@/lib/i18n';
 import { f } from '@/lib/shape';
 import { productView } from '@/lib/domain';
-import { postcardSet } from '@/lib/art';
+import { useMediaMap } from '@/lib/media';
 import { placeLabel } from '@/lib/places';
 import { HeartButton } from '@/components/favorites';
-import { realImages } from '@/components/cards';
+import { productImages } from '@/components/cards';
 import { ListingCard, type CardBadge } from '@/components/ui';
 import { productKindLabel, refundLines } from './labels';
 
@@ -17,7 +17,7 @@ import { productKindLabel, refundLines } from './labels';
 export function TourCard({ p }: { p: any }) {
   const v = productView(p);
   const { L, lang } = useI18n();
-  const real = realImages([v.cover]);
+  useMediaMap();
   const hours = v.durationMinutes && !v.durationDays ? Math.round((v.durationMinutes / 60) * 10) / 10 : undefined;
   const refund = refundLines(f(p, 'cancellationTerms'), 'ko');
   const freeCancel = refund.some((l) => l.includes('전액 환불')) || /free|무료/i.test(v.cancellation);
@@ -26,7 +26,7 @@ export function TourCard({ p }: { p: any }) {
   return (
     <ListingCard
       href={`/travel/${v.id}`}
-      images={real.length ? real : postcardSet(v.city || v.title, v.id, 2)}
+      images={productImages(p, 2)}
       title={v.title}
       meta={[placeLabel(v.city, lang), v.durationDays ? L(`${v.durationDays}일`, `${v.durationDays} days`) : hours ? L(`${hours}시간`, `${hours} h`) : '', v.supplier && L(`${v.supplier} 제공`, `by ${v.supplier}`)].filter(Boolean).join(' · ')}
       priceMinor={v.priceMinor}

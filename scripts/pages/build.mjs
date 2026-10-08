@@ -78,7 +78,12 @@ function paramValues(routeDir, param) {
   if (/^host\/listings$/.test(r)) return uniq(fx.ids.hostPropertyIds, fx.ids.propertyIds, pool('property'));
   if (/^orders$/.test(r)) return uniq(fx.ids.orderIds, pool('order'));
   if (/^stay$/.test(r)) return uniq(fx.ids.propertySlugs, pool('property').map((id) => `demo-${id.slice(0, 8)}`));
-  if (/^stories$/.test(r)) return uniq(fx.ids.storySlugs);
+  if (/^stories$/.test(r)) return uniq(fx.ids.storySlugs, fx.ids.legacySlugs ?? []);
+  // /about/[slug] renders CMS PAGE entries (falls back to LEGACY_CONTENT) — the migrated wontc.co.kr pages.
+  if (/^about$/.test(r)) {
+    const v = uniq(fx.ids.pageSlugs ?? [], fx.ids.legacySlugs ?? []);
+    return v.length ? v : ['about-jetpool'];
+  }
   if (/^travel$/.test(r)) return uniq(fx.ids.travelProductIds);
   if (/^trips$/.test(r)) return uniq(fx.ids.reservationIds, pool('reservation'));
   console.warn(`[pages] WARN no id list for dynamic route /${r}/[${param}] — prerendering a placeholder only`);

@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { Photo } from '@/components/media';
 import { useI18n } from '@/lib/i18n';
 import { useApi } from '@/lib/hooks';
 import { arr, items, str } from '@/lib/shape';
@@ -63,7 +64,7 @@ export default function DiscoverView() {
               return (
                 <article key={d.slug || d.city} className="lcard">
                   <Link href={`/stay?q=${q}`} className={s.destCard} style={{ aspectRatio: '4 / 3' }} tabIndex={-1} aria-hidden="true">
-                    <img src={d.cover || postcardFor(d.city || d.title, d.slug)} alt="" loading="lazy" />
+                    <Photo src={d.cover || postcardFor(d.city || d.title, d.slug)} seed={d.slug || d.city} alt="" sizes="(max-width: 640px) 92vw, 360px" />
                     <span className={s.cap}>
                       <strong>{d.title}</strong>
                     </span>

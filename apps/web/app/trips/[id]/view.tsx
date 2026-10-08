@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { Photo } from '@/components/media';
 import { useParams } from 'next/navigation';
 import { useI18n } from '@/lib/i18n';
 import { useApi } from '@/lib/hooks';
@@ -111,7 +112,7 @@ function Detail({ r }: { r: any }) {
           </Alert>
         )}
         <div className={s.hero}>
-          <img src={cover} alt={L(`${title} 대표 사진`, `${title} cover photo`)} />
+          <Photo src={cover} alt={L(`${title} 대표 사진`, `${title} cover photo`)} sizes="(max-width: 900px) 100vw, 800px" />
           {active && dd >= 0 && (
             <div className={s.heroBadge}>
               <span className="badge solid">{dd === 0 ? L('오늘 체크인', 'Check-in today') : L(`체크인까지 ${dd}일`, `${dd} days to check-in`)}</span>

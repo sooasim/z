@@ -1,0 +1,988 @@
+[
+ {
+  "sha": "004450f5212482d75eaba4adf8e0927e4e9ef7f46ad4e20becca9e77f2ddceec",
+  "accepted": true,
+  "roles": [
+   "charter:jet",
+   "charter:airport"
+  ],
+  "subjectKo": "탑승 계단을 내린 채 계류장에 대기 중인 대형 비즈니스 제트기",
+  "subjectEn": "Large business jet waiting on the apron with its airstair lowered",
+  "quality": 3
+ },
+ {
+  "sha": "00ccec4e71a2aabd72968310fcb0e73e903ac2d36a4dcf60563f87eb3d324c49",
+  "accepted": true,
+  "roles": [
+   "charter:jet"
+  ],
+  "subjectKo": "검은 배경 위로 빛을 받아 떠오르는 제트기 날개와 엔진 실루엣",
+  "subjectEn": "Studio-lit silhouette of a jet wing and engine against black",
+  "quality": 3
+ },
+ {
+  "sha": "04ddd89fd96acaef2ffe0844f21eba845f33039cd2321a07f430690dc113fd2a",
+  "accepted": false,
+  "reason": "Baked-in white and black picture-frame border on every edge; cannot be cropped cleanly for covers",
+  "roles": [],
+  "subjectKo": "노을 진 바다 위를 달리는 작은 보트",
+  "subjectEn": "Small boat crossing a sunlit bay at sunset",
+  "quality": 2
+ },
+ {
+  "sha": "07e640034f299b2bb34540f9b63ad9c647a8d34c02c03bf4e5cc6bb638c98fd7",
+  "accepted": false,
+  "reason": "Scanned-film quality with a bare tree and power line across the frame; the dock/boat the query asks for is barely visible",
+  "roles": [],
+  "subjectKo": "티티카카 호수 아만타니 섬의 호숫가 마을",
+  "subjectEn": "Lakeside village on Amantani Island, Lake Titicaca",
+  "quality": 2
+ },
+ {
+  "sha": "0a52bc127aa80cc8a619d729ab4c658da3a805f5ad9ec2260d68ba2f63fec5ff",
+  "accepted": true,
+  "roles": [
+   "travel:boat"
+  ],
+  "subjectKo": "가을빛 강변 항구에 정박한 보트와 돌다리",
+  "subjectEn": "Boats moored in an autumn riverside harbour beside a stone bridge",
+  "quality": 4
+ },
+ {
+  "sha": "0eef272c70699e62a3b8a13b034963250c5bca953b5df9c819d44992d50639b5",
+  "accepted": true,
+  "roles": [
+   "charter:sky",
+   "hero-candidate"
+  ],
+  "subjectKo": "비행기 창밖으로 펼쳐진 눈 덮인 알프스 산맥과 날개",
+  "subjectEn": "Snow-covered Alps seen past the wing from a plane window",
+  "quality": 4
+ },
+ {
+  "sha": "12640e042415a74cfd9599f7a862e01e3ad156279422bf83f75f6411909a7ea4",
+  "accepted": false,
+  "reason": "Iconic Sydney landmark dominates; misleading as a generic boat-tour image for platform destinations",
+  "roles": [],
+  "subjectKo": "시드니 오페라하우스와 항구를 내려다본 풍경",
+  "subjectEn": "Aerial view of the Sydney Opera House and harbour",
+  "quality": 3
+ },
+ {
+  "sha": "14956c09af4d2477d06cdd262581db0329427ab7488cf4f4999bcac8a4acc229",
+  "accepted": true,
+  "roles": [
+   "travel:sunrise",
+   "travel:hiking",
+   "guide-cover:hiking",
+   "hero-candidate"
+  ],
+  "subjectKo": "첫 햇살에 붉게 물든 고산 능선",
+  "subjectEn": "Alpine ridges glowing red in the first light of sunrise",
+  "quality": 5
+ },
+ {
+  "sha": "1817e208a1dca8cb64c2e858bcb2fcb18e825430e29d451f473740657d28ed77",
+  "accepted": true,
+  "roles": [
+   "travel:hiking"
+  ],
+  "subjectKo": "새벽빛이 드는 눈 덮인 산골짜기",
+  "subjectEn": "Snow-dusted mountain valley in soft morning light",
+  "quality": 3
+ },
+ {
+  "sha": "18ea2fed05eaa5812be4d8bc7b88b194d1fd5c2570556b48f127bda0b9c2f930",
+  "accepted": true,
+  "roles": [
+   "city:Busan"
+  ],
+  "subjectKo": "구름 낀 여름 오후 해운대 해변에서 물놀이하는 사람들",
+  "subjectEn": "Swimmers on Haeundae Beach on a cloudy summer afternoon",
+  "quality": 3
+ },
+ {
+  "sha": "1e1262e760e011c38f0736629a32091436b61daef440ad6d62847e018109fe64",
+  "accepted": true,
+  "roles": [
+   "charter:jet",
+   "charter:airport"
+  ],
+  "subjectKo": "흐린 하늘 아래 계류장에 나란히 선 프라이빗 제트기들",
+  "subjectEn": "Row of private jets parked on an apron under grey skies",
+  "quality": 3
+ },
+ {
+  "sha": "2391f54dce939a85658443241714318ce668703b53a675652af0041e0101221b",
+  "accepted": false,
+  "reason": "Near-duplicate of the SSJ100 black-and-white render series (00ccec4e71a2/8a0aef3c65d3 kept); abstract crop and not the cabin interior the query asked for",
+  "roles": [],
+  "subjectKo": "어둠 속 제트 엔진 흑백 클로즈업",
+  "subjectEn": "Black-and-white close-up of a jet engine in darkness",
+  "quality": 3
+ },
+ {
+  "sha": "25860767e7f4002e5071ca729093120e14cd6103ad25d3752cbc903c278a9c4b",
+  "accepted": true,
+  "roles": [
+   "travel:cycling"
+  ],
+  "subjectKo": "초록 숲 사이 자전거길을 달리는 라이더",
+  "subjectEn": "Cyclist riding a tree-lined trail on a sunny day",
+  "quality": 3
+ },
+ {
+  "sha": "2651ae4d83db5512ce3d65e5bae993a52e79c78518a424664e5a9bd314a8ec3c",
+  "accepted": true,
+  "roles": [
+   "travel:cycling",
+   "guide-cover:walking"
+  ],
+  "subjectKo": "바닷가 갯벌을 따라 이어지는 해안 오솔길",
+  "subjectEn": "Coastal track running alongside tidal flats",
+  "quality": 2
+ },
+ {
+  "sha": "28391963e72f9c9f1647f20b105564ce357223b63c2af214832ce0fd08487531",
+  "accepted": true,
+  "roles": [
+   "charter:sky",
+   "hero-candidate"
+  ],
+  "subjectKo": "햇살이 쏟아지는 구름 위를 나는 비행기 날개",
+  "subjectEn": "Aircraft wing above sunlit cumulus clouds",
+  "quality": 4
+ },
+ {
+  "sha": "28551f259e748a48e094544cd4474cd6651721157e64c5c7602308c2a9ac99a1",
+  "accepted": true,
+  "roles": [
+   "charter:airport"
+  ],
+  "subjectKo": "해 질 녘 활주로를 걸어 비행기에 오르는 승객들",
+  "subjectEn": "Passengers walking across the apron to board at sunset",
+  "quality": 4
+ },
+ {
+  "sha": "2ab8bc3ba8f4c97154c0c74ef3629c13df648f0f86a243a7f5f6f74cbdc90823",
+  "accepted": false,
+  "reason": "Flat grey overcast; a docked cruise ship at a foreign port is not a boat-tour experience and is off-destination",
+  "roles": [],
+  "subjectKo": "흐린 날 탈린 구시가지 앞에 정박한 크루즈선",
+  "subjectEn": "Cruise ship docked below Tallinn old town on a grey day",
+  "quality": 2
+ },
+ {
+  "sha": "344320c71e76043776349c27ca21a9207c83a74383d42dbb46cbb02e0f5316a6",
+  "accepted": true,
+  "roles": [
+   "travel:sunrise",
+   "travel:hiking",
+   "hero-candidate"
+  ],
+  "subjectKo": "새벽 알펜글로에 물든 티턴 산봉우리 파노라마",
+  "subjectEn": "Panorama of Teton peaks lit pink by dawn alpenglow",
+  "quality": 4
+ },
+ {
+  "sha": "3803e5ac76fe83144d6bf12b97528615a3ad3249fb21598a7baa26066c81e8a3",
+  "accepted": true,
+  "roles": [
+   "travel:sunrise",
+   "travel:hiking"
+  ],
+  "subjectKo": "아침 햇살이 스치는 고원 능선",
+  "subjectEn": "Morning light washing over high mountain ridges",
+  "quality": 3
+ },
+ {
+  "sha": "38311cd1dc17cc720db1516710a00006fff901ee0fcc6254a8809ca052284cdd",
+  "accepted": false,
+  "reason": "Black and white where colour sky imagery is expected; plenty of colour sky shots available",
+  "roles": [],
+  "subjectKo": "흑백으로 담은 거대한 적란운",
+  "subjectEn": "Black-and-white towering cumulus cloud",
+  "quality": 3
+ },
+ {
+  "sha": "42e89d2e9a263fc6d220a93ba095533a5b1fa1917243a433507b455e62fc478f",
+  "accepted": false,
+  "reason": "Military battleship; irrelevant to a leisure boat tour",
+  "roles": [],
+  "subjectKo": "진주만에 정박한 미주리 전함",
+  "subjectEn": "USS Missouri battleship moored at Pearl Harbor",
+  "quality": 3
+ },
+ {
+  "sha": "43985b6eba657038c3d2213881cec5cb9379b6f6fad8f63f4d14827499b60c25",
+  "accepted": true,
+  "roles": [
+   "stay-exterior:house"
+  ],
+  "subjectKo": "꽃 정원과 오솔길이 있는 초가지붕 시골집",
+  "subjectEn": "Thatched country cottage with a flower garden and lane",
+  "quality": 3
+ },
+ {
+  "sha": "44d2dde5910ee580fcab6d5e1255afc06970a11a422d5c95dab67525cbc5fea1",
+  "accepted": false,
+  "reason": "Black and white where colour is expected; colour wing-over-cloud shots available",
+  "roles": [],
+  "subjectKo": "흑백 비행기 날개와 구름",
+  "subjectEn": "Black-and-white aircraft wing over clouds",
+  "quality": 3
+ },
+ {
+  "sha": "44e200023ca1a966c2cd686894bcb4f121cb8340ffca6a1628bd7432d17b0b5d",
+  "accepted": false,
+  "reason": "Near-duplicate of the SSJ100 black-and-white render series; mostly black, abstract and not the cabin interior the query asked for",
+  "roles": [],
+  "subjectKo": "어둠 속 조종석 앞유리 흑백 렌더",
+  "subjectEn": "Black-and-white render of cockpit windows in darkness",
+  "quality": 2
+ },
+ {
+  "sha": "49bc347ecea68db3c776ff0a44fdb5702c7249c3de49f0d509c5e03d8d087657",
+  "accepted": false,
+  "reason": "Near-duplicate of the SSJ100 black-and-white render series; soft focus and shows the exterior, not the cabin interior",
+  "roles": [],
+  "subjectKo": "흐릿한 초점의 기체 창문 흑백 클로즈업",
+  "subjectEn": "Soft-focus black-and-white close-up of fuselage windows",
+  "quality": 2
+ },
+ {
+  "sha": "4b8e1a593275e8e776292c22dac25a39f85934092d284b0037af0ca50f9bb59d",
+  "accepted": false,
+  "reason": "Shows a collapsed road from coastal erosion; negative and misleading for a cycling route",
+  "roles": [],
+  "subjectKo": "해안 침식으로 부서진 바닷가 도로",
+  "subjectEn": "Coastal road broken away by erosion",
+  "quality": 2
+ },
+ {
+  "sha": "4c326d486354859275575c200d8feac37c8f7c06f8402c1bd34096a2b629ec76",
+  "accepted": true,
+  "roles": [
+   "charter:sky"
+  ],
+  "subjectKo": "뭉게구름 위로 뻗은 빨간 플랩의 비행기 날개",
+  "subjectEn": "Aircraft wing with red flap fairings above billowing clouds",
+  "quality": 4
+ },
+ {
+  "sha": "4f4950014830d2fe8024faebdd64d89ebfe5e0e09e849589eea1af2b28de7022",
+  "accepted": false,
+  "reason": "Vintage military fighter in a museum; irrelevant and misleading for private jet charter",
+  "roles": [],
+  "subjectKo": "항공 박물관에 전시된 2차 대전 전투기",
+  "subjectEn": "WWII Hawker Hurricane fighter in an aviation museum",
+  "quality": 3
+ },
+ {
+  "sha": "5130d4a4f1c1acac7df028bdc945e079522f267245ba14e5ca7bef6f7437617e",
+  "accepted": true,
+  "roles": [
+   "city:Jeju",
+   "travel:oreum",
+   "hero-candidate"
+  ],
+  "subjectKo": "지미오름에서 내려다본 밭담 마을과 포구",
+  "subjectEn": "Stone-walled fields and harbour village seen from Jimi Oreum, Jeju",
+  "quality": 4
+ },
+ {
+  "sha": "543b6d22c6c14cf5fad092443f674ab7c3b8a0e5b76d57348183ed4aa12a6bf9",
+  "accepted": true,
+  "roles": [
+   "charter:airport"
+  ],
+  "subjectKo": "노을빛 하늘 아래 활주로와 항공기 실루엣",
+  "subjectEn": "Runway and aircraft silhouettes under a vivid sunset sky",
+  "quality": 3
+ },
+ {
+  "sha": "54d79de9ee1160893b564644701297603ec67d38d8e65b7fcad5ea2529126410",
+  "accepted": false,
+  "reason": "Black and white, and an iconic New York landmark unrelated to platform destinations",
+  "roles": [],
+  "subjectKo": "자유의 여신상 섬 흑백 항공사진",
+  "subjectEn": "Black-and-white aerial of Liberty Island",
+  "quality": 3
+ },
+ {
+  "sha": "5918f9db06e43af5a9dce3555fcffc2dbc96c4d33bba4aed38e0f22cdf0106c1",
+  "accepted": true,
+  "roles": [
+   "charter:airport"
+  ],
+  "subjectKo": "해 질 녘 활주로 불빛 위로 착륙하는 항공기",
+  "subjectEn": "Aircraft on approach over runway lights at dusk",
+  "quality": 4
+ },
+ {
+  "sha": "5942a848338afed580cb4a0ae09c86c52b03b0a3979b43450a0f000393692e97",
+  "accepted": false,
+  "reason": "Black and white with a baked-in black border; colour expected",
+  "roles": [],
+  "subjectKo": "바닷가 굽은 도로를 달리는 자전거 흑백 사진",
+  "subjectEn": "Black-and-white cyclist on a winding coastal road",
+  "quality": 3
+ },
+ {
+  "sha": "59c798d476154fb7fe99ca489fb27c8f44647ecd3948b1532b6cf28e690ecb3d",
+  "accepted": false,
+  "reason": "Flat grey sky and dull light; near-duplicate of 7051a04e8b40 from the same viewpoint",
+  "roles": [],
+  "subjectKo": "흐린 날 오름에서 본 제주 들녘",
+  "subjectEn": "Overcast view over Jeju farmland from an oreum",
+  "quality": 2
+ },
+ {
+  "sha": "5cbf523586f2dea2ff3021eded56d877ee3bcc399a34d8f345ad7f7debe45380",
+  "accepted": false,
+  "reason": "Identifiable children are the main subject; odd buried-mask sand figure",
+  "roles": [],
+  "subjectKo": "보령 머드축제 해변의 아이들과 모래 조형물",
+  "subjectEn": "Children and a sand sculpture at the Boryeong Mud Festival beach",
+  "quality": 2
+ },
+ {
+  "sha": "6677eec6d91b8c28f88a6df18cec8647119587969a9253d350a586bc9c7802cc",
+  "accepted": true,
+  "roles": [
+   "charter:jet"
+  ],
+  "subjectKo": "흐린 하늘 아래 유도로를 지나는 걸프스트림 제트기",
+  "subjectEn": "Gulfstream business jet taxiing under heavy clouds",
+  "quality": 3
+ },
+ {
+  "sha": "66a4858d6d355cf6b93ba60f2383eba29f4f8597447472dcf2deea5af62766da",
+  "accepted": false,
+  "reason": "Identifiable Cape Town waterfront and Table Mountain; misleading as a generic boat tour for platform destinations",
+  "roles": [],
+  "subjectKo": "테이블마운틴 아래 케이프타운 워터프런트",
+  "subjectEn": "Cape Town waterfront below Table Mountain",
+  "quality": 3
+ },
+ {
+  "sha": "695e0972be176f1d76bf3efedc6b0af110b8cb6eaf82cfb9a02d5fc6475220b5",
+  "accepted": true,
+  "roles": [
+   "charter:jet",
+   "charter:airport"
+  ],
+  "subjectKo": "도시 야경을 배경으로 한 프라이빗 제트기 꼬리날개",
+  "subjectEn": "Private jet tail and engines against a city skyline at night",
+  "quality": 4
+ },
+ {
+  "sha": "7051a04e8b4046363471920031d584f268e8a3f85bcbfd9945ea7bf575253580",
+  "accepted": true,
+  "roles": [
+   "city:Jeju",
+   "travel:oreum"
+  ],
+  "subjectKo": "오름 정상에서 바라본 풍력발전기와 중산간 풍경",
+  "subjectEn": "Wind turbines and rolling Jeju hills seen from an oreum summit",
+  "quality": 2
+ },
+ {
+  "sha": "70fdac18f23dc2a08751a258157253ee99c76aece075852772ea8415139036d3",
+  "accepted": false,
+  "reason": "Commercial regional airliner with prominent Sukhoi/Gazprom branding; not a charter jet image and not the cabin interior queried",
+  "roles": [],
+  "subjectKo": "가즈프롬 광고판 앞 수호이 슈퍼젯 여객기",
+  "subjectEn": "Sukhoi Superjet airliner taxiing past a Gazprom billboard",
+  "quality": 3
+ },
+ {
+  "sha": "75075dcc1cd27f7b5831c60bd6b9da4b53dfb85e98f77d3bcfb173508ce6680e",
+  "accepted": true,
+  "roles": [
+   "charter:sky"
+  ],
+  "subjectKo": "노을빛을 받으며 하늘을 지나는 여객기 밑면",
+  "subjectEn": "Airliner overhead catching the last sunset light",
+  "quality": 3
+ },
+ {
+  "sha": "7757e5c9788e31f9f2de0c847d41535729edbfe5cd8dd75cf7b5e33f6461997c",
+  "accepted": true,
+  "roles": [
+   "charter:jet",
+   "charter:airport"
+  ],
+  "subjectKo": "격납고 안에 대기 중인 전세 비행기들",
+  "subjectEn": "Charter aircraft parked inside a hangar",
+  "quality": 3
+ },
+ {
+  "sha": "7cc20d12942331b07ad9272ee9992d56e0e406f7e465fe663fc05257534807e3",
+  "accepted": true,
+  "roles": [
+   "charter:airport",
+   "charter:sky",
+   "hero-candidate"
+  ],
+  "subjectKo": "황금빛 일몰 속으로 뻗은 활주로 불빛",
+  "subjectEn": "Runway lights stretching toward a golden sunset",
+  "quality": 4
+ },
+ {
+  "sha": "7faad06f86893d491095edfa0e5194ed0fa5bafce27add26d5d45409e4c6de37",
+  "accepted": true,
+  "roles": [
+   "city:Jeju"
+  ],
+  "subjectKo": "종달리 해안의 바위섬과 에메랄드빛 바다",
+  "subjectEn": "Rocky islets and emerald water along the Jongdal-ri coast, Jeju",
+  "quality": 3
+ },
+ {
+  "sha": "80d9439ec99a4cca8a6a11bc19439918d8ae63ca751a3c4be2e2b9ea3994e7bc",
+  "accepted": false,
+  "reason": "Near-duplicate of the SSJ100 black-and-white render series; abstract and not the cabin interior queried",
+  "roles": [],
+  "subjectKo": "날개 밑면 흑백 렌더",
+  "subjectEn": "Black-and-white render of a wing underside",
+  "quality": 2
+ },
+ {
+  "sha": "82238ddf37fe1bc1b8d80eaf5a8f3bf804e75547cfd0d02680408643dc2a1eea",
+  "accepted": false,
+  "reason": "Close-up of identifiable people as the main subject",
+  "roles": [],
+  "subjectKo": "해안 절벽길에서 자전거를 끌고 오르는 라이더들",
+  "subjectEn": "Riders pushing bikes up a cliffside coastal path",
+  "quality": 3
+ },
+ {
+  "sha": "834f3443ae7304230a498566741453109ff961c210a874f9b8ce81f045b914d5",
+  "accepted": true,
+  "roles": [
+   "charter:jet"
+  ],
+  "subjectKo": "어둠 속에 빛으로 그린 제트기 기수 곡선",
+  "subjectEn": "Light tracing the curve of a jet nose in darkness",
+  "quality": 3
+ },
+ {
+  "sha": "8526760b95f86e3dd9fd4a257313e3c8099398c708794654998d6762faf3caec",
+  "accepted": true,
+  "roles": [
+   "city:Jeju",
+   "travel:culture"
+  ],
+  "subjectKo": "성산 일출봉 아래 물질하러 나가는 제주 해녀들",
+  "subjectEn": "Jeju haenyeo divers wading out to work below Seongsan Ilchulbong",
+  "quality": 4
+ },
+ {
+  "sha": "8734329dc38fbd857f3a35dd95bd0c0646af94be597b85df0dac625b120ee533",
+  "accepted": true,
+  "roles": [
+   "charter:airport"
+  ],
+  "subjectKo": "해 질 녘 공항 활주로를 바라보는 여행자",
+  "subjectEn": "Traveller watching the runway at dusk",
+  "quality": 3
+ },
+ {
+  "sha": "87a7b6a2dc056e653e5d95592cce1c2b04bd208c0bb47dc3a3f041b29ef8bd09",
+  "accepted": false,
+  "reason": "Museum exhibit of an airliner with heavy HDR and a baked-in border; not a business jet interior",
+  "roles": [],
+  "subjectKo": "과학관에 전시된 보잉 747 동체",
+  "subjectEn": "Boeing 747 fuselage on display in a science museum",
+  "quality": 2
+ },
+ {
+  "sha": "8a0aef3c65d3d04d9aedfbbab2566490e3500385dd46994490e8f86a3ca0698c",
+  "accepted": true,
+  "roles": [
+   "charter:jet"
+  ],
+  "subjectKo": "빛 번짐과 함께 어둠 속에 드러난 제트기 기수",
+  "subjectEn": "Jet nose emerging from darkness with a star of light",
+  "quality": 4
+ },
+ {
+  "sha": "8c91e80ea378315286e5184760518d7086532ca06a97fcbc10f5ef8a41b6d192",
+  "accepted": true,
+  "roles": [
+   "charter:sky"
+  ],
+  "subjectKo": "깊고 푸른 하늘과 구름 위를 나는 날개 끝",
+  "subjectEn": "Wingtip over clouds in a deep blue sky",
+  "quality": 3
+ },
+ {
+  "sha": "8d400b4e34a194c58bd2815af06e63577be4807f50a15caa91e476d18cb8d9e9",
+  "accepted": true,
+  "roles": [
+   "charter:sky"
+  ],
+  "subjectKo": "해안선과 뭉게구름 위를 지나는 비행기 날개",
+  "subjectEn": "Aircraft wing above a coastline dotted with clouds",
+  "quality": 4
+ },
+ {
+  "sha": "92f8e6b6a056be96b68862b80cc0c4281177517999311bebe37a178550f2f2b8",
+  "accepted": false,
+  "reason": "Dark and gloomy storm sky; near-duplicate of 18ea2fed05ea",
+  "roles": [],
+  "subjectKo": "먹구름 드리운 해운대 해변",
+  "subjectEn": "Storm clouds over Haeundae Beach",
+  "quality": 2
+ },
+ {
+  "sha": "9382de92f7b607f1d56acecb2951234eb09442e57bfc4c1f5c6a2080b7f23664",
+  "accepted": false,
+  "reason": "Identifiable children are the main subject",
+  "roles": [],
+  "subjectKo": "해운대 해변에서 노는 아이들",
+  "subjectEn": "Children playing on Haeundae Beach",
+  "quality": 3
+ },
+ {
+  "sha": "976f07d3bc0220873a8d49b8cad9c2659df2f0796716598999bddf221553d13a",
+  "accepted": false,
+  "reason": "Dim, mostly tent fabric; unrelated to the cycling query",
+  "roles": [],
+  "subjectKo": "텐트 입구로 내다본 흐린 바닷가",
+  "subjectEn": "Grey beach seen through a tent opening",
+  "quality": 2
+ },
+ {
+  "sha": "9a0f4a19ffb2dd720aea46426eb25067dbbf4df84308db892143b8093562e18d",
+  "accepted": true,
+  "roles": [
+   "charter:sky"
+  ],
+  "subjectKo": "노을빛 지평선과 구름바다 위의 날개",
+  "subjectEn": "Wing over a sea of clouds with a golden horizon",
+  "quality": 3
+ },
+ {
+  "sha": "9c613c596bdd1a26205a5f937ab8efe9320e0056627d1bddbc0b47cd6f665b47",
+  "accepted": true,
+  "roles": [
+   "travel:sunrise",
+   "travel:hiking",
+   "hero-candidate"
+  ],
+  "subjectKo": "분홍빛 새벽 안개가 깔린 겹겹의 산맥",
+  "subjectEn": "Layered mountain ranges in pink dawn mist",
+  "quality": 4
+ },
+ {
+  "sha": "9dae6e4518aedc74aa863015b9039c4c33288dc9caa0a59cbfc87bddfb7c03a2",
+  "accepted": false,
+  "reason": "Black and white where colour sky imagery is expected",
+  "roles": [],
+  "subjectKo": "흑백 구름 풍경",
+  "subjectEn": "Black-and-white cloudscape",
+  "quality": 3
+ },
+ {
+  "sha": "9f3e03fb4ecdf694c3345cea7d918b5a647b5865753484bb117523ac52551897",
+  "accepted": false,
+  "reason": "Prominent commercial airline branding; misleading on private charter pages",
+  "roles": [],
+  "subjectKo": "로스앤젤레스 공항에서 이륙하는 에미레이트 여객기",
+  "subjectEn": "Emirates airliner taking off at LAX",
+  "quality": 3
+ },
+ {
+  "sha": "a25a038971c1564ee36bc15e9971f468e4e20325dd6c4b49d7854c6336277064",
+  "accepted": false,
+  "reason": "Identifiable people in swimwear are the main subject",
+  "roles": [],
+  "subjectKo": "해변에서 물놀이하는 수영복 차림의 사람들",
+  "subjectEn": "Swimmers in swimwear at a beach party",
+  "quality": 2
+ },
+ {
+  "sha": "a6ce38628cb0fa2f3f45c5f359e88363b61649eabf0b658cc46292701994caec",
+  "accepted": true,
+  "roles": [
+   "city:Gangneung"
+  ],
+  "subjectKo": "정동진 갯바위에 부서지는 에메랄드빛 파도",
+  "subjectEn": "Emerald waves breaking over the rocks at Jeongdongjin",
+  "quality": 4
+ },
+ {
+  "sha": "a908c90f73a29860d30e0a15be57450e85b3daaee24d0411d68db9c613f3d136",
+  "accepted": false,
+  "reason": "Close-up of an identifiable person; irrelevant to surfing",
+  "roles": [],
+  "subjectKo": "차가운 바다에 뛰어드는 상의 탈의 남성",
+  "subjectEn": "Shirtless man plunging into icy water",
+  "quality": 2
+ },
+ {
+  "sha": "a90c93b814f821ace91e71ccedb83a1fe296621e28b0a80fb149e83ae7bde0be",
+  "accepted": true,
+  "roles": [
+   "travel:hiking",
+   "guide-cover:hiking"
+  ],
+  "subjectKo": "킬리만자로 정상 아래 바위 캠프의 텐트들",
+  "subjectEn": "Tents at a rocky high camp below the summit of Kilimanjaro",
+  "quality": 3
+ },
+ {
+  "sha": "ac15191c7e6a0dfbad999e3e62caefe0b4c5fb10a13700719283b9080f6238d2",
+  "accepted": false,
+  "reason": "Text-heavy UK road signage is the subject",
+  "roles": [],
+  "subjectKo": "자전거길 안내 표지판",
+  "subjectEn": "Cycleway direction signs",
+  "quality": 2
+ },
+ {
+  "sha": "b2bd99dcaaac72c4504a0fbf0faeaa2aff42f1a5813cdefedbdd0c5e911cb8d6",
+  "accepted": false,
+  "reason": "Museum exhibit with airline branding, heavy HDR and a baked-in border",
+  "roles": [],
+  "subjectKo": "과학관에 전시된 이베리아 747 동체",
+  "subjectEn": "Iberia 747 fuselage exhibited in a museum",
+  "quality": 2
+ },
+ {
+  "sha": "b336a2acc0235e77c0b2157dc528a5dcd037df2960c447e307aa3811a8c99bf5",
+  "accepted": true,
+  "roles": [
+   "city:Jeju",
+   "travel:oreum",
+   "hero-candidate"
+  ],
+  "subjectKo": "지미오름에서 본 성산일출봉과 우도 파노라마",
+  "subjectEn": "Panorama of Seongsan Ilchulbong and Udo from Jimi Oreum",
+  "quality": 4
+ },
+ {
+  "sha": "b5b95f6bb282381c7a3b713018d599550a89b84cd35c44ede11a18704bd9f5f8",
+  "accepted": true,
+  "roles": [
+   "charter:sky"
+  ],
+  "subjectKo": "창가 좌석에서 내려다본 초록 들판과 날개",
+  "subjectEn": "Green countryside below the wing from a window seat",
+  "quality": 4
+ },
+ {
+  "sha": "b71c2a1414eb2e68d25a51e3b6d50740c1201d3ffe7d8b5bc1215d3b85aaed61",
+  "accepted": false,
+  "reason": "Trademark logo and registration identify a specific celebrity-owned aircraft",
+  "roles": [],
+  "subjectKo": "점프맨 로고가 그려진 걸프스트림 제트기",
+  "subjectEn": "Gulfstream jet with a Jumpman logo on the tail",
+  "quality": 3
+ },
+ {
+  "sha": "b82bcb4f2bef8a392dab30308b7951bd9af5e9b1f62fe03f5c567a98ea8c5029",
+  "accepted": true,
+  "roles": [
+   "city:Jeju",
+   "travel:oreum",
+   "hero-candidate"
+  ],
+  "subjectKo": "들꽃이 핀 초록빛 제주 오름 능선",
+  "subjectEn": "Green Jeju oreum slopes scattered with wildflowers",
+  "quality": 5
+ },
+ {
+  "sha": "b9a90d31e2bbe837758e368d95acc31688783d2b4c99a5fe5bfdb8cd32b3f873",
+  "accepted": false,
+  "reason": "Insect close-up; irrelevant to Jeju oreum",
+  "roles": [],
+  "subjectKo": "차량 위의 사마귀 HDR 사진",
+  "subjectEn": "HDR photo of a praying mantis on a car roof",
+  "quality": 2
+ },
+ {
+  "sha": "ba21f965789aecddc25a76c0a33c61da4049892a06c2279c86b3e80c6627faf3",
+  "accepted": false,
+  "reason": "Screenshot of a web map with UI and copyright text; not a photo",
+  "roles": [],
+  "subjectKo": "자전거 경로를 표시한 지도 스크린숏",
+  "subjectEn": "Map screenshot with a cycling route drawn on it",
+  "quality": 1
+ },
+ {
+  "sha": "bf70f3bda75ca66f26d4eef2463401c835c63441a1c7beace966f144dad44933",
+  "accepted": true,
+  "roles": [
+   "charter:sky"
+  ],
+  "subjectKo": "빛이 스미는 구름 위를 가르는 날개",
+  "subjectEn": "Wing slicing over clouds lit by the sun",
+  "quality": 4
+ },
+ {
+  "sha": "c5787b12bfaf0a0a0558516e0dd74e9d6c359d6b3a618db7e62ba8b6bb2c4c5a",
+  "accepted": false,
+  "reason": "Iconic Machu Picchu heritage site; misleading as a generic sunrise hike for platform destinations",
+  "roles": [],
+  "subjectKo": "해 뜨는 마추픽추 유적과 안데스 산맥",
+  "subjectEn": "Machu Picchu ruins and Andes peaks at sunrise",
+  "quality": 4
+ },
+ {
+  "sha": "c8be7e2bcfab1f1a334f466fd4479498a9fbd01285ab6fb65d0b469f9de88f3b",
+  "accepted": true,
+  "roles": [
+   "guide-cover:walking"
+  ],
+  "subjectKo": "양이 노니는 초원 사이 시골길을 걷는 두 사람",
+  "subjectEn": "Two people walking a country lane past grazing sheep",
+  "quality": 4
+ },
+ {
+  "sha": "c8dde0f15209875097eb423cfd1fca2093d59e268d32f6377ef5a07ec053e4fe",
+  "accepted": false,
+  "reason": "Vintage propeller biplane; misleading for private jet charter",
+  "roles": [],
+  "subjectKo": "에어쇼에 전시된 빈티지 복엽기",
+  "subjectEn": "Vintage biplane at an air show",
+  "quality": 3
+ },
+ {
+  "sha": "cc4c7e852e90da135a8e97639326f4036ed17870978b537b4c91052328dd8ec4",
+  "accepted": false,
+  "reason": "Oil-spill response scene; negative and irrelevant to a boat tour",
+  "roles": [],
+  "subjectKo": "기름 유출 방제 붐 옆의 작업 보트",
+  "subjectEn": "Work boat beside oil-spill containment booms",
+  "quality": 2
+ },
+ {
+  "sha": "d003967be5478264e973e2ab090038071b2c2a7badde2ddfc445fbb0dff24d90",
+  "accepted": false,
+  "reason": "Military exercise; offensive/irrelevant for a travel platform",
+  "roles": [],
+  "subjectKo": "연막이 피어오르는 해변 상륙 군사 훈련",
+  "subjectEn": "Military beach-landing exercise with smoke",
+  "quality": 2
+ },
+ {
+  "sha": "d00a2f5f0dc9d6ee4dbd2709d35c840dde7c53916dcecff3e69d7c42cdbd6fb5",
+  "accepted": false,
+  "reason": "Near-duplicate of the SSJ100 black-and-white render series; abstract and not the cabin interior queried",
+  "roles": [],
+  "subjectKo": "제트기 하부와 엔진 흑백 렌더",
+  "subjectEn": "Black-and-white render of a jet underside and engine",
+  "quality": 2
+ },
+ {
+  "sha": "d2e60c13e60a504cee7027aa71a14bdd091604d1428a65636189cd4e6b036208",
+  "accepted": true,
+  "roles": [
+   "charter:sky"
+  ],
+  "subjectKo": "착륙 전 창밖으로 내려다본 바다 위 섬들",
+  "subjectEn": "Islands in a calm sea seen from the window on approach",
+  "quality": 3
+ },
+ {
+  "sha": "d4905ffb64b3314608a6f9dd723ba98181fbae526822320cf6cf6948c31446ba",
+  "accepted": false,
+  "reason": "Near-duplicate of the SSJ100 black-and-white render series; mostly black and not the cabin interior queried",
+  "roles": [],
+  "subjectKo": "날개와 엔진 흑백 렌더",
+  "subjectEn": "Black-and-white render of a wing and engine",
+  "quality": 2
+ },
+ {
+  "sha": "d6f0e0cc26f80a210b57da860df2a9883c9239c321fd7ace2462117c1d557c83",
+  "accepted": true,
+  "roles": [
+   "travel:sunrise",
+   "travel:hiking"
+  ],
+  "subjectKo": "해 뜨는 브라이스 캐니언 후두 바위 협곡",
+  "subjectEn": "Sunrise over the hoodoo canyon at Bryce",
+  "quality": 4
+ },
+ {
+  "sha": "d916d3165102e5b0cc5b9afb467c9b24806af6fa196f351192000251426f76d2",
+  "accepted": false,
+  "reason": "Military museum ships with text; irrelevant to a boat tour",
+  "roles": [],
+  "subjectKo": "박물관 군함과 잠수함",
+  "subjectEn": "Museum warship and submarine",
+  "quality": 2
+ },
+ {
+  "sha": "d9afbfba977eaabd792166c2fcbb114f70293042ceee0ff03f2dbd40e8b6173e",
+  "accepted": false,
+  "reason": "Black and white where colour beach imagery is expected",
+  "roles": [],
+  "subjectKo": "갯바위에 부서지는 파도 흑백 사진",
+  "subjectEn": "Black-and-white waves crashing on rocks",
+  "quality": 3
+ },
+ {
+  "sha": "db1dc88ae7068f3f33f7e58e4419b782f7ef3f4a1eda37f4fc22e1d4acff5776",
+  "accepted": true,
+  "roles": [
+   "city:Jeju",
+   "travel:oreum",
+   "hero-candidate"
+  ],
+  "subjectKo": "지미오름에서 바라본 성산일출봉과 해안 마을",
+  "subjectEn": "Seongsan Ilchulbong and coastal village seen from Jimi Oreum",
+  "quality": 4
+ },
+ {
+  "sha": "e3b01d93429538c152db54f6a40edd45e87280cdcb7cecb41b63db128af890ec",
+  "accepted": false,
+  "reason": "Pixel-identical duplicate of 14956c09af4d (accepted)",
+  "roles": [],
+  "subjectKo": "첫 햇살에 붉게 물든 고산 능선",
+  "subjectEn": "Alpine ridges glowing red at sunrise",
+  "quality": 5
+ },
+ {
+  "sha": "e4e84a48f5a216d10e30dca8dd26bf2029b8e9e0a4cc7675043de2f586ed4db0",
+  "accepted": false,
+  "reason": "Visible copyright watermark in the corner",
+  "roles": [],
+  "subjectKo": "파타고니아 호수 위로 지는 해",
+  "subjectEn": "Sunset over a Patagonian lake",
+  "quality": 3
+ },
+ {
+  "sha": "e55fb9e4d9db544cd0d4aaf0acb107fea1c2ce4ca8d3974a741b2f0aec159a9f",
+  "accepted": true,
+  "roles": [
+   "city:Jeju",
+   "travel:oreum"
+  ],
+  "subjectKo": "용눈이오름에서 본 풍력발전기와 중산간 들판 파노라마",
+  "subjectEn": "Panorama of wind turbines and farmland from Yongnuni Oreum",
+  "quality": 3
+ },
+ {
+  "sha": "e7265d4310ec19af1bace9b5387db7d339af14e2c35b812f88ca33deabefaf66",
+  "accepted": false,
+  "reason": "Copyright watermark; irrelevant to airports/charter",
+  "roles": [],
+  "subjectKo": "사막 화물열차 위의 여행자",
+  "subjectEn": "Traveller riding a desert freight train at sunset",
+  "quality": 3
+ },
+ {
+  "sha": "e78c5b82467e703d817763e624e0c8cd82d8ad18143d7b61567bc254239a9575",
+  "accepted": true,
+  "roles": [
+   "travel:cycling"
+  ],
+  "subjectKo": "언덕길 갈림길에 세워 둔 여행용 자전거",
+  "subjectEn": "Touring bike with panniers at a hill-road crossroads",
+  "quality": 4
+ },
+ {
+  "sha": "e7ca5b1ec39d64e891f94a1e1c31eb582ac5cb38fc33dbaabff9f5bcfcca3a3a",
+  "accepted": false,
+  "reason": "Cluttered, dim car deck with identifiable people; low quality",
+  "roles": [],
+  "subjectKo": "페리 갑판에 실린 자전거들",
+  "subjectEn": "Bicycles racked on a wet ferry deck",
+  "quality": 2
+ },
+ {
+  "sha": "e9d58f0653641b03c5924a8d1aa71e5b867d24a71ecc2225e7adc94918aced4e",
+  "accepted": true,
+  "roles": [
+   "charter:jet",
+   "charter:airport"
+  ],
+  "subjectKo": "FBO 터미널 앞에 선 노란색 비즈니스 제트기",
+  "subjectEn": "Yellow business jet parked outside an FBO terminal",
+  "quality": 3
+ },
+ {
+  "sha": "ea2f423a581b80586a34a21daada8631b62c3c19f479a34ba119d4fa44c19877",
+  "accepted": false,
+  "reason": "Street signage dominates the foreground and a blurred head intrudes; text-heavy",
+  "roles": [],
+  "subjectKo": "정지 표지판 너머로 착륙하는 여객기",
+  "subjectEn": "Airliner landing beyond a stop sign at dusk",
+  "quality": 2
+ },
+ {
+  "sha": "ee1c4003003cac3f25a80d133706c4bf94586057093ebbc77dc3c6706f24cdb1",
+  "accepted": false,
+  "reason": "Prominent Viking Line branding on the hull; ferry is not a boat tour",
+  "roles": [],
+  "subjectKo": "흐린 바다를 지나는 대형 페리",
+  "subjectEn": "Large ferry sailing on a grey sea",
+  "quality": 2
+ },
+ {
+  "sha": "eeba083e941c7731c40312ac318f66a92213f663894c1d29e085044b7f05bb07",
+  "accepted": true,
+  "roles": [
+   "travel:hiking",
+   "hero-candidate"
+  ],
+  "subjectKo": "구름바다 위 산 능선의 텐트와 오토바이",
+  "subjectEn": "Tent and motorbikes on a ridge above a sea of clouds",
+  "quality": 4
+ },
+ {
+  "sha": "f04170a021259d9e7de2d08d79f9b32eb2a2dae3194630aa6216f7b336c3d92b",
+  "accepted": false,
+  "reason": "Aerobatic biplane; misleading for private jet charter",
+  "roles": [],
+  "subjectKo": "곡예비행용 복엽기",
+  "subjectEn": "Aerobatic biplane on the apron",
+  "quality": 3
+ },
+ {
+  "sha": "f0d2928d0a8b854f5d6e35517c5da1fa9409add2b7b0558035757a2f1ab79a08",
+  "accepted": false,
+  "reason": "Baked-in yellow rounded frame; iconic New York landmark unrelated to platform destinations",
+  "roles": [],
+  "subjectKo": "자유의 여신상",
+  "subjectEn": "Statue of Liberty at dusk",
+  "quality": 3
+ },
+ {
+  "sha": "f11d0e254347a0a7af855f172b47b624533ebb4d719b061c82a6137371615be9",
+  "accepted": true,
+  "roles": [
+   "city:Jeju",
+   "travel:surfing"
+  ],
+  "subjectKo": "파도가 밀려오는 제주 중문 해변",
+  "subjectEn": "Waves rolling in at Jungmun Beach, Jeju",
+  "quality": 3
+ },
+ {
+  "sha": "f811b005c03227d2ea0d64aaf9ef9fd54ae44adc034019fe9199d17cc6f07dc0",
+  "accepted": false,
+  "reason": "Identifiable children are the main subject",
+  "roles": [],
+  "subjectKo": "튜브를 들고 바다에서 노는 어린이들",
+  "subjectEn": "Children playing with floats in the sea",
+  "quality": 3
+ },
+ {
+  "sha": "f8f0f59ea62a6f23b2e3279006fc72bb4b89f1e88fa7fce0e269c551bc0c6a23",
+  "accepted": true,
+  "roles": [
+   "travel:sunrise",
+   "travel:hiking",
+   "guide-cover:hiking",
+   "hero-candidate"
+  ],
+  "subjectKo": "해 뜨는 히말라야 고쿄 빙하와 설산",
+  "subjectEn": "Himalayan peaks and the Gokyo glacier at sunrise",
+  "quality": 5
+ }
+]

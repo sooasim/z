@@ -1,0 +1,1048 @@
+[
+  {
+    "sha": "1677cbfddd0eaadeade4f02d32da84b2db30d498c9c2e7c5334d13c81d54cbe0",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "travel:hiking",
+      "guide-cover:hiking"
+    ],
+    "subjectKo": "한라산 숲속 데크 탐방로",
+    "subjectEn": "Boardwalk trail through Hallasan forest",
+    "quality": 4
+  },
+  {
+    "sha": "1aeee567dc36d3b451147db11eb24a0eecc001cde6758cf936cca8f38a7a7c23",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "travel:hiking"
+    ],
+    "subjectKo": "안개 낀 한라산 조릿대 탐방로",
+    "subjectEn": "Misty upland trail on Hallasan",
+    "quality": 2
+  },
+  {
+    "sha": "1b08b4c307a455d6b429f064d309d89eddb9b370eb62e904dc412473ef685c48",
+    "accepted": false,
+    "reason": "Black-and-white abstract of a concrete window; not recognisably Hallasan/Jeju",
+    "roles": [],
+    "subjectKo": "흑백 콘크리트 창 추상 사진",
+    "subjectEn": "Black-and-white concrete window abstract",
+    "quality": 1
+  },
+  {
+    "sha": "2515efbbc273e2ff861021ebcd8c18c8b3cb587e43e1dfda6565cba3b252c277",
+    "accepted": false,
+    "reason": "Identifiable tourists posing at the summit marker are the main subject; fog and flat light",
+    "roles": [],
+    "subjectKo": "한라산 표지석 앞에서 기념사진을 찍는 등산객",
+    "subjectEn": "Hikers posing at a foggy summit marker",
+    "quality": 2
+  },
+  {
+    "sha": "4333bb0e227bfbf0f68cb58970b84f1726a29a00c585c7efa226f7838a78459c",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "travel:hiking"
+    ],
+    "subjectKo": "안개 속 한라산을 오르는 등산객",
+    "subjectEn": "Hikers climbing Hallasan in the fog",
+    "quality": 2
+  },
+  {
+    "sha": "898b65fe0d4c2b7511b716631f5480117db40a10fa87e10bec6bc9f1cc8278d4",
+    "accepted": false,
+    "reason": "Black-and-white; colour expected",
+    "roles": [],
+    "subjectKo": "안개 낀 데크길 흑백 사진",
+    "subjectEn": "Foggy boardwalk in black and white",
+    "quality": 2
+  },
+  {
+    "sha": "899b8623664e6b7c7be0a8e07bd0796a6ed95f5d8eac47c07424346754262f6d",
+    "accepted": false,
+    "reason": "Washed-out hazy 4.6:1 strip; horses too small to read, unusable crop",
+    "roles": [],
+    "subjectKo": "제주 조랑말 목장 파노라마",
+    "subjectEn": "Hazy panorama of a Jeju pony ranch",
+    "quality": 2
+  },
+  {
+    "sha": "a9473d2264ac7084167e8cb07511b4ff66117d11b9ac5fa44ce1eeaf6b18a13b",
+    "accepted": false,
+    "reason": "Selective-colour black-and-white edit; colour expected",
+    "roles": [],
+    "subjectKo": "한라산 숲길의 붉은 옷 등산객(부분 컬러)",
+    "subjectEn": "Selective-colour hiker on a Hallasan forest path",
+    "quality": 2
+  },
+  {
+    "sha": "bd57cabab86128dc1299dfa6d3064f3aa162f843797c3a31f23e75a0bc8a6a78",
+    "accepted": false,
+    "reason": "Black-and-white; colour expected",
+    "roles": [],
+    "subjectKo": "흑백 나무 데크 다리",
+    "subjectEn": "Black-and-white wooden footbridge",
+    "quality": 2
+  },
+  {
+    "sha": "c8b63546ecf05f0002a2a34a1751da5b49b0da139a7d8f12b10a67a70ee84766",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "travel:sunrise"
+    ],
+    "subjectKo": "해 질 녘 제주 해안도로의 야자수 실루엣",
+    "subjectEn": "Palm silhouettes at sunset on a Jeju seaside road",
+    "quality": 3
+  },
+  {
+    "sha": "cfeedb2214231902f512ef4a1141c3987fdb10013285827014e2475898333e4d",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "guide-cover:night"
+    ],
+    "subjectKo": "조명과 물안개가 어우러진 제주 하천의 밤",
+    "subjectEn": "Lit mist drifting over a Jeju city stream at night",
+    "quality": 3
+  },
+  {
+    "sha": "f4e8deba1dd3e1944dcae961d02132dae5426d17525d581aba05d2b5d834eea2",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "hero-candidate",
+      "travel:hiking",
+      "guide-cover:hiking"
+    ],
+    "subjectKo": "산철쭉이 뒤덮은 한라산 정상부",
+    "subjectEn": "Royal azaleas blanketing the slopes below Hallasan's summit",
+    "quality": 5
+  },
+  {
+    "sha": "0f1548319da6e57fe29912c82dd358f0f65ae9ea77c1621b70723c0c23dc9570",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "travel:boat"
+    ],
+    "subjectKo": "거친 제주 바다를 가르는 작은 배",
+    "subjectEn": "Small boat crossing choppy Jeju waters",
+    "quality": 3
+  },
+  {
+    "sha": "0f3cb542ec625927bbc0023c4ed092a6e2339a9cba88003e81b35aa22579c4cd",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "hero-candidate",
+      "travel:sunrise"
+    ],
+    "subjectKo": "황금빛 햇살 아래 제주 현무암 해안과 무인도",
+    "subjectEn": "Golden-hour basalt shore and islets off Jeju",
+    "quality": 5
+  },
+  {
+    "sha": "168973e912642b6f899cacee1a1ea222b1e6d0fe4c7862e479d20d7fd9f65ee3",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "charter:sky"
+    ],
+    "subjectKo": "먹구름 사이로 쏟아지는 빛내림",
+    "subjectEn": "Sunbeams breaking through storm clouds",
+    "quality": 3
+  },
+  {
+    "sha": "1f7a264b2a2e06d5fef720b5c8f60c01c9c0498a8b49fb1bc200a547de577a6f",
+    "accepted": false,
+    "reason": "Black-and-white close-up of souvenir figurines; colour expected",
+    "roles": [],
+    "subjectKo": "흑백 돌하르방 기념품 인형",
+    "subjectEn": "Black-and-white dol hareubang souvenir figurines",
+    "quality": 2
+  },
+  {
+    "sha": "65b7eb289a17e637bca4e3e0cb66b17f35005f2e80e9ff149e9ab4ff457c5923",
+    "accepted": true,
+    "roles": [
+      "city:Jeju"
+    ],
+    "subjectKo": "흐린 날 현무암 해변 너머의 섬",
+    "subjectEn": "Island beyond a basalt shore on an overcast day",
+    "quality": 3
+  },
+  {
+    "sha": "71c8db0aff07cda09b36e740f8faaa4622ea55321dad1832f1d3773ce261ba96",
+    "accepted": true,
+    "roles": [
+      "city:Jeju"
+    ],
+    "subjectKo": "테트라포드가 놓인 제주 포구 마을",
+    "subjectEn": "Jeju harbour village lined with tetrapods",
+    "quality": 2
+  },
+  {
+    "sha": "a283f8089f4fc7a805ca79d1d066eaf7e5489e68f7a436bca83c2f1a9987ccdf",
+    "accepted": false,
+    "reason": "Group of identifiable tourists posing for a photo is the main subject",
+    "roles": [],
+    "subjectKo": "섬을 배경으로 단체 사진을 찍는 관광객",
+    "subjectEn": "Tour group posing in front of sea stacks",
+    "quality": 2
+  },
+  {
+    "sha": "a69ddbf1b9f8e6871b6db8aa954b4c2179ec5e80879331dfee63e525c3a2f729",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "옥빛 바다를 따라 이어진 제주 해안 산책로",
+    "subjectEn": "Coastal walking path along Jeju's turquoise sea",
+    "quality": 3
+  },
+  {
+    "sha": "b4a92f6c639f72eb78ef476ea5dbbcff49ec47919a4f6e0919e9fe93c36b7e2a",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "travel:boat"
+    ],
+    "subjectKo": "잿빛 바다 위 섬과 고깃배",
+    "subjectEn": "Fishing boat near islets on a grey sea",
+    "quality": 2
+  },
+  {
+    "sha": "d7ae1a6d983f35ec631a1335a2af0e4474f13a9f9f1fb10534bf2184af908ff5",
+    "accepted": true,
+    "roles": [
+      "city:Jeju"
+    ],
+    "subjectKo": "화산재 지층 틈에 자란 고사리",
+    "subjectEn": "Fern growing from layered volcanic tuff",
+    "quality": 2
+  },
+  {
+    "sha": "f0555ac347564293bfe7e57f97dc17353837aed1a72673c0014edb0f2269a98b",
+    "accepted": true,
+    "reason": "Near-duplicate of 0f3cb542ec62 (alternate framing); prefer that one where only one is needed",
+    "roles": [
+      "city:Jeju",
+      "travel:sunrise"
+    ],
+    "subjectKo": "노을빛 제주 현무암 해안과 무인도",
+    "subjectEn": "Golden-hour basalt shore and islets, Jeju",
+    "quality": 4
+  },
+  {
+    "sha": "fbda51bca57e965b57db11537d197cd5e7eac0b0748631523f789cff1468bdde",
+    "accepted": true,
+    "roles": [
+      "city:Jeju"
+    ],
+    "subjectKo": "흐린 하늘 아래 펼쳐진 현무암 해안과 섬들",
+    "subjectEn": "Moody basalt coast and islets under cloud",
+    "quality": 3
+  },
+  {
+    "sha": "135c12cd33adeddf599433ea8f1bcc90cf84d534f75ba761b29dc48ac447fe17",
+    "accepted": false,
+    "reason": "Blurry cat behind glass with reflected lettering; does not depict the hanok village",
+    "roles": [],
+    "subjectKo": "유리창 너머 잠든 고양이",
+    "subjectEn": "Cat sleeping behind a shop window",
+    "quality": 1
+  },
+  {
+    "sha": "54f015fcf85f69855857f233f2ecac70f94fb4ee083a79031412ceec1150a266",
+    "accepted": true,
+    "roles": [
+      "city:Jeonju",
+      "guide-cover:market",
+      "travel:culture"
+    ],
+    "subjectKo": "한옥마을 상점에 걸린 손그림 주전자",
+    "subjectEn": "Hand-painted kettles hanging at a Jeonju village shop",
+    "quality": 3
+  },
+  {
+    "sha": "55700aaceb05ff9fec8475f43b06d86ff4c5b0c9c0dfe744a572c812db7798ca",
+    "accepted": true,
+    "roles": [
+      "city:Jeonju",
+      "guide-cover:food",
+      "travel:food"
+    ],
+    "subjectKo": "전주비빔밥과 콩나물국",
+    "subjectEn": "Jeonju bibimbap with bean-sprout soup",
+    "quality": 4
+  },
+  {
+    "sha": "5d21efaf90d3875dc5136678892b896e4e24d778ae6e47fc8eeb38aac4a3ef11",
+    "accepted": true,
+    "roles": [
+      "city:Jeonju",
+      "guide-cover:culture",
+      "travel:culture"
+    ],
+    "subjectKo": "장독대에 놓인 옹기 항아리",
+    "subjectEn": "Onggi crocks on a traditional jar terrace",
+    "quality": 3
+  },
+  {
+    "sha": "7000953fd909c09d6117f82cec7eac8d9ff173cd6d1e9c614f77706a5066a25f",
+    "accepted": true,
+    "roles": [
+      "city:Jeonju",
+      "travel:culture"
+    ],
+    "subjectKo": "알록달록 그림을 그린 소원 돌",
+    "subjectEn": "Colourful hand-painted pebbles",
+    "quality": 2
+  },
+  {
+    "sha": "7e7c4f4bed14b50c878f6e104c8900ca2924517ce1b0eb9b0a43e3d278e11722",
+    "accepted": true,
+    "roles": [
+      "city:Jeonju",
+      "guide-cover:culture",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "전주 한옥마을의 단청 대문과 꽃밭",
+    "subjectEn": "Painted gatehouse and flower beds in Jeonju Hanok Village",
+    "quality": 4
+  },
+  {
+    "sha": "d34a76d6f15f848e405b447e84fc8c7e15c0a68491e939be506e25062b3fcbdc",
+    "accepted": false,
+    "reason": "Close-up of old electrical wiring; irrelevant to the hanok village",
+    "roles": [],
+    "subjectKo": "벽에 남은 옛 전기 배선",
+    "subjectEn": "Old electrical wiring on a wall",
+    "quality": 1
+  },
+  {
+    "sha": "f1bd1cf21288710b84b42c1a7092f203cf5894aef11a835315d3a1c41741c0e7",
+    "accepted": true,
+    "roles": [
+      "city:Jeonju",
+      "stay-exterior:hanok",
+      "hero-candidate",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "해 질 녘 전주 한옥마을 기와지붕 전경",
+    "subjectEn": "Sunset over the tiled rooftops of Jeonju Hanok Village",
+    "quality": 5
+  },
+  {
+    "sha": "0b276b55ed18372a8af5ea944215d7559627c16b93c45a4237ab836089812db6",
+    "accepted": true,
+    "roles": [
+      "city:Lisbon",
+      "guide-cover:night",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "해 질 녘 리스본 광장을 지나는 28E 트램",
+    "subjectEn": "Tram 28E crossing a Lisbon square at dusk",
+    "quality": 5
+  },
+  {
+    "sha": "179473854c894ba8c9a19fe43e3e2dc6d7e09f3df6ef783f5b923c0fe37c47ba",
+    "accepted": true,
+    "roles": [
+      "city:Lisbon"
+    ],
+    "subjectKo": "그라피티 벽 앞을 지나는 리스본 노란 트램",
+    "subjectEn": "Yellow Lisbon tram passing a graffitied wall",
+    "quality": 3
+  },
+  {
+    "sha": "326a851d79f0a656c2c36497b87cfde6bbc301607ed59417a611bd1179866673",
+    "accepted": true,
+    "roles": [
+      "city:Lisbon",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "파스텔빛 건물 사이를 달리는 리스본 28번 트램",
+    "subjectEn": "Tram 28 among pastel façades in Lisbon",
+    "quality": 5
+  },
+  {
+    "sha": "42c409fdb28ee82cff0b898ec6143e68baf2f1737c421dcb4b34246a49307e4a",
+    "accepted": false,
+    "reason": "Large whisky advertisement dominates the frame; heavy tilt-shift blur",
+    "roles": [],
+    "subjectKo": "주류 광고를 단 리스본 트램",
+    "subjectEn": "Lisbon tram wrapped in a liquor advert",
+    "quality": 2
+  },
+  {
+    "sha": "49c10c95cf69903b3fd20324b595926c04911d38065ca686a1bd3174e5535b57",
+    "accepted": true,
+    "roles": [
+      "city:Lisbon",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "아우구스타 개선문 앞 리스본 트램",
+    "subjectEn": "Lisbon tram in front of the Rua Augusta Arch",
+    "quality": 4
+  },
+  {
+    "sha": "68cbd9ff70922201691e5516b0a732531cceb6dece5d2777ee3b3311c126701b",
+    "accepted": true,
+    "roles": [
+      "city:Lisbon",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "좁은 골목길을 오르는 리스본 트램",
+    "subjectEn": "Tram climbing a narrow Lisbon street",
+    "quality": 3
+  },
+  {
+    "sha": "759cbfa9dfc02a1457ade902d2a91007efb4eec14e23690f02c42df720eded0c",
+    "accepted": true,
+    "roles": [
+      "city:Lisbon"
+    ],
+    "subjectKo": "한적한 리스본 거리의 빨간 트램",
+    "subjectEn": "Red heritage tram on a quiet Lisbon street",
+    "quality": 4
+  },
+  {
+    "sha": "cf52bc7b70faecd0f17b269408c2a8a71cedb37ab3333d41acfbdaf173e18706",
+    "accepted": true,
+    "reason": "Strong vintage colour filter",
+    "roles": [
+      "city:Lisbon"
+    ],
+    "subjectKo": "상 비센트 성당을 배경으로 한 빨간 트램",
+    "subjectEn": "Red tram below São Vicente de Fora, Lisbon",
+    "quality": 3
+  },
+  {
+    "sha": "ff638969eff8c0678a77b3b59453b6135823a433cd5947206abdcfcb9bb9e361",
+    "accepted": false,
+    "reason": "Selective-colour black-and-white edit; colour expected",
+    "roles": [],
+    "subjectKo": "흑백 배경 속 노란 리스본 트램",
+    "subjectEn": "Selective-colour yellow tram in Lisbon",
+    "quality": 3
+  },
+  {
+    "sha": "07d37a4d4027de78150c58509cafdc7ad54017c6fbbdbd4b07c5fc836b64ceab",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:night"
+    ],
+    "subjectKo": "남산에서 내려다본 서울 야경",
+    "subjectEn": "Seoul at night seen from Namsan",
+    "quality": 3
+  },
+  {
+    "sha": "0af1cdc080248682f4bab76b9a0b2d8a22292e759d88d860ac65742702b77191",
+    "accepted": false,
+    "reason": "Souvenir shop shelf with glare; not representative of Namsan / N Seoul Tower",
+    "roles": [],
+    "subjectKo": "기념품 가게의 한국 캐릭터 카드지갑",
+    "subjectEn": "Korean-themed card cases in a souvenir shop",
+    "quality": 2
+  },
+  {
+    "sha": "0bf9807de1a8710b87267e92cc61865263fabb579b267bad7146d368dc144e99",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:culture"
+    ],
+    "subjectKo": "테디베어 박물관의 궁궐 건축 디오라마",
+    "subjectEn": "Teddy-bear museum diorama of palace construction",
+    "quality": 2
+  },
+  {
+    "sha": "2195bb1f5db0b7b4c82e2f258bd84bec465a7c58c535eba6c0311de6077740a4",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:culture"
+    ],
+    "subjectKo": "테디베어로 재현한 조선 궁중 행렬",
+    "subjectEn": "Teddy bears recreating a Joseon court procession",
+    "quality": 2
+  },
+  {
+    "sha": "606dea12222a745b545f80ef1cf623a452d9db1f48437c44ea390d993bc1eb23",
+    "accepted": false,
+    "reason": "Text-heavy close-up of a time-capsule plaque",
+    "roles": [],
+    "subjectKo": "남산 타임캡슐 표지석",
+    "subjectEn": "Namsan time-capsule marker plaque",
+    "quality": 1
+  },
+  {
+    "sha": "7dd6d718aa97d56c34f3056632c94b6f4d0e219214f6ab46e894b7d7756d196e",
+    "accepted": true,
+    "roles": [
+      "city:Seoul"
+    ],
+    "subjectKo": "역광 속 남산서울타워 실루엣",
+    "subjectEn": "Backlit silhouette of N Seoul Tower on Namsan",
+    "quality": 2
+  },
+  {
+    "sha": "870732586138daf6a84c8c1ae5031b31cb949dd7426f8332e68330db81cedb3e",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:night"
+    ],
+    "subjectKo": "남산에서 본 서울의 빛나는 도로",
+    "subjectEn": "Glowing roads across Seoul at night from Namsan",
+    "quality": 3
+  },
+  {
+    "sha": "9618e639d7c959a3dac5896d345c70669b5ce2fc4dbd9b2d4bb2569a4f4d24d4",
+    "accepted": false,
+    "reason": "Pillarboxed with black side bars; flat grey sky and tight crop",
+    "roles": [],
+    "subjectKo": "흐린 하늘 아래 남산서울타워 전망대",
+    "subjectEn": "N Seoul Tower observation deck under a grey sky",
+    "quality": 2
+  },
+  {
+    "sha": "99524f9ee2f5b4563da31ce205a18d36cd4348bdec9406bec379f650db23674f",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:night"
+    ],
+    "subjectKo": "남산타워 송신탑 너머 펼쳐진 서울 야경",
+    "subjectEn": "Seoul night lights beyond the N Seoul Tower mast",
+    "quality": 4
+  },
+  {
+    "sha": "dadcf1a8c9373c08f488ddd42a35b590ca4e8d7bf5dd2a7e1b5a007fdaa4958e",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:night",
+      "hero-candidate"
+    ],
+    "subjectKo": "남산에서 본 서울 도심 야경",
+    "subjectEn": "Downtown Seoul skyline at night from Namsan",
+    "quality": 4
+  },
+  {
+    "sha": "f8cf6f4d8836adbf91aa7cd67f7dbdd4d87f75075a684f7c20e6ad746cc05f51",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:night",
+      "hero-candidate"
+    ],
+    "subjectKo": "산자락에 둘러싸인 서울 도심의 밤",
+    "subjectEn": "Seoul's glittering centre ringed by mountains at night",
+    "quality": 4
+  },
+  {
+    "sha": "0ea9a84a78b3360d8461c0b1e6fa1a51b689a9b5046f3eddd5a81e174d5badaa",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "hero-candidate",
+      "stay-exterior:beach"
+    ],
+    "subjectKo": "성산일출봉과 옥빛 해변",
+    "subjectEn": "Seongsan Ilchulbong above a turquoise beach",
+    "quality": 4
+  },
+  {
+    "sha": "454e72deb88adc783cd218b084d2cfa850ccde8881996e69b84b7110f51fc798",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "hero-candidate"
+    ],
+    "subjectKo": "에메랄드빛 바다 위로 솟은 성산일출봉",
+    "subjectEn": "Seongsan Ilchulbong tuff cone rising from an emerald sea",
+    "quality": 5
+  },
+  {
+    "sha": "49cdcc5702da01a62737a51961cabcb46b22c1d70688c94d5385602440ca82a4",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "travel:hiking",
+      "hero-candidate"
+    ],
+    "subjectKo": "성산일출봉 정상에서 내려다본 성산 마을",
+    "subjectEn": "Seongsan village from the summit of Ilchulbong",
+    "quality": 4
+  },
+  {
+    "sha": "6b12e23047721ae01cdb8f6c9b88f7c70b3624f593d7250806aa3955be12a9c4",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "hero-candidate",
+      "travel:hiking"
+    ],
+    "subjectKo": "성산일출봉에서 본 성산포 파노라마",
+    "subjectEn": "Panorama of Seongsan from Ilchulbong",
+    "quality": 4
+  },
+  {
+    "sha": "75738e7d8d08b94f758718f4ef29ef442127b605eab0672d36feff6cc44ba343",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "travel:oreum",
+      "hero-candidate"
+    ],
+    "subjectKo": "푸른 초원 언덕과 제주 동쪽 바다",
+    "subjectEn": "Green hillside meadow overlooking Jeju's east coast",
+    "quality": 4
+  },
+  {
+    "sha": "845b94e99ac698d3d44d6e9dfeefa6e6963a5dd10933ae4bebc8e69c72beaa7f",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "travel:hiking"
+    ],
+    "subjectKo": "관광객으로 붐비는 성산일출봉 앞 잔디밭",
+    "subjectEn": "Visitors on the lawn below Seongsan Ilchulbong",
+    "quality": 3
+  },
+  {
+    "sha": "8cf6fd14f75718578138a5a6a1ffc68a7ebd0cb03b2d828bfebd9b8850e09639",
+    "accepted": false,
+    "reason": "Car park and tour buses dominate; corporate sign on the hillside",
+    "roles": [],
+    "subjectKo": "주차장에서 본 성산일출봉",
+    "subjectEn": "Seongsan Ilchulbong behind a tour-bus car park",
+    "quality": 2
+  },
+  {
+    "sha": "978f1e124830b13f9b0db5fed918e425380bb8e203bbff991d4597e1b52bb3c6",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "travel:oreum"
+    ],
+    "subjectKo": "나무 울타리 너머 성산 앞바다와 오름",
+    "subjectEn": "Fenced meadow overlooking Seongsan's bay and oreum",
+    "quality": 3
+  },
+  {
+    "sha": "9b6734d2d4347e2fabbeb1171ffd03bfa1e28f85da2a42da149ae24fb669f7b9",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "travel:hiking",
+      "guide-cover:hiking"
+    ],
+    "subjectKo": "성산일출봉 탐방로와 푸른 초지",
+    "subjectEn": "Seongsan Ilchulbong trail descending through green slopes",
+    "quality": 4
+  },
+  {
+    "sha": "a4c49e26a1b87408d31c9597c1bb872d6513e612fecd9525228c0cfb8d395fb9",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "travel:boat"
+    ],
+    "subjectKo": "성산일출봉 아래 작은 포구와 보트",
+    "subjectEn": "Cove with boats beneath Seongsan Ilchulbong",
+    "quality": 4
+  },
+  {
+    "sha": "e734ea63fb9cb3d2acff1f60641b0192ccf955d8055e8b262040e7dad0fa8a0f",
+    "accepted": true,
+    "roles": [
+      "city:Jeju"
+    ],
+    "subjectKo": "초원 너머 알록달록한 성산 마을 지붕",
+    "subjectEn": "Colourful Seongsan village roofs beyond a meadow",
+    "quality": 3
+  },
+  {
+    "sha": "1a433fb43b0e411791456d71a008bb29f4b0f0998a81417f99e857684f097dc6",
+    "accepted": true,
+    "roles": [
+      "city:Sokcho",
+      "guide-cover:temple"
+    ],
+    "subjectKo": "설악산 신흥사 법당과 석등",
+    "subjectEn": "Sinheungsa Temple hall and stone lantern, Seoraksan",
+    "quality": 4
+  },
+  {
+    "sha": "37cb7dbf7c320883969c9155499ffad3c57546a3a7c95a4f40afba4b59bf542c",
+    "accepted": true,
+    "reason": "Heavy HDR processing",
+    "roles": [
+      "city:Sokcho",
+      "travel:hiking",
+      "guide-cover:hiking"
+    ],
+    "subjectKo": "설악산 능선 너머로 보이는 속초 바다",
+    "subjectEn": "Seoraksan ridges stretching to the Sokcho coast",
+    "quality": 3
+  },
+  {
+    "sha": "68d55cfa71f3d45533d12a675ed986349b806d4ab12f4dca428807c0987fe3fd",
+    "accepted": true,
+    "roles": [
+      "city:Sokcho",
+      "stay-exterior:beach"
+    ],
+    "subjectKo": "이른 아침 속초 해변의 파도",
+    "subjectEn": "Early-morning waves on a Sokcho beach",
+    "quality": 3
+  },
+  {
+    "sha": "7246a5904573c6f910b236f4fc13258304146ecfeb645b9e60972552387ab2eb",
+    "accepted": false,
+    "reason": "Blurry 1994 concert snapshot; identifiable performer, unrelated to travel",
+    "roles": [],
+    "subjectKo": "1994년 설악산 청소년 축제 공연",
+    "subjectEn": "1994 Seoraksan youth festival concert",
+    "quality": 1
+  },
+  {
+    "sha": "7d9fdc17d5faa6b0e320f19933b9febfdcdabe9c4bf54bf72cc11191a9e84587",
+    "accepted": true,
+    "roles": [
+      "city:Sokcho",
+      "travel:hiking"
+    ],
+    "subjectKo": "눈 덮인 설악산 계곡",
+    "subjectEn": "Snow-covered valley in Seoraksan",
+    "quality": 3
+  },
+  {
+    "sha": "b8c53d256126f0a37d82ba3d4d966f812f2a555e6b919fd61c260a0b38f20b98",
+    "accepted": true,
+    "roles": [
+      "city:Sokcho"
+    ],
+    "subjectKo": "속초 해변 모래사장의 갈매기",
+    "subjectEn": "Seagulls on the sand at a Sokcho beach",
+    "quality": 3
+  },
+  {
+    "sha": "d5875361c6105f6af31d2770511bf3dc066709c94ccc89f772364f4ff416a855",
+    "accepted": true,
+    "roles": [
+      "city:Sokcho",
+      "travel:hiking",
+      "guide-cover:hiking"
+    ],
+    "subjectKo": "붉게 물든 설악산 단풍숲",
+    "subjectEn": "Blazing autumn maples in Seoraksan",
+    "quality": 4
+  },
+  {
+    "sha": "e47ee57a83ff4fc68a0e9f5d9350651e8dde30e64f62ef476f170fa9dcd42f34",
+    "accepted": true,
+    "roles": [
+      "city:Sokcho",
+      "guide-cover:temple"
+    ],
+    "subjectKo": "설산을 배경으로 한 신흥사 단청",
+    "subjectEn": "Sinheungsa's painted eaves against snowy peaks",
+    "quality": 4
+  },
+  {
+    "sha": "e65f2aa8900f775d4366f9a103bb16c2cf9057546e27b64efcafe65e983318bb",
+    "accepted": false,
+    "reason": "Close-up portrait of an identifiable person is the main subject",
+    "roles": [],
+    "subjectKo": "설악산 산책로의 여행자 인물 사진",
+    "subjectEn": "Portrait of a traveller on a Seoraksan path",
+    "quality": 2
+  },
+  {
+    "sha": "f3c131570428290e346c2da2ed23a3c0683e2756071e9f63e0f2a5dfc9cb108f",
+    "accepted": true,
+    "reason": "Location unverified (title 'KR-34'); no city role assigned",
+    "roles": [
+      "guide-cover:temple",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "연등이 걸린 사찰 문과 초록 숲길",
+    "subjectEn": "Temple gate with lotus lanterns opening onto a forest path",
+    "quality": 4
+  },
+  {
+    "sha": "f8c6caac3b0689669c402604be467b7fecf876a54adc2b82b03eddc3826d1c46",
+    "accepted": false,
+    "reason": "Abstract close-up of a painted door; does not depict Sokcho/Seoraksan",
+    "roles": [],
+    "subjectKo": "파란 칠이 벗겨진 나무 문",
+    "subjectEn": "Weathered blue-painted wooden door",
+    "quality": 3
+  },
+  {
+    "sha": "fbb7a204c5febd85ea9090ab226a2bed03553aa79e9cc1185a7a5207faffdb14",
+    "accepted": false,
+    "reason": "Faded scanned film print with date stamp; low quality",
+    "roles": [],
+    "subjectKo": "안개 낀 설악산 (옛 필름 사진)",
+    "subjectEn": "Misty Seoraksan on faded film",
+    "quality": 1
+  },
+  {
+    "sha": "0a4d680278f4b300c91901e3a9b22aab95f098f2a326166dd4f46694a06ce8b7",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:night"
+    ],
+    "subjectKo": "남산에서 내려다본 서울 시가지 야경",
+    "subjectEn": "Seoul cityscape at night from Namsan",
+    "quality": 3
+  },
+  {
+    "sha": "0c8911c463cf0f2b90b85e814e4638c105c0f484ed946b13c1a4455b210d1d55",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:night"
+    ],
+    "subjectKo": "한강에 비친 서울의 밤 불빛",
+    "subjectEn": "Seoul's lights reflected in the Han River",
+    "quality": 3
+  },
+  {
+    "sha": "116f9b81ceeacfd78358a0959f78e40f8c28e2eb76040f3f08e7ec3fdac514a1",
+    "accepted": false,
+    "reason": "Underexposed; murky brown sky with little detail",
+    "roles": [],
+    "subjectKo": "탁한 밤하늘 아래 서울 도심",
+    "subjectEn": "Murky night skyline of Seoul",
+    "quality": 1
+  },
+  {
+    "sha": "2ef21db382cacf5c20142f254d783170ca54d2c28872615bc3e424d61791cec3",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:night"
+    ],
+    "subjectKo": "푸른 밤 한강 너머 롯데월드타워",
+    "subjectEn": "Lotte World Tower glowing over the Han River at night",
+    "quality": 5
+  },
+  {
+    "sha": "368fa3dae297618c01c25565ad4578814b512312d84c7540bc857989a99d212b",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:night"
+    ],
+    "subjectKo": "조명이 켜진 한강 다리의 저녁",
+    "subjectEn": "Illuminated Han River bridge at blue hour",
+    "quality": 4
+  },
+  {
+    "sha": "5bb9e563694d2e7399a0d22e3f4be467ac25ec8be7c42464969354ca0f62121d",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:cafe"
+    ],
+    "subjectKo": "서울 카페의 아이스 아메리카노",
+    "subjectEn": "Iced Americano in a Seoul café",
+    "quality": 3
+  },
+  {
+    "sha": "65bcd5b6013a442c884d86efae546557b4f08a598e429e3b3cfad4aceffcf32e",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:night",
+      "hero-candidate"
+    ],
+    "subjectKo": "롯데월드타워가 빛나는 서울 야경 파노라마",
+    "subjectEn": "Seoul night panorama with Lotte World Tower",
+    "quality": 5
+  },
+  {
+    "sha": "7d8e31bc804179fda91a6c7cc9050acb916c7c466f0f6006255cb4c759f15f7d",
+    "accepted": false,
+    "reason": "Underexposed; half the frame is black sky with little detail",
+    "roles": [],
+    "subjectKo": "어두운 서울 한강 야경",
+    "subjectEn": "Dark night view over the Han River",
+    "quality": 1
+  },
+  {
+    "sha": "97d7ba1a146e0fa40005915fafc1a1be630ec1d9d7313cb3d4171411ec865cc5",
+    "accepted": true,
+    "reason": "Window reflections at left edge",
+    "roles": [
+      "city:Seoul",
+      "guide-cover:night"
+    ],
+    "subjectKo": "남산서울타워 전망대에서 본 서울 야경 파노라마",
+    "subjectEn": "Seoul night panorama from N Seoul Tower",
+    "quality": 3
+  },
+  {
+    "sha": "bfd30c7f60d58c3e0978142c08e37ddb53f8c45cd7dcce77ce1f55a45049d91f",
+    "accepted": false,
+    "reason": "Visual duplicate of 0c8911c463cf (same photographer, re-upload)",
+    "roles": [],
+    "subjectKo": "한강에 비친 서울의 밤 불빛",
+    "subjectEn": "Seoul's lights reflected in the Han River",
+    "quality": 3
+  },
+  {
+    "sha": "d66563459b4d217d83bdad0ca200df97c58079d5fb17471c14c38509ec66a070",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:night"
+    ],
+    "subjectKo": "보랏빛 하늘 아래 서울 골목의 밤",
+    "subjectEn": "Seoul back-street buildings under a violet night sky",
+    "quality": 3
+  },
+  {
+    "sha": "ef142971f7d4a02a7c2905380a5302fd1d90c2273d2ef89a4def8d32ba0d4476",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:night",
+      "hero-candidate"
+    ],
+    "subjectKo": "롯데월드타워와 서울 도심 야경",
+    "subjectEn": "Seoul's night skyline with Lotte World Tower",
+    "quality": 5
+  },
+  {
+    "sha": "1db8b71d5c05b43c4f7d5e908dc683cb955ba90b95db4a62257f5503c5390a32",
+    "accepted": false,
+    "reason": "Product labels and trademarks fill the frame (text/brand-heavy)",
+    "roles": [],
+    "subjectKo": "도쿄 거리의 음료 자판기",
+    "subjectEn": "Tokyo street drinks vending machine",
+    "quality": 2
+  },
+  {
+    "sha": "383a136825c80f1bef4ab8bbb97433ae03a529eaa7c321138577cdd5a90cfcdf",
+    "accepted": true,
+    "roles": [
+      "city:Tokyo",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "쇼핑객으로 붐비는 도쿄 번화가 횡단보도",
+    "subjectEn": "Shoppers on a busy downtown Tokyo crossing",
+    "quality": 3
+  },
+  {
+    "sha": "3b747adc473ff84775c62cfb11242e59f01cc3a11215618ed989840462dd6a7f",
+    "accepted": false,
+    "reason": "Product labels and trademarks fill the frame (text/brand-heavy)",
+    "roles": [],
+    "subjectKo": "도쿄 거리의 음료 자판기",
+    "subjectEn": "Tokyo street drinks vending machine",
+    "quality": 2
+  },
+  {
+    "sha": "3d63d97dec9c728d4a07ef3d4a43f8b49a091cc1b6a60b1acbd332de8eb6f594",
+    "accepted": false,
+    "reason": "Out-of-focus close-up of an identifiable person",
+    "roles": [],
+    "subjectKo": "도쿄 밤거리의 인물 (초점 흐림)",
+    "subjectEn": "Blurred street portrait in Tokyo",
+    "quality": 1
+  },
+  {
+    "sha": "448d2a32b282805d661e8ca666793df8827e63d71b9af20c04d2782496481441",
+    "accepted": false,
+    "reason": "Close-up portrait of an identifiable man is the main subject",
+    "roles": [],
+    "subjectKo": "네온 보케 속 남성 인물 사진",
+    "subjectEn": "Portrait of a man against Tokyo neon bokeh",
+    "quality": 2
+  },
+  {
+    "sha": "6870f48d73c8e050dd194089a53b69343779c01b45a566336dc102beb3bc566b",
+    "accepted": false,
+    "reason": "Heavily underexposed street; dull and dark",
+    "roles": [],
+    "subjectKo": "어두운 도쿄 주택가 골목",
+    "subjectEn": "Dim residential street in Tokyo",
+    "quality": 1
+  },
+  {
+    "sha": "72c22aee7d82279bf62cbb045dc2f4f7a8f1ac1bf4d6d4aa77f56df57f82386d",
+    "accepted": true,
+    "roles": [
+      "city:Tokyo",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "셔터가 내려진 도쿄 뒷골목",
+    "subjectEn": "Quiet Tokyo backstreet with shuttered shops",
+    "quality": 3
+  },
+  {
+    "sha": "955b87a6e705a87fadf8918c732d5c8e30a46ccd7038d3c417dba6363e2f763f",
+    "accepted": true,
+    "roles": [
+      "city:Tokyo",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "가로수가 늘어선 도쿄 도심 보행로",
+    "subjectEn": "Tree-lined pedestrian boulevard in central Tokyo",
+    "quality": 3
+  },
+  {
+    "sha": "9eea77be5f718bdf06697d806d9676daa18f8628dd7ec460e3844d6af1ef6d91",
+    "accepted": false,
+    "reason": "Out-of-focus close-up of an identifiable person",
+    "roles": [],
+    "subjectKo": "도쿄 밤거리에서 웃는 여성 (초점 흐림)",
+    "subjectEn": "Blurred portrait of a laughing woman in Tokyo",
+    "quality": 1
+  },
+  {
+    "sha": "b478c5a28da0ecd92e280ce65e45d25d3de41521c23473a3ecd18e8d9d963939",
+    "accepted": true,
+    "roles": [
+      "city:Tokyo",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "낙엽이 흩어진 도쿄 가을 보도",
+    "subjectEn": "Autumn leaves on a Tokyo sidewalk",
+    "quality": 3
+  },
+  {
+    "sha": "c1d1dd0c1e8d2ea5b18cb5f1238eb024d6a2ce88c546a0ba3e04c0ac53590cc1",
+    "accepted": true,
+    "roles": [
+      "city:Tokyo",
+      "guide-cover:night"
+    ],
+    "subjectKo": "도쿄 밤거리의 불빛을 바라보는 연인",
+    "subjectEn": "Couple facing the bokeh lights of a Tokyo night street",
+    "quality": 3
+  },
+  {
+    "sha": "e747b91e04f23bf04911760f4cebdc6f95acb07f460b69bcb239c0cd1789549b",
+    "accepted": false,
+    "reason": "Product labels and trademarks fill the frame (text/brand-heavy)",
+    "roles": [],
+    "subjectKo": "도쿄 거리의 음료 자판기",
+    "subjectEn": "Tokyo street drinks vending machine",
+    "quality": 2
+  }
+]

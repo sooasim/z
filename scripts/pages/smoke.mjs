@@ -159,9 +159,9 @@ try {
     await shot('06-checkout-pay');
     await page.getByRole('button', { name: /결제하기|Pay now/ }).click();
     await page.waitForURL(/\/checkout\/success\//, { timeout: 15000 });
-    await page.getByText(/결제가 승인되었습니다|Payment approved/).waitFor({ timeout: 15000 });
+    await page.getByText(/결제가 승인되었|Payment approved/).waitFor({ timeout: 15000 });
     await shot('07-paid');
-    await page.getByRole('link', { name: /예약\/주문 상세 보기|View booking/ }).click();
+    await page.getByRole('link', { name: /예약 상세|예약\/주문 상세 보기|Booking details|View booking/ }).click();
     await page.waitForURL(/\/trips\/[0-9a-f-]{36}\/?/, { timeout: 15000 });
     await page.getByText(target.title).first().waitFor({ timeout: 15000 });
     const txt = await page.locator('main').innerText();
@@ -191,7 +191,7 @@ try {
     await step('host accepts a home exchange', async () => {
       await as('host');
       await page.goto(`${URL0}/exchange/${requested}/`, { waitUntil: 'domcontentloaded' });
-      await page.getByRole('button', { name: /조건 수락|Accept v/ }).click();
+      await page.getByRole('button', { name: /이 조건으로 수락|조건 수락|Accept these terms|Accept v/ }).click();
       await page.getByText(/안전 수칙|Verification|검증/).first().waitFor({ timeout: 15000 });
       check('host accepts a home exchange', true);
     });
@@ -204,8 +204,8 @@ try {
     await page.locator('input[type=radio][name=dep]').nth(1).check({ timeout: 15000 });
     await page.getByRole('button', { name: /예약하기|Book now/ }).click();
     await page.getByRole('button', { name: /결제하기|Pay now/ }).click({ timeout: 15000 });
-    await page.getByText(/결제가 승인되었습니다|Payment approved/).waitFor({ timeout: 15000 });
-    await page.getByRole('link', { name: /상세 보기|View booking/ }).click();
+    await page.getByText(/결제가 승인되었|Payment approved/).waitFor({ timeout: 15000 });
+    await page.getByRole('link', { name: /주문 상세|상세 보기|Order & vouchers|View booking/ }).click();
     await page.waitForURL(/\/orders\/[0-9a-f-]{36}\/?/, { timeout: 15000 });
     await page.getByText(/결제 완료|PAID/).first().waitFor({ timeout: 15000 });
     check('tour order paid (MOCK)', true, page.url().replace(URL0, ''));

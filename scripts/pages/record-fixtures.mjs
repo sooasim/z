@@ -576,7 +576,7 @@ async function recordAll(templates) {
   const jobs = [];
   for (const persona of personas) for (const t of plain) for (const q of variants(t) ?? []) jobs.push([persona, t, q]);
   // content types used by the web
-  for (const persona of personas) for (const type of ['page', 'story', 'destination', 'faq', 'charter']) for (const q of [{}, { limit: 24 }, { limit: 50 }]) jobs.push([persona, `/v1/content/${type}`, q]);
+  for (const persona of personas) for (const type of ['page', 'story', 'destination', 'faq', 'charter', 'legacy']) for (const q of [{}, { limit: 24 }, { limit: 50 }]) jobs.push([persona, `/v1/content/${type}`, q]);
   log(`recording ${jobs.length} list/singleton requests…`);
   await pool(jobs, async ([persona, t, q]) => {
     const r = await record(persona, t, q);
@@ -605,7 +605,7 @@ async function recordAll(templates) {
       for (const v of values) for (const q of qs) detailJobs.push([persona, t.replace(segs[pi], encodeURIComponent(v)), q]);
     }
     // content/{type}/{slug}
-    for (const type of ['story', 'destination', 'page', 'faq']) for (const slug of idList(persona, `content:${type}`)) detailJobs.push([persona, `/v1/content/${type}/${encodeURIComponent(slug)}`, {}]);
+    for (const type of ['story', 'destination', 'page', 'faq', 'legacy']) for (const slug of idList(persona, `content:${type}`)) detailJobs.push([persona, `/v1/content/${type}/${encodeURIComponent(slug)}`, {}]);
     // reviews for each property; host calendars
     for (const id of idList(persona, 'properties')) detailJobs.push([persona, '/v1/reviews', { targetType: 'PROPERTY', targetId: id, limit: 6 }]);
     for (const id of ids[`${persona}:properties`] ?? []) {
@@ -677,6 +677,8 @@ async function main() {
       propertyIds: all('properties'),
       hostPropertyIds: [...new Set([...personaIds('host', 'properties'), ...personaIds('hostJeju', 'properties'), ...personaIds('exchange', 'properties')])].sort(),
       storySlugs: all('content:story'),
+      pageSlugs: all('content:page'),
+      legacySlugs: all('content:legacy'),
       travelProductIds: all('travel-products'),
       guideIds: all('guides'),
       exchangeIds: all('exchanges'),

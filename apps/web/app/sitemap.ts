@@ -5,7 +5,7 @@ import { items, str } from '@/lib/shape';
 
 export const revalidate = 3600;
 
-const STATIC = ['/', '/stay', '/map', '/exchange', '/guide-friends', '/travel', '/jetpool-charter', '/discover', '/stories', '/login', '/signup', '/support'];
+const STATIC = ['/', '/stay', '/map', '/exchange', '/guide-friends', '/travel', '/jetpool-charter', '/discover', '/stories', '/about', '/archive', '/credits', '/login', '/signup', '/support'];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
@@ -14,7 +14,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const res = await serverGet<any>('/v1/seo/sitemap', { revalidate: 3600, timeoutMs: 2000 });
   const extra = items(res)
     .map((e: any) => {
-      const loc = str(e, 'loc', 'url', 'path');
+      // CMS PAGE entries are served at /about/<slug> by the web (the API's generic path is /p/<slug>).
+      const loc = str(e, 'loc', 'url', 'path').replace(/^((?:https?:\/\/[^/]+)?)\/p\//, '$1/about/');
       if (!loc) return null;
       const url = loc.startsWith('http') ? loc : SITE_URL + (loc.startsWith('/') ? loc : '/' + loc);
       const lm = str(e, 'lastmod', 'lastModified', 'updatedAt');

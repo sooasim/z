@@ -1,0 +1,826 @@
+[
+  {
+    "sha": "210d3f5e8f15ed792b876291f953168ab741c5a039c84d5f29d97aa7ccda1113",
+    "accepted": true,
+    "roles": [
+      "city:Jeju",
+      "stay-exterior:villa"
+    ],
+    "subjectKo": "바다가 내려다보이는 애월의 모던 주택과 해안 마을",
+    "subjectEn": "Modern villa above the sea and the coastal town of Aewol, Jeju",
+    "quality": 4
+  },
+  {
+    "sha": "406d63cbce084464e32c655e32911f9deaf1979c15f6c094ccb93694bcd5aae8",
+    "accepted": true,
+    "roles": [
+      "city:Jeju"
+    ],
+    "subjectKo": "야자수와 밭 너머로 바다가 보이는 애월 들녘",
+    "subjectEn": "Palm trees and farm fields running down to the sea in Aewol",
+    "quality": 3
+  },
+  {
+    "sha": "573ac023174705f1ec7d4d145c09e76418d73fda35cad909616f0bf39c1e817a",
+    "accepted": true,
+    "roles": [
+      "city:Jeju"
+    ],
+    "subjectKo": "푸른 바다와 밭이 어우러진 애월 해안 풍경",
+    "subjectEn": "Fields and blue sea along the Aewol coast",
+    "quality": 4
+  },
+  {
+    "sha": "28646aab9c1e382b567f48e6ca4d74acb92546fc2ee2e65c36827be42909299b",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:culture"
+    ],
+    "subjectKo": "북촌에서 바라본 국립민속박물관 목탑형 전각",
+    "subjectEn": "The pagoda-style hall of the National Folk Museum seen from Bukchon",
+    "quality": 4
+  },
+  {
+    "sha": "2ad32bd0dbdb257a66cc09e141c9c85e5af973a8485c562f693c0e0dabd9ccfb",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "stay-exterior:hanok",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "도심 빌딩이 보이는 북촌 한옥 골목길",
+    "subjectEn": "Bukchon hanok lane with downtown towers in the distance",
+    "quality": 3
+  },
+  {
+    "sha": "4582870047ca24a62a6a6bbd7f8cc5190c51cea21faf28d93f2f2f4c4f9780cd",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "stay-exterior:hanok"
+    ],
+    "subjectKo": "갤러리로 쓰이는 북촌 전통 한옥 외관",
+    "subjectEn": "Traditional hanok house used as a gallery in Bukchon",
+    "quality": 3
+  },
+  {
+    "sha": "460ffb7f2ccbc8ffdfbc4ad5662949543bfdc2c71ec91c657f210bcf1f2d48a6",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "종로 빌딩숲을 배경으로 한 북촌 초입 거리",
+    "subjectEn": "Busy street at the edge of Bukchon with Jongno towers behind",
+    "quality": 4
+  },
+  {
+    "sha": "81b8c85a366770dd6f9c40e313a15736b94b145589350ada606fdfc02f8f3804",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "stay-exterior:hanok",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "맑은 날 북촌 한옥 골목을 걷는 여행자",
+    "subjectEn": "A traveler walking a sunny Bukchon hanok alley",
+    "quality": 4
+  },
+  {
+    "sha": "899736d47efcf3976805480fc9470f84ea2532c4913806e7c712dfa3c351e5c2",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "stay-exterior:hanok",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "기와지붕이 이어진 북촌 한옥마을 골목",
+    "subjectEn": "Tiled hanok rooftops lining a Bukchon alley",
+    "quality": 4
+  },
+  {
+    "sha": "997a98188d8a04352079c16ee7d237f219fc46629560785f9a35f7523811a79b",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "stay-exterior:hanok"
+    ],
+    "subjectKo": "파란 하늘 아래 북촌 한옥 담장과 처마",
+    "subjectEn": "Hanok walls and eaves under a blue sky in Bukchon",
+    "quality": 4
+  },
+  {
+    "sha": "a62bb51a15712ce23d65ed3896bf7cdfee3e776b895915620fd64fa6f2febf13",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "stay-exterior:hanok",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "언덕을 따라 오르는 북촌 한옥 골목",
+    "subjectEn": "Uphill hanok lane in Bukchon Hanok Village",
+    "quality": 4
+  },
+  {
+    "sha": "dbf0e502d2babbcbe1d668c497b3c4e2f7b4feca8060ec8c678f8f6fd3c953bf",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "stay-exterior:hanok"
+    ],
+    "subjectKo": "북악산을 배경으로 펼쳐진 북촌 한옥 지붕",
+    "subjectEn": "Bukchon hanok rooftops with the mountains behind",
+    "quality": 3
+  },
+  {
+    "sha": "ec2e02bd82154f2e7c2cf31527d88eedacba6434e1103efb3d3b2cfc1ed40f5f",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "stay-exterior:hanok",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "N서울타워가 보이는 북촌 한옥 골목",
+    "subjectEn": "Bukchon hanok alley framing N Seoul Tower",
+    "quality": 5
+  },
+  {
+    "sha": "f4a8954156cf8ca6fb0642ae005f9c6f089b3ffafc759f38daf4943729e81e1a",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "stay-exterior:hanok",
+      "hero-candidate"
+    ],
+    "subjectKo": "한옥 지붕 너머 서울 도심과 남산타워 전경",
+    "subjectEn": "Panorama over Bukchon rooftops to downtown Seoul and Namsan Tower",
+    "quality": 5
+  },
+  {
+    "sha": "0063ca0b177acd61d01a3031abd79e590054e23cde9492b04d98fbe8d53e35df",
+    "accepted": false,
+    "reason": "Advertising posters for a zipline tour (model's face, heavy text); not a view of Chiang Mai",
+    "roles": [],
+    "subjectKo": "치앙마이 액티비티 광고 포스터",
+    "subjectEn": "Zipline tour advertising posters",
+    "quality": 1
+  },
+  {
+    "sha": "1fc4f21071b9732c09b96a01865e589d5253fd5f9144950cc98a10fe0c10fc3e",
+    "accepted": false,
+    "reason": "Generic row of parked scooters under a shop sign; does not represent Chiang Mai old city",
+    "roles": [],
+    "subjectKo": "가게 앞에 줄지어 선 스쿠터",
+    "subjectEn": "Row of parked scooters",
+    "quality": 2
+  },
+  {
+    "sha": "211b66744e73678e593626b7f77cfac6a377807f4bec777e689192b4f6d3b8d4",
+    "accepted": false,
+    "reason": "Close-up of identifiable people (Songkran water fight) as the main subject",
+    "roles": [],
+    "subjectKo": "송끄란 물축제에 참여한 사람들",
+    "subjectEn": "Revellers at the Songkran water fight",
+    "quality": 3
+  },
+  {
+    "sha": "569f1d794db75ae44314781b59ca747fec7f1573bbd44ee24c2060d36020d945",
+    "accepted": true,
+    "roles": [
+      "city:Chiang Mai",
+      "guide-cover:temple",
+      "travel:culture"
+    ],
+    "subjectKo": "도이수텝 사원으로 오르는 나가 계단",
+    "subjectEn": "Naga serpent staircase up to Wat Phra That Doi Suthep",
+    "quality": 4
+  },
+  {
+    "sha": "82403ca9bc5e9ccb808a70ee5069f4642f1c12cf1e97fb9bf4f90d579077ba3d",
+    "accepted": false,
+    "reason": "Two parked Segways against a wall; irrelevant to the location",
+    "roles": [],
+    "subjectKo": "주차된 세그웨이 두 대",
+    "subjectEn": "Two parked Segways",
+    "quality": 2
+  },
+  {
+    "sha": "95d3873db9477ba2267140e339e674b2ce888f4d198a36c0b8046e591b105657",
+    "accepted": true,
+    "roles": [
+      "city:Chiang Mai"
+    ],
+    "subjectKo": "분수가 솟는 치앙마이 구시가지 해자",
+    "subjectEn": "Fountain in the moat around Chiang Mai old city",
+    "quality": 2
+  },
+  {
+    "sha": "a744e887fd6041f4b231d9eecd02eddae2bdfad36daa78592675dfdcf716397f",
+    "accepted": false,
+    "reason": "Tour-operator banner; branding/text is the only subject",
+    "roles": [],
+    "subjectKo": "세그웨이 투어 업체 현수막",
+    "subjectEn": "Segway tour company banner",
+    "quality": 1
+  },
+  {
+    "sha": "ae837e0c248b624daaeb315cfe164bb13bc09984266590be00441d8d635f6c5d",
+    "accepted": false,
+    "reason": "Identifiable people posing close-up on a truck (Songkran); people are the main subject",
+    "roles": [],
+    "subjectKo": "송끄란 축제 트럭 위의 사람들",
+    "subjectEn": "Songkran revellers riding a truck",
+    "quality": 3
+  },
+  {
+    "sha": "cc4d8464b38c50ef838e55ec9f73b5679f096411c73e02408a6db9107b6951a6",
+    "accepted": false,
+    "reason": "Identifiable people with water guns close-up (Songkran); people are the main subject",
+    "roles": [],
+    "subjectKo": "물총을 든 송끄란 축제 참가자들",
+    "subjectEn": "Songkran participants with water guns",
+    "quality": 3
+  },
+  {
+    "sha": "d0ae73bd200af7612351c7d42ee66afd90315fb09e9cd34e71e3d7248c04d49c",
+    "accepted": true,
+    "roles": [
+      "city:Chiang Mai",
+      "guide-cover:night",
+      "guide-cover:cafe"
+    ],
+    "subjectKo": "해 질 녘 불이 켜진 치앙마이 구시가지 카페 골목",
+    "subjectEn": "Cafe-lined lane in Chiang Mai old city at dusk",
+    "quality": 4
+  },
+  {
+    "sha": "d8c9f1bfc6fdb605a8d5e10ca42121ce1e3cf66688d2bc42c50539a463a70aff",
+    "accepted": true,
+    "roles": [
+      "city:Chiang Mai",
+      "guide-cover:temple",
+      "guide-cover:night",
+      "travel:festival"
+    ],
+    "subjectKo": "이펭 축제 밤 불꽃이 터지는 왓 판따오",
+    "subjectEn": "Fireworks over Wat Phan Tao during the Yi Peng festival",
+    "quality": 4
+  },
+  {
+    "sha": "068c7566024f2291e107d966b405311d1284328a11a55070eddbb6fca03b777d",
+    "accepted": true,
+    "roles": [
+      "city:Busan",
+      "guide-cover:culture"
+    ],
+    "subjectKo": "감천문화마을을 내려다보는 어린왕자와 여우 조형물",
+    "subjectEn": "Little Prince and fox statues overlooking Gamcheon Culture Village",
+    "quality": 3
+  },
+  {
+    "sha": "07f4bab697ba4374e57797690ea227d22018b4e4327421bc703c887769b40d86",
+    "accepted": true,
+    "roles": [
+      "city:Busan",
+      "guide-cover:culture",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "알록달록한 감천문화마을의 계단식 집들",
+    "subjectEn": "Colourful terraced houses of Gamcheon Culture Village",
+    "quality": 4
+  },
+  {
+    "sha": "376c2cacd5b8b7a1cbcac377e42e95255eabbcee653194b818d0ddc9496b96e6",
+    "accepted": true,
+    "roles": [
+      "city:Busan",
+      "guide-cover:culture"
+    ],
+    "subjectKo": "감천문화마을 담장의 색색 집 모양 조형물",
+    "subjectEn": "Rainbow house-shaped art installation on a Gamcheon wall",
+    "quality": 4
+  },
+  {
+    "sha": "4a7b8a0a6cdaea39c32e111e01d63ab663d8b49be8ba6e271c0ee75f5cf244df",
+    "accepted": true,
+    "roles": [
+      "city:Busan",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "감천마을 산비탈의 파스텔톤 주택들",
+    "subjectEn": "Pastel hillside houses in Gamcheon",
+    "quality": 3
+  },
+  {
+    "sha": "5a026a75ff2a213748e620f412c9a43721c67dcac1225f693c0978e263bb1999",
+    "accepted": true,
+    "roles": [
+      "city:Busan",
+      "guide-cover:culture"
+    ],
+    "subjectKo": "파란 지붕과 물탱크가 어우러진 감천마을 지붕 풍경",
+    "subjectEn": "Blue roofs and water tanks across the rooftops of Gamcheon",
+    "quality": 4
+  },
+  {
+    "sha": "68749681dd410ef8564bab44b75af7be438c5e6c8f661bbdb6b617a53eb905bb",
+    "accepted": true,
+    "roles": [
+      "city:Busan",
+      "guide-cover:culture"
+    ],
+    "subjectKo": "감천마을 전망대의 어린왕자와 여우",
+    "subjectEn": "The Little Prince and fox at the Gamcheon lookout",
+    "quality": 3
+  },
+  {
+    "sha": "6c71aa89cf7f54ea8ff680b717148054ab36c39f542a58cc624c24c3afad8d97",
+    "accepted": true,
+    "roles": [
+      "city:Busan",
+      "guide-cover:culture"
+    ],
+    "subjectKo": "어린왕자 조형물 너머로 펼쳐진 감천문화마을",
+    "subjectEn": "Gamcheon Culture Village beyond the Little Prince statue",
+    "quality": 4
+  },
+  {
+    "sha": "6efe4a42440a9ec1d73d6e21a375f5f109a6cdac0830f0eb11085620fd1bc088",
+    "accepted": true,
+    "roles": [
+      "city:Busan"
+    ],
+    "subjectKo": "전선 사이로 보이는 감천마을 파란 지붕들",
+    "subjectEn": "Blue rooftops of Gamcheon seen through overhead wires",
+    "quality": 3
+  },
+  {
+    "sha": "7533e774c492bd1d33533b61a1db51885d52735d387900698aec1ec16391ec78",
+    "accepted": true,
+    "roles": [
+      "city:Busan",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "흐린 날 내려다본 감천문화마을 전경",
+    "subjectEn": "Overcast view across Gamcheon Culture Village",
+    "quality": 3
+  },
+  {
+    "sha": "909f041671dfccc92d1e189892134d6df148d4e9a09b6118b9e98b122c089ced",
+    "accepted": true,
+    "roles": [
+      "city:Busan"
+    ],
+    "subjectKo": "흐릿한 어린왕자 뒤로 보이는 감천마을 집들",
+    "subjectEn": "Gamcheon houses behind an out-of-focus Little Prince statue",
+    "quality": 2
+  },
+  {
+    "sha": "a9e06ab24ff14f6752ae8d599a91152fb50765e0357f90c43ea5cf84293f6c15",
+    "accepted": true,
+    "roles": [
+      "city:Busan",
+      "guide-cover:culture"
+    ],
+    "subjectKo": "감천마을을 바라보는 어린왕자 조형물",
+    "subjectEn": "Close-up of the Little Prince statue gazing over Gamcheon",
+    "quality": 3
+  },
+  {
+    "sha": "d13c73a7f8bdf2fac0f8d2b94336e0c510dde160a85dda4d64ce30645bb934a8",
+    "accepted": true,
+    "roles": [
+      "city:Busan",
+      "guide-cover:culture"
+    ],
+    "subjectKo": "산자락을 따라 빼곡한 감천문화마을 전경",
+    "subjectEn": "Gamcheon Culture Village packed along the hillside",
+    "quality": 4
+  },
+  {
+    "sha": "b263169728d971d798d86a14bb8599efdf0bfc9358dc16b102443e3b5781f2fe",
+    "accepted": true,
+    "roles": [
+      "city:Gangneung"
+    ],
+    "subjectKo": "강릉 해변의 나무 그네 벤치",
+    "subjectEn": "Wooden swing bench on a Gangneung beach",
+    "quality": 3
+  },
+  {
+    "sha": "e13fe7ecddd95505b8938a9e35bd1d2bf362fb4d8985e8050f2a8cdd1654537b",
+    "accepted": false,
+    "reason": "Macro of seaweed on sand; gives no sense of Gangneung as a destination",
+    "roles": [],
+    "subjectKo": "모래 위 해초 클로즈업",
+    "subjectEn": "Seaweed on beach sand (macro)",
+    "quality": 2
+  },
+  {
+    "sha": "e21162f7fcd3c4ae2a54fa48243342d62de1b2d34f28b80bc6350e0f1c6a60da",
+    "accepted": true,
+    "roles": [
+      "city:Gangneung"
+    ],
+    "subjectKo": "파도가 부서지는 강릉 앞바다 바위섬",
+    "subjectEn": "Waves breaking around rock islets off Gangneung",
+    "quality": 3
+  },
+  {
+    "sha": "e892c73c09aed922e16e4d66f2537e09798caa4f209ffededcbda3b3977be13b",
+    "accepted": true,
+    "roles": [
+      "city:Gangneung"
+    ],
+    "subjectKo": "강릉 바다 앞 모래사장에서 쉬는 두 사람의 발",
+    "subjectEn": "Two pairs of feet relaxing on a Gangneung beach",
+    "quality": 3
+  },
+  {
+    "sha": "24cbec20bf454ec6c14974ec681b03bdb4ce30261662254505d2a4ed99bc6566",
+    "accepted": true,
+    "roles": [
+      "city:Busan",
+      "guide-cover:night"
+    ],
+    "subjectKo": "밤바다에 비친 광안대교 야경",
+    "subjectEn": "Gwangan Bridge lit up and reflected in the night sea",
+    "quality": 4
+  },
+  {
+    "sha": "2e25ad28ab3bc508aa544493585071ab9405c6e1f8933b3d6daf75bf841a86d4",
+    "accepted": false,
+    "reason": "Exact duplicate of 24cbec20bf45 (same Flickr photo 31877281478); keep the higher-resolution Commons copy",
+    "roles": [],
+    "subjectKo": "밤바다에 비친 광안대교 야경",
+    "subjectEn": "Gwangan Bridge lit up at night (duplicate)",
+    "quality": 4
+  },
+  {
+    "sha": "49e653027d8221b06165367497fd6cccccb98efb5d0b9019a9878207520f189a",
+    "accepted": false,
+    "reason": "Extreme 5:1 panorama only 1023x195 px; too small and thin for any layout slot",
+    "roles": [],
+    "subjectKo": "광안리 해변 파노라마",
+    "subjectEn": "Thin panorama of Gwangalli Beach",
+    "quality": 2
+  },
+  {
+    "sha": "55064453af3594c05fab9d53989f7751986236908542224768dcca3c1fe89bab",
+    "accepted": true,
+    "roles": [
+      "city:Busan",
+      "guide-cover:night",
+      "travel:festival"
+    ],
+    "subjectKo": "광안리 해변의 야간 행사 인파와 광안대교",
+    "subjectEn": "Night event crowds on Gwangalli Beach with Gwangan Bridge",
+    "quality": 4
+  },
+  {
+    "sha": "73492ac113f5b85eb5227f465c0abb7ede557f53eb307a4e7fafff7799ada87c",
+    "accepted": true,
+    "roles": [
+      "city:Busan",
+      "guide-cover:night"
+    ],
+    "subjectKo": "광안리 해변에서 본 광안대교 야경",
+    "subjectEn": "Gwangan Bridge at night from Gwangalli Beach",
+    "quality": 3
+  },
+  {
+    "sha": "a3292cd333a9a7779f08be14fe04fb01489937fc7b69f28ef1efc6d8b2dcba6c",
+    "accepted": true,
+    "roles": [
+      "city:Busan",
+      "guide-cover:night",
+      "travel:festival",
+      "hero-candidate"
+    ],
+    "subjectKo": "광안대교 위로 터지는 부산불꽃축제",
+    "subjectEn": "Busan International Fireworks Festival over Gwangan Bridge",
+    "quality": 5
+  },
+  {
+    "sha": "f36950b45e0222bcd8778feef5741fd17767d97114a08922523b1f408f1b1e5b",
+    "accepted": false,
+    "reason": "Black-and-white rendition; colour expected",
+    "roles": [],
+    "subjectKo": "흑백으로 담은 광안대교 야경",
+    "subjectEn": "Gwangan Bridge at night in black and white",
+    "quality": 3
+  },
+  {
+    "sha": "fdc9264cabb5bd952f44507531943e60c771749339779aac0e491f970c0e45eb",
+    "accepted": true,
+    "roles": [
+      "city:Busan",
+      "guide-cover:night"
+    ],
+    "subjectKo": "잔잔한 물결 위 광안대교의 밤 풍경",
+    "subjectEn": "Gwangan Bridge glowing over calm night water",
+    "quality": 3
+  },
+  {
+    "sha": "0cb6b2d7b04d886f120db7de2efcc03069686291c7c0934389310e217ad37d43",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:palace"
+    ],
+    "subjectKo": "경복궁 궁문 앞을 지키는 수문장",
+    "subjectEn": "Gate guards in traditional dress at Gyeongbokgung",
+    "quality": 3
+  },
+  {
+    "sha": "125aec7b732281b26f53adf7fb26ba036dd9fcc3b60bc8ccd2f6f0d814234853",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:palace"
+    ],
+    "subjectKo": "우산을 든 관람객으로 붐비는 경복궁 앞마당",
+    "subjectEn": "Umbrella-carrying crowds in a Gyeongbokgung courtyard",
+    "quality": 3
+  },
+  {
+    "sha": "2773933cb871c414c564b67568c204c1456e928654427e2478ce23991a9128c1",
+    "accepted": false,
+    "reason": "Heavily over-processed HDR with an unnatural brown cast; misrepresents the palace colours",
+    "roles": [],
+    "subjectKo": "과도한 HDR로 보정된 경복궁 문",
+    "subjectEn": "Over-processed HDR view of a Gyeongbokgung gate",
+    "quality": 2
+  },
+  {
+    "sha": "367046503387c172d20b273d4b428cf51b2a16c9af85f4ed98caeaacb6db135a",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:palace",
+      "hero-candidate"
+    ],
+    "subjectKo": "눈 덮인 경복궁 향원정과 북악산",
+    "subjectEn": "Snow-covered Hyangwonjeong Pavilion at Gyeongbokgung with Bugaksan",
+    "quality": 5
+  },
+  {
+    "sha": "866f3d3a3f7cc202f689020fa7756403b87536afa18cb8bdbc1af47da7dca16a",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:palace",
+      "hero-candidate"
+    ],
+    "subjectKo": "단풍 물든 경복궁 향원정과 연못 반영",
+    "subjectEn": "Hyangwonjeong Pavilion reflected in its pond in autumn",
+    "quality": 5
+  },
+  {
+    "sha": "b681c66b4aa10b122894517a34fb0c8f72bf7b6adeb81234fe9a8cda3df68c73",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:palace"
+    ],
+    "subjectKo": "눈 쌓인 경복궁 담장길과 설산",
+    "subjectEn": "Snowy walled lane inside Gyeongbokgung beneath the mountains",
+    "quality": 4
+  },
+  {
+    "sha": "c22071d47ddcfc6fc855654f8a5a870f88942f6743156a6004dca0c1d6394f81",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:culture"
+    ],
+    "subjectKo": "경복궁 전각 처마의 화려한 단청",
+    "subjectEn": "Ornate dancheong painting under Gyeongbokgung eaves",
+    "quality": 3
+  },
+  {
+    "sha": "ca9d5d43185b14c6de244fc641ea3088ec278b0f4df35e1317581bb5de7b3270",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:palace",
+      "hero-candidate"
+    ],
+    "subjectKo": "연못에 비친 경복궁 경회루",
+    "subjectEn": "Gyeonghoeru Pavilion mirrored in its pond",
+    "quality": 5
+  },
+  {
+    "sha": "e31c428346407a03fc3497a0db28e309b53019a3d2a4a1cb45d16b320edd653d",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:palace"
+    ],
+    "subjectKo": "흐린 하늘 아래 경복궁 궁문과 마당",
+    "subjectEn": "Gyeongbokgung gate and courtyard under grey skies",
+    "quality": 3
+  },
+  {
+    "sha": "ea727ddf71f7ad645fe1998e72711103ec81085c9d46c41359e6b253016a392b",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:palace"
+    ],
+    "subjectKo": "여름 연잎 사이로 이어진 향원정 다리",
+    "subjectEn": "Bridge to Hyangwonjeong Pavilion among summer lotus leaves",
+    "quality": 4
+  },
+  {
+    "sha": "f24de8a1d324a57f04a4995282a013f1f945f7dd8619d9c27c65a2adedb8da50",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:palace"
+    ],
+    "subjectKo": "눈 내린 경복궁 근정전",
+    "subjectEn": "Geunjeongjeon throne hall of Gyeongbokgung after snowfall",
+    "quality": 4
+  },
+  {
+    "sha": "f9e1df434a3587b31de3cb4952e5683f8528fb1c604c1c40cf40e78b8bf85981",
+    "accepted": true,
+    "roles": [
+      "city:Seoul",
+      "guide-cover:palace"
+    ],
+    "subjectKo": "산을 배경으로 한 경복궁 담장길과 관람객",
+    "subjectEn": "Visitors along the walled paths of Gyeongbokgung below the mountains",
+    "quality": 3
+  },
+  {
+    "sha": "781a27c949a2baa27a9a9dc277fa8a76a273551e22aecbef3a1aea1f0210222f",
+    "accepted": true,
+    "roles": [
+      "city:Gyeongju",
+      "travel:culture",
+      "hero-candidate"
+    ],
+    "subjectKo": "노을 진 하늘 아래 경주의 석탑",
+    "subjectEn": "Stone pagodas under a Gyeongju sunset",
+    "quality": 5
+  },
+  {
+    "sha": "9601d5cc1f89643087479d64cabbcdab14b46e623757ebe2b2abdec22dcd8e48",
+    "accepted": true,
+    "roles": [
+      "city:Gyeongju",
+      "guide-cover:temple"
+    ],
+    "subjectKo": "붉은 기둥이 늘어선 경주 사찰 회랑",
+    "subjectEn": "Red-pillared temple corridor in Gyeongju",
+    "quality": 4
+  },
+  {
+    "sha": "adb89289f8e98ee975e7493741d12a5ba4352eb37e77772218164f6fa77c2460",
+    "accepted": true,
+    "roles": [
+      "city:Gyeongju",
+      "guide-cover:temple",
+      "travel:culture"
+    ],
+    "subjectKo": "불국사 돌계단과 석축",
+    "subjectEn": "Stone stairway and terraces of Bulguksa Temple",
+    "quality": 4
+  },
+  {
+    "sha": "c0ae9b2fbe8bc7baf146a16308bfd520010d77223c561e593ff289f997e13fed",
+    "accepted": true,
+    "roles": [
+      "city:Gyeongju",
+      "guide-cover:temple"
+    ],
+    "subjectKo": "햇살 비치는 불국사 석축과 전각",
+    "subjectEn": "Sunlit stone terraces and halls of Bulguksa Temple",
+    "quality": 4
+  },
+  {
+    "sha": "14a0d0446e1b1af981d6351c78e71ac8d453ef3bfb7052375fd916be523c415d",
+    "accepted": true,
+    "roles": [
+      "city:Busan",
+      "guide-cover:night"
+    ],
+    "subjectKo": "해운대 해변 산책로의 밤 풍경",
+    "subjectEn": "Haeundae beachfront promenade at night",
+    "quality": 2
+  },
+  {
+    "sha": "27f438bc3eea3211273771ca54208380ea77fcf7c723943ed228903f7da58ea5",
+    "accepted": true,
+    "roles": [
+      "city:Busan"
+    ],
+    "subjectKo": "해운대 백사장의 HAEUNDAE 글자 조형물",
+    "subjectEn": "HAEUNDAE letter sculpture on the beach sand",
+    "quality": 3
+  },
+  {
+    "sha": "43eaeecfb9b55ca1a8ba1d88a05ada3c323eae38fc498650260485eb7d022eed",
+    "accepted": true,
+    "roles": [
+      "city:Busan"
+    ],
+    "subjectKo": "초고층 빌딩이 솟은 해운대 해수욕장",
+    "subjectEn": "Haeundae Beach beneath its skyscrapers",
+    "quality": 4
+  },
+  {
+    "sha": "448ef57eb06f6fdad7f37ca5822c5a1020413c2939def94e1ae6776c4cac6dce",
+    "accepted": true,
+    "roles": [
+      "city:Busan"
+    ],
+    "subjectKo": "산책하는 사람들로 붐비는 해운대 백사장",
+    "subjectEn": "Strollers on the sands of Haeundae Beach",
+    "quality": 3
+  },
+  {
+    "sha": "6a1976da45b9c84d4ea040637a6e4c9b4e4b8ea24c74af4313806758d747639d",
+    "accepted": true,
+    "roles": [
+      "city:Busan"
+    ],
+    "subjectKo": "해운대 앞바다에 선 동상",
+    "subjectEn": "Statue standing in the sea off Haeundae",
+    "quality": 2
+  },
+  {
+    "sha": "723b49a779d138e04434be7e8bfb52c0d238e0e4c90b67625c5adc2279b2583e",
+    "accepted": true,
+    "roles": [
+      "city:Busan"
+    ],
+    "subjectKo": "노을 지는 해운대 해변의 실루엣",
+    "subjectEn": "Silhouettes on Haeundae Beach at sunset",
+    "quality": 3
+  },
+  {
+    "sha": "73317affe17acddb122c16f2dafff11aa9eca68962392245b2661f95d9607dc8",
+    "accepted": true,
+    "roles": [
+      "city:Busan"
+    ],
+    "subjectKo": "여름 피서객으로 가득한 해운대 해수욕장",
+    "subjectEn": "Haeundae Beach packed with summer swimmers",
+    "quality": 4
+  },
+  {
+    "sha": "7349fcefd4afcfeea920d2c3b8c724cdc2a4d59b33a4d640c746f2e91c85e097",
+    "accepted": true,
+    "roles": [
+      "city:Busan"
+    ],
+    "subjectKo": "맑은 날 해운대 해변과 갯바위",
+    "subjectEn": "Haeundae Beach and shoreline rocks on a clear day",
+    "quality": 4
+  },
+  {
+    "sha": "76988f3db8577787c2a4a727097fa5d4dc7367b1697eef43844d8bd25f1b99a5",
+    "accepted": true,
+    "roles": [
+      "city:Busan",
+      "guide-cover:walking"
+    ],
+    "subjectKo": "해운대 해변으로 이어지는 보행자 거리",
+    "subjectEn": "Pedestrian shopping street leading to Haeundae Beach",
+    "quality": 3
+  },
+  {
+    "sha": "7eb396c78c6ad624d030b89c62921f3db5fd95757887c2e7c837a78facb9a294",
+    "accepted": false,
+    "reason": "A single identifiable stranger reading on steps is the main subject; weak sense of place",
+    "roles": [],
+    "subjectKo": "해변 계단에 앉아 책 읽는 사람",
+    "subjectEn": "Man reading on beach steps",
+    "quality": 2
+  },
+  {
+    "sha": "a59a056f51ce98f95f6156eb20b91f325168852b7e11b2128f686b8583f920c4",
+    "accepted": true,
+    "roles": [
+      "city:Busan",
+      "hero-candidate"
+    ],
+    "subjectKo": "에메랄드빛 바다와 해운대 해변 전경",
+    "subjectEn": "Sweeping view of Haeundae Beach and emerald water",
+    "quality": 5
+  },
+  {
+    "sha": "dca83701c9a188ced5989cd7326e77601d3727ba856ebd4c9b63c534566524f2",
+    "accepted": true,
+    "roles": [
+      "city:Busan"
+    ],
+    "subjectKo": "넓게 펼쳐진 해운대 백사장",
+    "subjectEn": "The wide sands of Haeundae Beach",
+    "quality": 3
+  }
+]

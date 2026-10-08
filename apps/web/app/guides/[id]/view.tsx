@@ -14,7 +14,9 @@ import { placeLabel } from '@/lib/places';
 import { ApiError } from '@/lib/errors';
 import { StateView, NotFoundState } from '@/components/states';
 import { MonthCalendar, type DayInfo } from '@/components/calendar';
-import { FavoriteButton } from '@/components/cards';
+import { FavoriteButton, guideCoverUrl } from '@/components/cards';
+import { Photo, PhotoCredit } from '@/components/media';
+import { useMediaMap } from '@/lib/media';
 import { Alert, Avatar, Badge, Button, ButtonLink, ErrorText, Icon, Money, Qty, Section, Select, Textarea, MobileActionBar } from '@/components/ui';
 import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { ReviewsSection } from '@/components/public/Reviews';
@@ -32,6 +34,7 @@ const kstMinutes = (iso: string) => {
 const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 
 export default function GuideProfileView() {
+  useMediaMap();
   const { id } = useParams<{ id: string }>();
   const { L, lang } = useI18n();
   const { user } = useAuth();
@@ -130,7 +133,10 @@ export default function GuideProfileView() {
           <>
             <Breadcrumbs items={[{ href: '/guide-friends', label: L('가이드 프렌드', 'Guide friends') }, ...(city ? [{ href: `/guide-friends?q=${encodeURIComponent(g.city)}`, label: city }] : []), { label: g.name }]} />
             <header className="card flat" style={{ padding: 0, overflow: 'hidden', marginBottom: 'var(--sp-6)' }}>
-              <div style={{ height: 140, background: `center / cover no-repeat url(${postcardFor(g.city, g.id)})` }} aria-hidden="true" />
+              <div style={{ height: 180, position: 'relative', background: 'var(--surface-3)' }} aria-hidden="true">
+                <Photo src={guideCoverUrl(raw) || postcardFor(g.city, g.id)} seed={g.id} alt="" eager sizes="(max-width: 1100px) 100vw, 1100px" style={{ display: 'block', width: '100%', height: '100%' }} />
+                <PhotoCredit src={guideCoverUrl(raw) || postcardFor(g.city, g.id)} seed={g.id} style={{ top: 8, bottom: 'auto' }} />
+              </div>
               <div className="row" style={{ padding: '0 var(--sp-5) var(--sp-5)', alignItems: 'flex-end', gap: 16, marginTop: -44 }}>
                 <span style={{ borderRadius: '50%', boxShadow: '0 0 0 4px var(--surface)' }}>
                   <Avatar name={g.name} src={g.avatar || undefined} size={96} verified={g.verified} decorative />

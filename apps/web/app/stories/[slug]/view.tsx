@@ -4,17 +4,17 @@ import { useParams } from 'next/navigation';
 import { useI18n } from '@/lib/i18n';
 import { useApi } from '@/lib/hooks';
 import { arr, item, items, str } from '@/lib/shape';
-import { postcardFor } from '@/lib/art';
 import { ApiError } from '@/lib/errors';
 import { canonicalPlace, findPlace, placeLabel } from '@/lib/places';
 import { StateView, NotFoundState } from '@/components/states';
 import { Alert, ButtonLink, DateText, HeadingLevel, Icon } from '@/components/ui';
 import { Breadcrumbs } from '@/components/public/Breadcrumbs';
-import { Markdown } from '@/components/public/Markdown';
-import { mdExcerpt } from '@/components/public/labels';
+import { CmsExtras, Photo, PhotoCredit, RichMarkdown, cmsHero, markdownExcerpt } from '@/components/media';
+import { useMediaMap } from '@/lib/media';
 
 function MoreStories({ current }: { current: string }) {
   const { L } = useI18n();
+  useMediaMap();
   const st = useApi<any>('/v1/content/story', { query: { limit: 6 } });
   const rows = items(st.data).filter((s: any) => str(s, 'slug') !== current).slice(0, 3);
   if (!rows.length) return null;
@@ -28,11 +28,11 @@ function MoreStories({ current }: { current: string }) {
             return (
               <Link key={slug} href={`/stories/${slug}`} className="lcard" style={{ textDecoration: 'none' }}>
                 <div className="media" style={{ aspectRatio: '16 / 10' }}>
-                  <img src={str(s, 'data.coverUrl', 'coverUrl') || postcardFor(str(s, 'title'), slug)} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Photo src={cmsHero(s) || '/art/postcards/city.svg'} seed={slug} alt="" sizes="(max-width: 640px) 100vw, 360px" style={{ width: '100%', height: '100%' }} />
                 </div>
                 <div className="body">
                   <h3 className="lcard-title" style={{ whiteSpace: 'normal' }}>{str(s, 'title')}</h3>
-                  <p className="small muted" style={{ margin: 0 }}>{str(s, 'summary') || mdExcerpt(str(s, 'bodyMd'), 60)}</p>
+                  <p className="small muted" style={{ margin: 0 }}>{str(s, 'summary') || markdownExcerpt(str(s, 'bodyMd', 'body'), 60)}</p>
                 </div>
               </Link>
             );
@@ -47,8 +47,13 @@ function MoreStories({ current }: { current: string }) {
 export default function StoryView() {
   const { slug } = useParams<{ slug: string }>();
   const { L, lang } = useI18n();
-  const st = useApi<any>(`/v1/content/story/${encodeURIComponent(slug)}`);
-  if (st.error instanceof ApiError && st.error.kind === 'not_found')
+  useMediaMap();
+  const story = useApi<any>(`/v1/content/story/${encodeURIComponent(slug)}`);
+  // LEGACY_CONTENT (migrated wontc.co.kr pages that are not stories) shares the /stories/<slug> URL space.
+  const storyMissing = story.error instanceof ApiError && story.error.kind === 'not_found';
+  const legacy = useApi<any>(storyMissing ? `/v1/content/legacy/${encodeURIComponent(slug)}` : null);
+  const st = storyMissing ? legacy : story;
+  if (storyMissing && legacy.error instanceof ApiError && legacy.error.kind === 'not_found')
     return <NotFoundState as="h1" title={L('스토리를 찾을 수 없어요', 'We can’t find that story')} body={L('글이 내려갔거나 주소가 바뀌었을 수 있어요.', 'It may have been unpublished or moved.')} back={{ href: '/stories', label: L('다른 스토리 읽기', 'Read other stories') }} />;
   return (
     <StateView state={st} skeleton="detail">
@@ -56,6 +61,7 @@ export default function StoryView() {
         const s = item(d);
         const title = str(s, 'title');
         const body = str(s, 'bodyMd', 'body', 'content', 'markdown', 'text');
+        const hero = cmsHero(s);
         const tags = arr<string>(s, 'data.tags');
         const place = tags.map((t) => findPlace(t)).find(Boolean);
         const locale = (str(s, 'locale') || 'ko-KR').toLowerCase();
@@ -77,8 +83,12 @@ export default function StoryView() {
               </p>
             </header>
             {lang === 'en' && locale.startsWith('ko') && <Alert>This story is only available in Korean for now.</Alert>}
-            <img src={str(s, 'data.coverUrl', 'coverUrl') || postcardFor(title, slug)} alt="" style={{ width: '100%', borderRadius: 'var(--r-xl)', aspectRatio: '16 / 9', objectFit: 'cover', margin: '24px 0' }} />
-            {body ? <Markdown source={body} /> : <p className="muted">{L('본문이 아직 준비되지 않았어요.', 'The full story is not available yet.')}</p>}
+            <figure style={{ position: 'relative', margin: '24px 0', borderRadius: 'var(--r-xl)', overflow: 'hidden', aspectRatio: '16 / 9', background: 'var(--surface-3)' }}>
+              <Photo src={hero || '/art/postcards/city.svg'} seed={slug} alt={str(s, 'data.heroAlt') || ''} eager sizes="(max-width: 800px) 100vw, 760px" style={{ width: '100%', height: '100%' }} />
+              <PhotoCredit src={hero || '/art/postcards/city.svg'} seed={slug} />
+            </figure>
+            {body ? <RichMarkdown source={body} dropTitle={title} omit={hero ? [hero] : undefined} /> : <p className="muted">{L('본문이 아직 준비되지 않았어요.', 'The full story is not available yet.')}</p>}
+            <CmsExtras e={s} hero={hero} />
             {place && (
               <div className="card flat row between" style={{ background: 'var(--surface-2)', marginTop: 'var(--sp-8)' }}>
                 <span>

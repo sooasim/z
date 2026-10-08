@@ -11,6 +11,10 @@ import { TourCard } from '@/components/public/TourCard';
 import { Icon, type IconName } from '@/components/ui';
 import { HomeRail, RailNav } from '@/components/public/HomeRail';
 import s from '@/components/public/public.module.css';
+import { charterPhotos, cityPhoto, heroPhotos, useMediaMap } from '@/lib/media';
+import { canonicalPlace } from '@/lib/places';
+import { Photo, PhotoCredit } from '@/components/media';
+import m from '@/components/media/media.module.css';
 
 /** `en` is the canonical (API) city name used in search links; `ko`/`en` are display names. */
 const DESTINATIONS: Array<{ ko: string; en: string; art: string; tag: [string, string] }> = [
@@ -27,6 +31,7 @@ const DESTINATIONS: Array<{ ko: string; en: string; art: string; tag: [string, s
 function DestinationRail() {
   const { lang, L } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
+  useMediaMap();
   const title = L('어디서 살아볼까요?', 'Where will you live next?');
   return (
     <section className="section" aria-labelledby="dest-h">
@@ -45,7 +50,7 @@ function DestinationRail() {
       <div className="rail" ref={ref} tabIndex={0} aria-label={`${title} — ${L('좌우로 스크롤', 'scroll horizontally')}`}>
         {DESTINATIONS.map((d) => (
           <Link key={d.en} href={`/stay?q=${encodeURIComponent(d.en)}`} className={s.destCard}>
-            <img src={`/art/postcards/${d.art}.svg`} alt="" loading="lazy" />
+            <Photo src={cityPhoto(d.en, canonicalPlace) || `/art/postcards/${d.art}.svg`} seed={d.en} alt="" sizes="(max-width: 640px) 78vw, 260px" />
             <span className={s.cap}>
               <strong>{d[lang]}</strong>
               <span>{d.tag[lang === 'ko' ? 0 : 1]}</span>
@@ -63,16 +68,23 @@ const FALLBACK_BLOCKS = [
   { key: 'local-life', tone: 'sand', art: 'seoul', ko: { title: 'Local Life', body: '관광지가 아닌 동네의 일상. 현지 프렌드와 걷고, 먹고, 이야기하는 여행.', cta: '가이드 프렌드 만나기' }, en: { title: 'Local Life', body: 'Neighbourhood life, not tourist spots. Walk, eat and talk with local friends.', cta: 'Meet guide friends' }, href: '/guide-friends' },
 ] as const;
 
+/** Real photo for a brand block: charter → a jet photo, otherwise the city photo behind the block's postcard name. */
+function blockPhoto(key: string, art: string): string {
+  if (/charter|jetpool/i.test(key) && charterPhotos().length) return charterPhotos()[0];
+  return `/art/postcards/${art}.svg`;
+}
+
 function BrandBlocks() {
   const { lang, L } = useI18n();
+  useMediaMap();
   const st = useApi<any>('/v1/content/page', { query: { limit: 50 } });
   const entry = items(st.data).find((e: any) => str(e, 'slug') === 'wont-home');
   // CMS blocks are authored in Korean; the English UI keeps the bilingual fallback copy.
   const remote = lang === 'ko' || /^en/i.test(str(entry, 'locale')) ? arr(entry, 'data.blocks', 'blocks') : [];
   const blocks =
     remote.length > 0
-      ? remote.map((b: any, i: number) => ({ key: str(b, 'key', 'id') || String(i), tone: (['navy', 'coral', 'sand'] as const)[i % 3], art: str(b, 'art') || FALLBACK_BLOCKS[i % 3].art, title: str(b, 'title'), body: str(b, 'body', 'summary', 'text'), cta: str(b, 'cta', 'ctaLabel') || L('자세히', 'Learn more'), href: str(b, 'href', 'url', 'link') || '/' }))
-      : FALLBACK_BLOCKS.map((b) => ({ key: b.key, tone: b.tone, art: b.art, ...b[lang], href: b.href }));
+      ? remote.map((b: any, i: number) => ({ key: str(b, 'key', 'id') || String(i), tone: (['navy', 'coral', 'sand'] as const)[i % 3], art: str(b, 'art') || FALLBACK_BLOCKS[i % 3].art, image: str(b, 'imageUrl', 'image', 'photoUrl'), title: str(b, 'title'), body: str(b, 'body', 'summary', 'text'), cta: str(b, 'cta', 'ctaLabel') || L('자세히', 'Learn more'), href: str(b, 'href', 'url', 'link') || '/' }))
+      : FALLBACK_BLOCKS.map((b) => ({ key: b.key, tone: b.tone, art: b.art, image: '', ...b[lang], href: b.href }));
   return (
     <section className="section" aria-labelledby="brand-h">
       <p className="eyebrow">WONT Travel Club → JETPOOL</p>
@@ -80,7 +92,7 @@ function BrandBlocks() {
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(280px, 100%), 1fr))' }}>
         {blocks.map((b) => (
           <article key={b.key} className={`brand-block ${b.tone}`}>
-            <img className="art" src={`/art/postcards/${b.art}.svg`} alt="" style={{ borderRadius: '50%', objectFit: 'cover' }} />
+            <Photo className="art" src={b.image || blockPhoto(b.key, b.art)} seed={b.key} alt="" sizes="180px" style={{ borderRadius: '50%' }} />
             <h3 style={{ fontSize: 'var(--fs-2xl)' }}>{b.title}</h3>
             <p>{b.body}</p>
             <Link className={`btn ${b.tone === 'sand' ? 'primary' : ''}`} href={b.href}>
@@ -123,16 +135,17 @@ function TrustRow() {
 /** Tilted postcard collage on the right of the hero (desktop): the brand's city postcards instead of a flat sun. */
 function PostcardCollage() {
   const { L } = useI18n();
-  const cards: Array<[string, string]> = [
-    ['jeju', L('제주', 'Jeju')],
-    ['lisbon', L('리스본', 'Lisbon')],
-    ['busan', L('부산', 'Busan')],
+  useMediaMap();
+  const cards: Array<[string, string, string]> = [
+    ['jeju', 'Jeju', L('제주', 'Jeju')],
+    ['lisbon', 'Lisbon', L('리스본', 'Lisbon')],
+    ['busan', 'Busan', L('부산', 'Busan')],
   ];
   return (
     <div className={s.collage} aria-hidden="true">
-      {cards.map(([art, name]) => (
+      {cards.map(([art, city, name]) => (
         <figure key={art}>
-          <img src={`/art/postcards/${art}.svg`} alt="" />
+          <Photo src={cityPhoto(city) || `/art/postcards/${art}.svg`} seed={city} alt="" eager sizes="160px" />
           <figcaption>{name}</figcaption>
         </figure>
       ))}
@@ -145,11 +158,25 @@ function PostcardCollage() {
   );
 }
 
+/** Full-bleed real photo behind the hero copy (navy scrim keeps the white text at AA contrast). */
+function HeroPhoto() {
+  useMediaMap();
+  const src = heroPhotos()[0];
+  if (!src) return null;
+  return (
+    <div className={m.heroPhoto} aria-hidden="true">
+      <Photo src={src} alt="" eager sizes="100vw" />
+      <PhotoCredit src={src} style={{ top: 10, bottom: 'auto' }} />
+    </div>
+  );
+}
+
 export default function HomeView() {
   const { L } = useI18n();
   return (
     <>
       <section className={`hero full-bleed ${s.hero}`}>
+        <HeroPhoto />
         <div className="container">
           <div className={s.heroGrid}>
             <div>

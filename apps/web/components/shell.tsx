@@ -378,6 +378,13 @@ export function Footer() {
             <Link href="/discover">{L('여행지 탐색', 'Discover')}</Link>
             <Link href="/stories">{L('스토리', 'Stories')}</Link>
           </nav>
+          <nav aria-labelledby="ft-brand">
+            <h2 className="footer-h" id="ft-brand">{L('브랜드', 'About')}</h2>
+            <Link href="/about">{L('브랜드 이야기', 'Our story')}</Link>
+            <Link href="/about/about-ceo">{L('CEO 원치승', 'CEO Michael Won')}</Link>
+            <Link href="/archive">{L('브랜드 아카이브', 'Brand archive')}</Link>
+            <Link href="/credits">{L('사진 출처·라이선스', 'Photo credits')}</Link>
+          </nav>
           <nav aria-labelledby="ft-support">
             <h2 className="footer-h" id="ft-support">{L('지원', 'Support')}</h2>
             <Link href="/support">{L('고객센터', 'Help center')}</Link>

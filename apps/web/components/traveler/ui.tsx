@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { Photo } from '@/components/media';
 import { useId, useMemo, useState, type ReactNode, type KeyboardEvent } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { Button, Icon, StatusPill, type IconName } from '@/components/ui';
@@ -162,7 +163,7 @@ export function TripCard({ href, image, title, meta, status, statusLabels, badge
   return (
     <li className={`${s.tripCard} ${dimmed ? s.muted : ''}`}>
       <div className={s.tripMedia}>
-        <img src={image} alt="" loading="lazy" />
+        <Photo src={image} alt="" sizes="160px" />
       </div>
       <div className={s.tripBody}>
         <div className={s.tripTop}>

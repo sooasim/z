@@ -10,6 +10,8 @@
 //  - transactions with full state_transitions history: completed stays → reviews, upcoming confirmed stays,
 //    Home Exchanges (COUNTERED / CONFIRMED / REVIEWED), guide bookings, travel orders; conversations,
 //    notifications, favorites, an itinerary; reputation_scores are recomputed from the reviews.
+//  - then (when data/media/assignments.json exists) packages/db/seed-media.mjs: licensed real photos for every stay,
+//    guide, product and CMS cover, and the migrated wontc.co.kr pages / media / redirects (see scripts/legacy/assign.mjs)
 // DEV seed rule: NO payments / refunds / ledger rows are written. Money only moves through the real payment
 // path (PAY-01 → FIN-01), so the CONFIRMED / PAID demo records below have no payment object and settle nothing.
 // Dates are relative to the first run ("today" in Asia/Seoul) and existing rows are never rewritten, except
@@ -17,7 +19,7 @@
 // roll forward by calendar date (keyed by date) so the catalogue keeps upcoming dates on later runs.
 import pg from 'pg';
 import { randomBytes, scryptSync, createHash } from 'node:crypto';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -130,6 +132,15 @@ function artUrls(names, min = 3) {
   return placeholders.length ? placeholders.slice(0, min) : names.map((n) => `/art/postcards/${n}.svg`);
 }
 const CAPTIONS = ['대표 사진', '거실과 주방', '침실', '동네 풍경', '테라스·마당', '욕실'];
+// Real photos: when data/media/assignments.json exists (scripts/legacy/assign.mjs), listings get licensed real photos
+// from packages/db/seed-media.mjs (run at the end of this seed) instead of the postcard art above.
+const MEDIA_ASSIGNMENTS_FILE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../data/media/assignments.json');
+let MEDIA_ASSIGNED_STAYS = new Set();
+try {
+  if (existsSync(MEDIA_ASSIGNMENTS_FILE)) MEDIA_ASSIGNED_STAYS = new Set(Object.keys(JSON.parse(readFileSync(MEDIA_ASSIGNMENTS_FILE, 'utf8')).stays ?? {}));
+} catch (e) {
+  console.warn(`seed-dev: ignoring unreadable ${MEDIA_ASSIGNMENTS_FILE}: ${e.message}`);
+}
 
 async function user(key, email, name, roles = [], verified = true, opts = {}) {
   const id = uid(`user:${key}`);
@@ -621,7 +632,7 @@ try {
     for (const a of [...new Set([...AM_BASE, ...p.amenities])]) {
       await ins('property_amenities', `INSERT INTO property_amenities(property_id, amenity_code) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [id, a]);
     }
-    const photos = artUrls(p.art).slice(0, 6);
+    const photos = MEDIA_ASSIGNED_STAYS.has(p.slug) ? [] : artUrls(p.art).slice(0, 6); // real photos come from seed-media.mjs
     for (const [i, u] of photos.entries()) {
       const mid = uid(`media:${p.slug}:${i}`);
       await run(
@@ -1512,4 +1523,16 @@ try {
   process.exitCode = 1;
 } finally {
   await db.end();
+}
+
+// Real photos + migrated wontc.co.kr media/content (seed-media.mjs applies data/media/assignments.json; separate
+// transaction, idempotent). Without the assignments file the postcard-art listings above are the final state.
+if (!process.exitCode && existsSync(MEDIA_ASSIGNMENTS_FILE)) {
+  try {
+    const { seedMedia } = await import('./seed-media.mjs');
+    await seedMedia({ connectionString: url, assignmentsPath: MEDIA_ASSIGNMENTS_FILE });
+  } catch (e) {
+    console.error(`[seed-media] failed, nothing written: ${e.stack ?? e.message}`);
+    process.exitCode = 1;
+  }
 }

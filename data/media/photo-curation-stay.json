@@ -1,0 +1,977 @@
+[
+ {
+  "sha": "01ed50148b6fa81d2393ef828e332e15dc8a3e2d4760aa57b3d143253c013d92",
+  "accepted": false,
+  "reason": "Snowy US suburban street with parked cars seen from a window; does not show the stay and is off-topic",
+  "roles": [],
+  "subjectKo": "눈 덮인 주택가 거리 전망",
+  "subjectEn": "Snowy residential street seen from above",
+  "quality": 2
+ },
+ {
+  "sha": "05f717967a82f2079cf0bc33eebe32473c0d987d4ae8d7d24324af441bdc2628",
+  "accepted": true,
+  "roles": [
+   "stay-interior:kitchen"
+  ],
+  "subjectKo": "원목 상판과 나무 천장이 어우러진 넓은 모던 주방",
+  "subjectEn": "Spacious modern kitchen with butcher-block counter and wood ceiling",
+  "quality": 4
+ },
+ {
+  "sha": "0ff821dad22213da53ee53cae3a5ea7997006e5866eb96090a042913e9309803",
+  "accepted": true,
+  "roles": [
+   "stay-interior:living"
+  ],
+  "subjectKo": "은은한 조명이 비추는 원목 천장 복도와 선반",
+  "subjectEn": "Warmly lit hallway with wood ceiling and display shelves",
+  "quality": 3
+ },
+ {
+  "sha": "157d7a8b60b15b92261d84770eb0e58d21e4c9a729820639c9be7768ee7efb53",
+  "accepted": false,
+  "reason": "Identifiable diners are the main subject; restaurant scene, not a stay",
+  "roles": [],
+  "subjectKo": "한식당에서 식사하는 사람들",
+  "subjectEn": "People dining at a Korean restaurant",
+  "quality": 2
+ },
+ {
+  "sha": "15c919fdbd6425e2cf652d11dfa619fe38da7f676f950cb5a58792aecce8a7ef",
+  "accepted": true,
+  "roles": [
+   "stay-interior:living"
+  ],
+  "subjectKo": "햇살이 드는 노란 벽의 아늑한 거실",
+  "subjectEn": "Cosy yellow-walled living room with large windows",
+  "quality": 3
+ },
+ {
+  "sha": "164df9fd523fd784c7a9aabb0d1d7248d971fe51bf072760e4ee013e5011af2d",
+  "accepted": false,
+  "reason": "Identifiable children in a pool are the main subject; unrelated to traditional houses",
+  "roles": [],
+  "subjectKo": "실내 수영장의 아이들",
+  "subjectEn": "Children in an indoor pool",
+  "quality": 2
+ },
+ {
+  "sha": "180fe530ba2ae633bdabd8ca4ececd2c4b1b594f5a946421746efb4826f55254",
+  "accepted": true,
+  "roles": [
+   "stay-exterior:house"
+  ],
+  "subjectKo": "통유리창이 돋보이는 언덕 위 현대식 주택",
+  "subjectEn": "Contemporary glass-fronted house on a hillside",
+  "quality": 3
+ },
+ {
+  "sha": "1effdfbd7496b363262c16671a8f95803471ff8a02247294a7ae36d19c2c0574",
+  "accepted": false,
+  "reason": "Top-down shot of a toilet and basin; unflattering, low appeal",
+  "roles": [],
+  "subjectKo": "작은 욕실의 변기와 세면대",
+  "subjectEn": "Toilet and basin in a small bathroom",
+  "quality": 2
+ },
+ {
+  "sha": "2083383094e9f5c80b57b631ab069856b0d2f389dacaad21087eb22b109f6d8d",
+  "accepted": false,
+  "reason": "Dingy wall and a shirt hung on a door; irrelevant and unappealing",
+  "roles": [],
+  "subjectKo": "방문에 걸린 셔츠",
+  "subjectEn": "Shirt hung on a guesthouse door",
+  "quality": 1
+ },
+ {
+  "sha": "298e195129071096fe9bda470a6762e5c7489e49c25e373cd7dd7e82219a095b",
+  "accepted": true,
+  "roles": [
+   "stay-interior:bedroom"
+  ],
+  "subjectKo": "주황색 침구와 서프보드 무늬로 꾸민 아이 방",
+  "subjectEn": "Kids' bedroom with orange bedding and surfboard-print sheets",
+  "quality": 3
+ },
+ {
+  "sha": "2bf7f52da4e858b5b36f554d1c8b7fde7ce94a304e57c82d9f0989a36d874040",
+  "accepted": true,
+  "roles": [
+   "stay-interior:pool",
+   "stay-exterior:villa"
+  ],
+  "subjectKo": "야자수에 둘러싸인 리조트 야외 수영장",
+  "subjectEn": "Resort pool lined with palm trees and sun loungers",
+  "quality": 4
+ },
+ {
+  "sha": "2c1b23e1f12fd1333f951452b442254b48fc546587cd2759fe2c8df8a4e8be53",
+  "accepted": true,
+  "roles": [
+   "stay-interior:living"
+  ],
+  "subjectKo": "흰 소파와 분홍 튤립이 놓인 따뜻한 거실",
+  "subjectEn": "Warm living room with a white sofa and pink tulips",
+  "quality": 4
+ },
+ {
+  "sha": "2c5f871437fd153934574f883563e9530db09273ad84f2eef39dcd3ae759cf32",
+  "accepted": true,
+  "roles": [
+   "stay-interior:living",
+   "stay-interior:studio"
+  ],
+  "subjectKo": "햇살이 비스듬히 드는 초록 소파의 거실",
+  "subjectEn": "Living area with a green sofa in slanting sunlight",
+  "quality": 3
+ },
+ {
+  "sha": "37a77a4626fd9a95f6b46806eaf20c6da4b9b193330012313810e3e740163d0c",
+  "accepted": true,
+  "roles": [
+   "stay-interior:bathroom"
+  ],
+  "subjectKo": "산 전망 통창과 욕조가 있는 모던 욕실",
+  "subjectEn": "Modern bathroom with a freestanding tub and mountain-view glass wall",
+  "quality": 5
+ },
+ {
+  "sha": "38c3fc4fefae96324220a86d24a5e024c26f23b52ca485081a8c3bda1ace62c5",
+  "accepted": false,
+  "reason": "Indoor waterpark with identifiable children as the subject; not a villa pool",
+  "roles": [],
+  "subjectKo": "실내 워터파크의 아이들",
+  "subjectEn": "Children at an indoor waterpark",
+  "quality": 2
+ },
+ {
+  "sha": "3a6c010ac79690b2ca850c0891978c33b172cc9e7ea2a4ea456b360f8cff860a",
+  "accepted": true,
+  "roles": [
+   "stay-interior:bedroom"
+  ],
+  "subjectKo": "샹들리에와 파란 침구가 있는 밝은 아파트 침실",
+  "subjectEn": "Bright apartment bedroom with a chandelier and blue bedspread",
+  "quality": 3
+ },
+ {
+  "sha": "3fa9e2081d2132763b70cb0e739476aa98f31b806a2fc62ac4c2eb9a5b8a63aa",
+  "accepted": false,
+  "reason": "Identifiable man posing on a balcony is the main subject",
+  "roles": [],
+  "subjectKo": "발코니에 선 남성",
+  "subjectEn": "Man posing on a beach-house balcony",
+  "quality": 2
+ },
+ {
+  "sha": "464e5a392b9d4b1dc9bcae0bad24cb3d6d3d36863aa518c991d6a25ff792d493",
+  "accepted": false,
+  "reason": "Heavy haze/smog with almost no visible detail; border-village view unrelated to apartments",
+  "roles": [],
+  "subjectKo": "짙은 연무에 가려진 마을 풍경",
+  "subjectEn": "Village view obscured by heavy haze",
+  "quality": 1
+ },
+ {
+  "sha": "4bfefbd0875e9c5f9f23f21d8d053f2ec34f6a3bd5864da8ebfacc53ef85d939",
+  "accepted": true,
+  "roles": [
+   "stay-interior:pool"
+  ],
+  "subjectKo": "태국풍 정자와 열대 정원이 있는 호텔 수영장",
+  "subjectEn": "Hotel pool with a Thai-style pavilion and tropical garden",
+  "quality": 4
+ },
+ {
+  "sha": "4c39ed02244eb97f2a1af49198ede51f139af2d304c3d73840d2d2916cc96a82",
+  "accepted": true,
+  "roles": [
+   "stay-interior:bathroom"
+  ],
+  "subjectKo": "주황색 상판과 사각 세면대가 있는 모던 욕실",
+  "subjectEn": "Modern bathroom with an orange counter and square basin",
+  "quality": 3
+ },
+ {
+  "sha": "4c63cafe332c101a9132a791f614e93d4a6c2e02d57c90ef142d82d7f7c3316f",
+  "accepted": true,
+  "roles": [
+   "stay-interior:living"
+  ],
+  "subjectKo": "벽난로와 데크로 이어지는 햇살 가득한 거실",
+  "subjectEn": "Sunlit living room with a fireplace opening onto a deck",
+  "quality": 4
+ },
+ {
+  "sha": "4df8bc111e5843ea8ee779f2c9a0cd77d64c3ca161e1fcc9cebd84da96bb8eae",
+  "accepted": true,
+  "roles": [
+   "stay-interior:kitchen",
+   "stay-interior:studio"
+  ],
+  "subjectKo": "원룸형 숙소의 아담한 주방",
+  "subjectEn": "Compact kitchenette in a studio apartment",
+  "quality": 2
+ },
+ {
+  "sha": "4e94c66b704c83f0f4887897e9b84c249b250022c41341ce7e0a2fb9cf8a5f1b",
+  "accepted": false,
+  "reason": "Mostly dark frame of a barred window; poor exposure and unappealing",
+  "roles": [],
+  "subjectKo": "창살 너머 붉은 지붕",
+  "subjectEn": "Red roofs through a barred window",
+  "quality": 2
+ },
+ {
+  "sha": "5422c80c9a83631f09f048544b17c239dfaaa04d1a6509c7cccea0bd8afa40a6",
+  "accepted": true,
+  "roles": [
+   "stay-interior:living"
+  ],
+  "subjectKo": "원목 천장과 벽난로가 있는 모던 거실",
+  "subjectEn": "Modern living room with wood ceiling, fireplace and deck doors",
+  "quality": 4
+ },
+ {
+  "sha": "5454ebe8caf5605dd07b0f1f534de09987716b23b759ebf3424e3da271a0ddc8",
+  "accepted": false,
+  "reason": "UK street of white buildings with road signs; not a stay interior, off-topic",
+  "roles": [],
+  "subjectKo": "흰 건물이 늘어선 영국 거리",
+  "subjectEn": "Street of white buildings in an English city",
+  "quality": 2
+ },
+ {
+  "sha": "5550dff0b7f20ab4f39a9d82159e22f97472466de41967b177c188c2a4090d01",
+  "accepted": true,
+  "roles": [
+   "guide-cover:culture"
+  ],
+  "subjectKo": "민속마을 전통 가옥의 흙바닥 부엌과 맷돌",
+  "subjectEn": "Earthen-floored kitchen with a millstone in a traditional Korean house",
+  "quality": 2
+ },
+ {
+  "sha": "55d24f130071f2db65338174a4c144a5b6c7640deaaa398447492672e620ed16",
+  "accepted": true,
+  "roles": [
+   "stay-interior:pool",
+   "stay-exterior:villa"
+  ],
+  "subjectKo": "돌담과 푸른 하늘 아래 빌라 전용 수영장",
+  "subjectEn": "Private villa pool beside stone walls under a clear sky",
+  "quality": 4
+ },
+ {
+  "sha": "56544a3a29b5e74740a91b8376213b6f566e76edf640c07b45d067a0e798d5f4",
+  "accepted": true,
+  "roles": [
+   "stay-interior:bedroom"
+  ],
+  "subjectKo": "스탠드 조명이 은은한 유럽풍 아파트 침실",
+  "subjectEn": "European apartment bedroom softly lit by table lamps",
+  "quality": 3
+ },
+ {
+  "sha": "56e0f7ad80514761f701864629257d2de7f43485d65da382f92b91235505a8f7",
+  "accepted": true,
+  "roles": [
+   "stay-interior:living"
+  ],
+  "subjectKo": "흰 소파와 주황 의자가 놓인 밝은 북유럽풍 거실",
+  "subjectEn": "Bright Scandinavian living room with a white sofa and orange chair",
+  "quality": 4
+ },
+ {
+  "sha": "5ab7661e591abc1464480bfe1be6ed5c8ae3d30256554efa6e8e1049f0650b0d",
+  "accepted": true,
+  "roles": [
+   "stay-exterior:beach",
+   "stay-exterior:house",
+   "travel:sunrise"
+  ],
+  "subjectKo": "새벽 바다와 야자수 앞 알록달록한 해변 코티지",
+  "subjectEn": "Colourful beach cottages and palm trees at dawn",
+  "quality": 4
+ },
+ {
+  "sha": "5c731a7a786a667e3372e331500808b7f1f09e4ef88edf80b8639e4afbb8affa",
+  "accepted": false,
+  "reason": "3D computer rendering with watermark text; not a real photo",
+  "roles": [],
+  "subjectKo": "3D 렌더링 주방",
+  "subjectEn": "3D-rendered kitchen",
+  "quality": 2
+ },
+ {
+  "sha": "5cf1cb3a0a1681997a6d60a2452f84bedb4bb6cf57b5e3bffd4d59e0948b16fd",
+  "accepted": true,
+  "roles": [
+   "stay-exterior:villa"
+  ],
+  "subjectKo": "바위 언덕 위 석조 대저택",
+  "subjectEn": "Stone mansion on a rocky green hillside",
+  "quality": 3
+ },
+ {
+  "sha": "5ede7e4abe5015cac5458ac65aa53b818712aa0aee075a754daf93eef25a949f",
+  "accepted": false,
+  "reason": "Black-and-white image where colour is expected",
+  "roles": [],
+  "subjectKo": "흑백으로 찍은 해변 호텔 외관",
+  "subjectEn": "Black-and-white seaside house hotel",
+  "quality": 2
+ },
+ {
+  "sha": "603f5c17d333f1141fadcee485f06d3a66e2675a22b6f616035721670c596797",
+  "accepted": true,
+  "roles": [
+   "stay-interior:studio",
+   "stay-interior:bedroom"
+  ],
+  "subjectKo": "주방과 욕실이 이어진 원룸 숙소의 침실",
+  "subjectEn": "Studio bedroom looking through to kitchen and bathroom",
+  "quality": 2
+ },
+ {
+  "sha": "6428b5ecf861c7bbbb922cb0b5f359471a5faf9892c7456a2e238d20bc17fa64",
+  "accepted": true,
+  "roles": [
+   "stay-interior:pool"
+  ],
+  "subjectKo": "붉은 벽돌과 촛불이 어우러진 실내 스파 풀",
+  "subjectEn": "Candlelit indoor spa pool framed by brick walls",
+  "quality": 4
+ },
+ {
+  "sha": "66b3eebb677c117e0d173df4822bf1f179a1befb88eccf96c07daaebd717136e",
+  "accepted": false,
+  "reason": "Bare white bathtub tiles; bland, no appeal",
+  "roles": [],
+  "subjectKo": "흰 타일 욕조",
+  "subjectEn": "Plain white tiled bathtub",
+  "quality": 1
+ },
+ {
+  "sha": "68b1bada0aee60b5e01365892a5d8c08609a2bf1f5d945d6a52614eb0a7eceee",
+  "accepted": true,
+  "roles": [
+   "stay-interior:bedroom",
+   "stay-interior:balcony",
+   "stay-exterior:beach"
+  ],
+  "subjectKo": "바다 전망 테라스로 열린 해변 하우스 침실",
+  "subjectEn": "Beach-house bedroom opening onto an ocean-view veranda",
+  "quality": 5
+ },
+ {
+  "sha": "693a6e2ba1767d82038da0f6cf088b798ca09e55356f744dd935513bde42b5b7",
+  "accepted": false,
+  "reason": "Public library interior with people; irrelevant to apartment stays",
+  "roles": [],
+  "subjectKo": "유리 외벽의 도서관 내부",
+  "subjectEn": "Glass-walled public library interior",
+  "quality": 3
+ },
+ {
+  "sha": "6a00d176b368a8ecd596e104a5be0d71058c170d5dfc2acbe2fbdc30afbb0d51",
+  "accepted": true,
+  "roles": [
+   "stay-interior:living"
+  ],
+  "subjectKo": "청록색 벽과 쿠션 소파의 아늑한 거실",
+  "subjectEn": "Cosy living room with a teal wall and cushioned sofa",
+  "quality": 3
+ },
+ {
+  "sha": "6d3da3bbce45c00a34887c612aef25d37043471ded1ac70f104c6062f6d9b49f",
+  "accepted": true,
+  "roles": [
+   "stay-interior:bedroom"
+  ],
+  "subjectKo": "트윈 침대가 놓인 깔끔한 게스트하우스 객실",
+  "subjectEn": "Simple guesthouse room with twin beds",
+  "quality": 2
+ },
+ {
+  "sha": "6efd70e31d91e2ce3b47bea3d44b70b14021c2f1abf56ebf100c12a4a9c8b6fa",
+  "accepted": false,
+  "reason": "Identifiable people splashing in a pool are the main subject",
+  "roles": [],
+  "subjectKo": "수영장에서 물놀이하는 사람들",
+  "subjectEn": "People splashing in a resort pool",
+  "quality": 2
+ },
+ {
+  "sha": "723722428935d925fa6cffba8b084e5a614ab1f5a648c74e5e9d75b628eed186",
+  "accepted": true,
+  "roles": [
+   "stay-interior:balcony",
+   "stay-exterior:beach"
+  ],
+  "subjectKo": "고층 객실에서 내려다본 해변과 에메랄드빛 바다",
+  "subjectEn": "Beachfront and turquoise sea seen from a high-rise balcony",
+  "quality": 4
+ },
+ {
+  "sha": "75266847e231cef6e2703a6df0639cb6943f17a0d52397557d8b5ce2980b90fb",
+  "accepted": true,
+  "roles": [
+   "stay-interior:living",
+   "stay-interior:studio"
+  ],
+  "subjectKo": "책장과 주황 소파가 있는 원목 바닥의 긴 거실",
+  "subjectEn": "Long wood-floored living space with bookshelves and an orange sofa",
+  "quality": 4
+ },
+ {
+  "sha": "7787a9dc444312c3d94fd03865163aec7568a9474a57dfab07f476b8599ce35d",
+  "accepted": true,
+  "roles": [
+   "stay-interior:living"
+  ],
+  "subjectKo": "햇살 아래 연두색 소파와 쿠션",
+  "subjectEn": "Green sofa and patterned cushion in soft sunlight",
+  "quality": 3
+ },
+ {
+  "sha": "79af98383b36a8898fbf5328ec2ade36e3262be29fc7f1ba916ce194d8cd8578",
+  "accepted": true,
+  "roles": [
+   "stay-interior:bedroom"
+  ],
+  "subjectKo": "벽난로와 거울이 있는 아늑한 유럽풍 침실",
+  "subjectEn": "Cosy European bedroom with a fireplace and mirror",
+  "quality": 3
+ },
+ {
+  "sha": "7d62d14cb515838251177973a6b6134007a13de4dd09fbdb0599c8fdaf42c0ef",
+  "accepted": false,
+  "reason": "Overcast UK dockyard street; irrelevant and dull",
+  "roles": [],
+  "subjectKo": "흐린 날의 항구 거리 건물",
+  "subjectEn": "Dockyard buildings on an overcast day",
+  "quality": 2
+ },
+ {
+  "sha": "7ed8a020f394b9b7f21706ae6197be6e15ecfeba1248aa6c20cda5dbdb493f97",
+  "accepted": true,
+  "roles": [
+   "stay-exterior:hanok"
+  ],
+  "subjectKo": "골목에 자리한 나무 대문의 한옥",
+  "subjectEn": "Hanok with wooden doors and potted plants on a city lane",
+  "quality": 4
+ },
+ {
+  "sha": "7f684f12f749076e6287c5e9be3e8b7f207c1e3ead1ac99940685dfe343f798b",
+  "accepted": false,
+  "reason": "Derelict, decaying hallway; misleading for a stay listing",
+  "roles": [],
+  "subjectKo": "낡고 허물어진 옛 건물 복도",
+  "subjectEn": "Derelict ornate hallway",
+  "quality": 3
+ },
+ {
+  "sha": "86dc8619e7edae41306dfffc08fed43c07b58be107dbee2c6bacf423a7444219",
+  "accepted": true,
+  "roles": [
+   "stay-interior:kitchen"
+  ],
+  "subjectKo": "파랑·주황 수납장이 경쾌한 밝은 주방",
+  "subjectEn": "Bright kitchen with blue and orange cabinets and wood ceiling",
+  "quality": 4
+ },
+ {
+  "sha": "8e3bdca9eda7d875f9c0b6caf8146797c2f8fcc1e9ad5443a2b24b20db9b6bd8",
+  "accepted": false,
+  "reason": "Dark, underexposed basic trekking-lodge room",
+  "roles": [],
+  "subjectKo": "어두운 산장 객실",
+  "subjectEn": "Dim trekking-lodge room",
+  "quality": 2
+ },
+ {
+  "sha": "99edc9f99f7e00274664d59b00111a4cbdc8f3f9e0fe4bb9aab804a083c1f273",
+  "accepted": true,
+  "roles": [
+   "stay-exterior:villa",
+   "stay-exterior:beach",
+   "hero-candidate"
+  ],
+  "subjectKo": "에메랄드빛 바다 위 수상 빌라 리조트 항공 전경",
+  "subjectEn": "Aerial view of overwater villas in a turquoise lagoon",
+  "quality": 5
+ },
+ {
+  "sha": "9b8211df405c230b2bc87452fc1dcea5171ee5b2230694d084116bd24be35561",
+  "accepted": true,
+  "roles": [
+   "stay-interior:pool",
+   "hero-candidate"
+  ],
+  "subjectKo": "바다와 맞닿은 인피니티 풀과 초가 파빌리온",
+  "subjectEn": "Infinity pool meeting the sea beside a thatched pavilion",
+  "quality": 5
+ },
+ {
+  "sha": "9b8d7b63d9bd6d32da85e45f7c53977aaca0dea891552b6dcd680777b63dbdff",
+  "accepted": false,
+  "reason": "Wardrobe covered in printed notices ('NO SMOKING'); text-heavy and unappealing",
+  "roles": [],
+  "subjectKo": "안내문이 붙은 객실 옷장",
+  "subjectEn": "Room wardrobe covered in notices",
+  "quality": 1
+ },
+ {
+  "sha": "9f90b916d174689f39be1a24fcecb863d68c72e8e569aed38a8740b4c74318f7",
+  "accepted": false,
+  "reason": "Architectural rendering with a watermark; not a real photo",
+  "roles": [],
+  "subjectKo": "고급 레지던스 건축 렌더링",
+  "subjectEn": "Architectural rendering of a residence",
+  "quality": 3
+ },
+ {
+  "sha": "9fd2227fe878adcdc3ce90b1c845a03912820f6be37a3288425a3a37b8b1f235",
+  "accepted": true,
+  "roles": [
+   "travel:sunrise"
+  ],
+  "subjectKo": "새벽 여명에 물든 해안 도시의 만",
+  "subjectEn": "Coastal city bay in blue morning twilight",
+  "quality": 3
+ },
+ {
+  "sha": "a02d76a40fc28e74a80770e24063bad8465ef4e7bc6858ecc9c4a0822820c223",
+  "accepted": false,
+  "reason": "Overcast view of UK tower blocks and parked cars; unappealing",
+  "roles": [],
+  "subjectKo": "흐린 하늘 아래 고층 주거 단지",
+  "subjectEn": "Tower blocks under an overcast sky",
+  "quality": 2
+ },
+ {
+  "sha": "a22d18fad554302a9e05c88a5b0d707c5ef917b6fe017ab00bb1dffe4bf3976d",
+  "accepted": true,
+  "roles": [
+   "stay-interior:pool",
+   "stay-exterior:villa"
+  ],
+  "subjectKo": "바위산과 야자수에 둘러싸인 리조트 수영장",
+  "subjectEn": "Resort pool framed by palms and rocky hills",
+  "quality": 4
+ },
+ {
+  "sha": "a345712b9ddf43bba15622b5cc97b33e4eea69322ebe4c0bd5fbbc34646e759d",
+  "accepted": true,
+  "roles": [
+   "stay-interior:living"
+  ],
+  "subjectKo": "흰 암체어와 원목 천장의 미니멀 거실",
+  "subjectEn": "Minimalist living room with white armchairs and wood ceiling",
+  "quality": 4
+ },
+ {
+  "sha": "a48b3095e67279cb24630e7095f48fe3ecbc7bc767091147fccf0f7d509b01b6",
+  "accepted": false,
+  "reason": "Identifiable woman reflected in the mirror and a person on the TV screen",
+  "roles": [],
+  "subjectKo": "벽돌 벽 거실과 거울",
+  "subjectEn": "Brick-walled living room with a mirror",
+  "quality": 3
+ },
+ {
+  "sha": "aba4745f028f05a0f5b57bb97461e2e4532ffb47ca950646e5f5930c788a745d",
+  "accepted": true,
+  "roles": [
+   "stay-interior:studio"
+  ],
+  "subjectKo": "창가 벽면을 채운 원목 수납 선반",
+  "subjectEn": "Wall of wooden shelves beside a garden window",
+  "quality": 3
+ },
+ {
+  "sha": "aba6295e1c87e50ed29d129b0074edc6755c444f53bea7b5c1ed71197ba87d02",
+  "accepted": false,
+  "reason": "Gloomy storm seascape; does not depict an ocean-view stay and the mood is off-brand",
+  "roles": [],
+  "subjectKo": "먹구름이 드리운 바다와 바위",
+  "subjectEn": "Storm clouds over sea rocks",
+  "quality": 3
+ },
+ {
+  "sha": "ae6acbba5dcbe2b831bd867ca3151eb7d4e637d2bd2aa50ac7d3af84d75910d9",
+  "accepted": true,
+  "roles": [
+   "travel:surfing",
+   "travel:sunrise"
+  ],
+  "subjectKo": "노을 진 바다 앞 서프보드와 요가하는 실루엣",
+  "subjectEn": "Silhouette doing yoga beside a surfboard at sunset",
+  "quality": 4
+ },
+ {
+  "sha": "af505b079d90c21fbf9c6d7009c8fa8fa7bf573a5f17d3b6c88d5e883bfa7a4b",
+  "accepted": true,
+  "roles": [
+   "stay-exterior:hanok",
+   "guide-cover:culture"
+  ],
+  "subjectKo": "기와지붕과 굴뚝이 있는 아담한 전통 가옥",
+  "subjectEn": "Small tiled-roof traditional Korean house with stone chimneys",
+  "quality": 3
+ },
+ {
+  "sha": "afe73dd827cbd7f28a05bddb8b4d5238bee2c7787cf30edc013a7c638da9d21e",
+  "accepted": true,
+  "roles": [
+   "stay-interior:bedroom",
+   "stay-interior:studio"
+  ],
+  "subjectKo": "침대와 라운지 공간이 함께 있는 넓은 아파트 객실",
+  "subjectEn": "Spacious apartment room combining bed and lounge area",
+  "quality": 3
+ },
+ {
+  "sha": "b0e5363ef0172eddb2801c3bfb5077d47e5f12c5bc0d0979bfe69008e8298fc8",
+  "accepted": false,
+  "reason": "Telecom towers over rooftops; irrelevant",
+  "roles": [],
+  "subjectKo": "지붕 너머 통신탑",
+  "subjectEn": "Telecom towers over rooftops",
+  "quality": 2
+ },
+ {
+  "sha": "b3c253b3a5442b728824cf9877810fb4d33e5abf32abb8bcbbee531d4fce8564",
+  "accepted": true,
+  "roles": [
+   "stay-interior:kitchen"
+  ],
+  "subjectKo": "도시 전망 창과 빈티지 컬러 가전의 주방",
+  "subjectEn": "Retro colourful kitchen with a city-view window",
+  "quality": 4
+ },
+ {
+  "sha": "b5c3c9d2ed2c3e6774a5332d3dcf5a1e6bba52b83afc4d98c861fb97814dfb4f",
+  "accepted": false,
+  "reason": "Flat wood texture, not a scene",
+  "roles": [],
+  "subjectKo": "원목 도마 질감",
+  "subjectEn": "Wood end-grain texture",
+  "quality": 2
+ },
+ {
+  "sha": "b977358191e6cb1b1f717242d73ad899536d01414e3d3bf14f6d55c60021d6a0",
+  "accepted": false,
+  "reason": "Dim, underexposed guesthouse bed",
+  "roles": [],
+  "subjectKo": "어두운 게스트하우스 침대",
+  "subjectEn": "Dim guesthouse bed",
+  "quality": 2
+ },
+ {
+  "sha": "bc1922879648ad2f863e4f053ee61ae97dfb2c837032717e418e1dcbf51ced43",
+  "accepted": false,
+  "reason": "Dim motel room with a burned-in date stamp",
+  "roles": [],
+  "subjectKo": "날짜가 찍힌 모텔 객실",
+  "subjectEn": "Motel room with a date stamp",
+  "quality": 1
+ },
+ {
+  "sha": "bee3cc3c82e18f9d60cc833b00e9e5f4f6347b36d173189692606e7784db9714",
+  "accepted": true,
+  "roles": [
+   "stay-interior:balcony",
+   "stay-exterior:villa",
+   "hero-candidate"
+  ],
+  "subjectKo": "푸른 바다가 펼쳐지는 하얀 테라스와 야외 소파",
+  "subjectEn": "White terrace with outdoor sofas overlooking a deep-blue sea",
+  "quality": 5
+ },
+ {
+  "sha": "c1124cc49c0826482fa0a2ca3664ddc8d7d10da5cd4ea80d5b8352bae84ccdb9",
+  "accepted": false,
+  "reason": "Hazy, smog-obscured flagpole view; low quality and irrelevant",
+  "roles": [],
+  "subjectKo": "연무 속 깃대가 보이는 풍경",
+  "subjectEn": "Flagpole view in heavy haze",
+  "quality": 1
+ },
+ {
+  "sha": "c5ab0fa24e4a7b3d606f864c5d63d438597c101c2d347e1c9aee56749999c21f",
+  "accepted": true,
+  "roles": [
+   "stay-interior:bedroom"
+  ],
+  "subjectKo": "원목 바닥과 붉은 러너로 꾸민 호텔 더블룸",
+  "subjectEn": "Hotel double room with wood floors and a red bed runner",
+  "quality": 3
+ },
+ {
+  "sha": "c6d374b1c64d721fd48f2c70108fce473a69d64836466a508b3925b29e872cea",
+  "accepted": true,
+  "roles": [
+   "stay-interior:living"
+  ],
+  "subjectKo": "체크무늬 식탁보가 깔린 햇살 좋은 다이닝룸",
+  "subjectEn": "Sunny dining room with a long gingham-covered table",
+  "quality": 3
+ },
+ {
+  "sha": "c76cc83b4d5473eaade3bb5cc109c98590aa634394c0495c37623d223792d9c7",
+  "accepted": true,
+  "roles": [
+   "guide-cover:culture"
+  ],
+  "subjectKo": "한옥 안에 전시된 전통 한복 차림 마네킹",
+  "subjectEn": "Hanbok-clad mannequins displayed inside a traditional house",
+  "quality": 3
+ },
+ {
+  "sha": "c887d001f784a074a1bb977dd835207d20df52258efe1da2291676b98454cb7d",
+  "accepted": true,
+  "roles": [
+   "stay-interior:bathroom"
+  ],
+  "subjectKo": "벽돌 타일과 따뜻한 조명의 욕실 세면대",
+  "subjectEn": "Bathroom vanity with brick tiles and warm sconces",
+  "quality": 3
+ },
+ {
+  "sha": "cd48162188c17665d6e57d95f639592a53048e7009013125a4750b95d65f4198",
+  "accepted": true,
+  "roles": [
+   "stay-interior:bedroom"
+  ],
+  "subjectKo": "고층 콘도 전망 창가의 붉은 침구 침실",
+  "subjectEn": "Condo bedroom with red bedding and high-rise window views",
+  "quality": 3
+ },
+ {
+  "sha": "cd7a00f37aaa5a24c959673f292a8a22a7aaffe966e3da2eb5f3e6da7b72ff90",
+  "accepted": true,
+  "roles": [
+   "stay-exterior:hanok",
+   "guide-cover:culture"
+  ],
+  "subjectKo": "현판이 걸린 한옥 대청마루",
+  "subjectEn": "Wooden maru hall of a hanok with a calligraphy plaque",
+  "quality": 3
+ },
+ {
+  "sha": "cefaecb2d27fd878682bf5bd49afe62c8ad1c0b3824b01f3602d08e75b8bc264",
+  "accepted": false,
+  "reason": "Watermarked URL and a person as the main subject",
+  "roles": [],
+  "subjectKo": "발코니에서 바다를 바라보는 남성",
+  "subjectEn": "Man looking at the sea from a balcony",
+  "quality": 2
+ },
+ {
+  "sha": "d02baa5b262adca0f71e47a9b7f5237e3a68d2dd2afb3f5c8557545b3e468ae9",
+  "accepted": true,
+  "roles": [
+   "stay-exterior:villa",
+   "stay-interior:pool"
+  ],
+  "subjectKo": "열대 정원과 수영장이 있는 발리풍 빌라",
+  "subjectEn": "Balinese-style villa with a tropical garden and pool",
+  "quality": 4
+ },
+ {
+  "sha": "d374f915e3b0ee8cb88283716e51ec674e4495f6ef11d4f85626beb7f4c831ad",
+  "accepted": true,
+  "roles": [
+   "stay-interior:bedroom"
+  ],
+  "subjectKo": "바다 전망 발코니가 딸린 호텔 객실",
+  "subjectEn": "Hotel room with two beds and an ocean-view balcony",
+  "quality": 3
+ },
+ {
+  "sha": "d53ad350ff5fa2f826aaebde956a4c8a7861ef31113c59c572e739f5a43e06a9",
+  "accepted": true,
+  "roles": [
+   "stay-interior:living"
+  ],
+  "subjectKo": "붉은 벽과 캔들로 꾸민 아늑한 거실",
+  "subjectEn": "Cosy living room with a red feature wall and candles",
+  "quality": 3
+ },
+ {
+  "sha": "d8b6ef0207f0006bb7e04b908e1baf1a3544219ba0f0cd62d683b648e382a0aa",
+  "accepted": false,
+  "reason": "Dim, cluttered room corner",
+  "roles": [],
+  "subjectKo": "어두운 객실 한쪽",
+  "subjectEn": "Dim corner of a guesthouse room",
+  "quality": 1
+ },
+ {
+  "sha": "dbf68c5c6da6a9c0bc723c51ec877eca26baaeb4e6b277335c440c75a2eaf941",
+  "accepted": false,
+  "reason": "Bland view of a ceiling fan; no appeal",
+  "roles": [],
+  "subjectKo": "객실 천장 선풍기",
+  "subjectEn": "Ceiling fan in a guesthouse room",
+  "quality": 1
+ },
+ {
+  "sha": "dd320ad441b7a49f63917cd3d600920531d9f56e38566711a8d026e389a34be5",
+  "accepted": false,
+  "reason": "Vintage 1958 magazine print; not a real current stay photo",
+  "roles": [],
+  "subjectKo": "1958년 잡지 속 주방",
+  "subjectEn": "Kitchen from a 1958 magazine",
+  "quality": 2
+ },
+ {
+  "sha": "df0daadd135c191432fc9718456cd74830270223335d7c2ea764a439429800b4",
+  "accepted": true,
+  "roles": [
+   "stay-interior:pool",
+   "stay-interior:courtyard"
+  ],
+  "subjectKo": "아치형 돌담 안뜰에 자리한 호텔 수영장",
+  "subjectEn": "Courtyard pool with stone arches and garden",
+  "quality": 4
+ },
+ {
+  "sha": "e342646639d915aaab6156d447e1db6ee02f730cff5d5f386add70c417c96900",
+  "accepted": true,
+  "roles": [
+   "stay-interior:living"
+  ],
+  "subjectKo": "창가 소파와 하늘색 벽의 아늑한 독서 공간",
+  "subjectEn": "Cosy window-side sofa nook with a sky-blue wall",
+  "quality": 3
+ },
+ {
+  "sha": "e399e6c9fbf51c25814a6720778c2ef6770b53fad037243c69f7a2ea377c486a",
+  "accepted": false,
+  "reason": "Night street lamp with pub signage; irrelevant to bedrooms",
+  "roles": [],
+  "subjectKo": "밤거리의 가로등",
+  "subjectEn": "Street lamp at night",
+  "quality": 3
+ },
+ {
+  "sha": "e7063371c7c623665a8c8a3ca7c660f3de6fde4f2cd8cc146de3723c96c23c03",
+  "accepted": false,
+  "reason": "Close-up of an identifiable shirtless person as the main subject",
+  "roles": [],
+  "subjectKo": "해먹 옆 발코니의 인물",
+  "subjectEn": "Person on a balcony by a hammock",
+  "quality": 2
+ },
+ {
+  "sha": "e7d5655af6426febb5a98686a8d565e85e857d7fc58eaf29b99ce8a2d85c9545",
+  "accepted": true,
+  "roles": [
+   "stay-interior:kitchen",
+   "stay-interior:living"
+  ],
+  "subjectKo": "노을빛이 드는 오픈형 주방과 거실",
+  "subjectEn": "Open-plan kitchen and living room in dusk light",
+  "quality": 4
+ },
+ {
+  "sha": "e7db59e20b325d55337391ad6892e1a8c2d3fae84721a949c29967df29731149",
+  "accepted": false,
+  "reason": "Faded vintage snapshot print with border",
+  "roles": [],
+  "subjectKo": "빛바랜 옛 사진 속 거실",
+  "subjectEn": "Faded vintage photo of a living room",
+  "quality": 2
+ },
+ {
+  "sha": "e8cac4674b932d9b44bd73b01e3f4c2e3d3395653b805dfea48e5d15041f8ec6",
+  "accepted": false,
+  "reason": "Messy hotel room with luggage and clothes",
+  "roles": [],
+  "subjectKo": "짐이 놓인 객실 침대",
+  "subjectEn": "Hotel bed with luggage",
+  "quality": 2
+ },
+ {
+  "sha": "eaae499c5729f267d1b2b37163eab679c4e8221d1a86728a38aa9ee04f0bfdf5",
+  "accepted": false,
+  "reason": "Plush toy mascot is the main subject",
+  "roles": [],
+  "subjectKo": "한옥 마루 위 오리 인형",
+  "subjectEn": "Plush duck on a hanok veranda",
+  "quality": 3
+ },
+ {
+  "sha": "ecd5804c34fb2018bdeb47875a7be1d337756de6ac7d9d6f66cfc3a5e3f92747",
+  "accepted": false,
+  "reason": "Over-processed street scene with large signage; irrelevant",
+  "roles": [],
+  "subjectKo": "간판이 있는 거리 풍경",
+  "subjectEn": "Street scene with signage",
+  "quality": 2
+ },
+ {
+  "sha": "f448cad63870e5a5efa623e1741e55516d476b1743131381c80e59ae44a435ac",
+  "accepted": false,
+  "reason": "3D rendering, not a real photo",
+  "roles": [],
+  "subjectKo": "3D 렌더링 욕실",
+  "subjectEn": "3D-rendered bathroom",
+  "quality": 2
+ },
+ {
+  "sha": "f772dc3f795d710079bc446104d0f5c2563528b2ea33bfaa7170ded44692bbe3",
+  "accepted": false,
+  "reason": "Dark, cluttered bedroom panorama",
+  "roles": [],
+  "subjectKo": "어두운 침실 파노라마",
+  "subjectEn": "Dark bedroom panorama",
+  "quality": 1
+ },
+ {
+  "sha": "f90db310072e0befedd63de04ac8b785ed157ff50cc42b7bcdec65093c0dbf11",
+  "accepted": true,
+  "roles": [
+   "stay-exterior:hanok"
+  ],
+  "subjectKo": "기와지붕과 나무 대문이 있는 한옥 담장",
+  "subjectEn": "Tiled-roof hanok gate and patterned brick wall",
+  "quality": 4
+ },
+ {
+  "sha": "fad9158d916a0ff80b4c893f5dc8692e7f785a320387e8eca99a879456d309e3",
+  "accepted": false,
+  "reason": "Run-down house with a broken roof; misleading for a stay",
+  "roles": [],
+  "subjectKo": "지붕이 낡은 오래된 주택",
+  "subjectEn": "Run-down old house with a damaged roof",
+  "quality": 2
+ },
+ {
+  "sha": "fc3c40835df92a220b5915e40d80a64be4ed27d715ebbf889d3615f2ec026832",
+  "accepted": true,
+  "roles": [
+   "stay-interior:kitchen"
+  ],
+  "subjectKo": "원목 들보 아래 오픈 주방과 다이닝",
+  "subjectEn": "Open kitchen and dining area under exposed wood beams",
+  "quality": 4
+ },
+ {
+  "sha": "ff7b4040646c70adb22c90b454e53845d83c19f5b867464a17556c3f63647e8a",
+  "accepted": true,
+  "roles": [
+   "stay-exterior:beach",
+   "stay-exterior:house",
+   "travel:sunrise"
+  ],
+  "subjectKo": "겨울 일출 무렵 해변 코티지와 야자수",
+  "subjectEn": "Beach cottages and palm trees at winter sunrise",
+  "quality": 3
+ }
+]

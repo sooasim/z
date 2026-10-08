@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { Photo } from '@/components/media';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
@@ -56,7 +57,7 @@ function BookingSummary({ p, quote, slug, onPolicy }: { p: any; quote: QuoteView
   return (
     <div className="stack">
       <div className="row nowrap" style={{ alignItems: 'flex-start', gap: 14 }}>
-        <img src={img} alt="" style={{ width: 96, height: 80, objectFit: 'cover', borderRadius: 'var(--r-md)', flex: '0 0 auto' }} />
+        <Photo src={img} alt="" sizes="96px" style={{ width: 96, height: 80, borderRadius: 'var(--r-md)', flex: '0 0 auto' }} />
         <div className="grow">
           <strong style={{ display: 'block', lineHeight: 1.35 }}>{v.title}</strong>
           <span className="small muted">{str(p, 'location.areaLabel') && lang === 'ko' ? str(p, 'location.areaLabel') : placeLabel(v.city, lang)}</span>

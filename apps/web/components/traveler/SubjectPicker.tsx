@@ -1,5 +1,6 @@
 'use client';
 import { useId, useMemo, useState, type KeyboardEvent } from 'react';
+import { Photo } from '@/components/media';
 import { useI18n } from '@/lib/i18n';
 import { useAuth } from '@/lib/auth';
 import { items, str } from '@/lib/shape';
@@ -168,7 +169,7 @@ export function SubjectPicker({ label, value, onChange, types = ['RESERVATION', 
             return (
               <li key={`${o.type}:${o.id}`}>
                 <button type="button" role="radio" aria-checked={on} tabIndex={on || (!selected && idx === 0) ? 0 : -1} className={s.pick} onClick={() => onChange({ type: o.type, id: o.id })} onKeyDown={(e) => onKey(e, idx)}>
-                  <img src={o.image} alt="" />
+                  <Photo src={o.image} alt="" sizes="80px" />
                   <span style={{ minWidth: 0 }}>
                     <strong>{o.title}</strong>
                     <span className={s.meta}>{[subjectLabel(o.type, lang), o.meta, o.code].filter(Boolean).join(' · ')}</span>

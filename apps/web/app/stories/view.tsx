@@ -6,10 +6,12 @@ import { arr, items, str } from '@/lib/shape';
 import { postcardFor } from '@/lib/art';
 import { StateView, EmptyState } from '@/components/states';
 import { ButtonLink, DateText, HeadingLevel, PageHeader } from '@/components/ui';
-import { mdExcerpt } from '@/components/public/labels';
+import { Photo, cmsHero, markdownExcerpt } from '@/components/media';
+import { useMediaMap } from '@/lib/media';
 
 export default function StoriesView() {
   const { L } = useI18n();
+  useMediaMap();
   const st = useApi<any>('/v1/content/story', { query: { limit: 24 } });
   return (
     <>
@@ -29,12 +31,12 @@ export default function StoriesView() {
             <div className="grid">
               {items(d).map((s: any) => {
                 const slug = str(s, 'slug', 'id');
-                const excerpt = str(s, 'summary', 'excerpt') || mdExcerpt(str(s, 'bodyMd', 'body'), 80);
+                const excerpt = str(s, 'summary', 'excerpt') || markdownExcerpt(str(s, 'bodyMd', 'body'), 80);
                 const tags = arr<string>(s, 'data.tags').slice(0, 2);
                 return (
                   <Link key={slug} href={`/stories/${slug}`} className="lcard" style={{ textDecoration: 'none' }}>
                     <div className="media" style={{ aspectRatio: '16 / 10' }}>
-                      <img src={str(s, 'data.coverUrl', 'coverUrl', 'imageUrl') || postcardFor(str(s, 'title'), slug)} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <Photo src={cmsHero(s) || postcardFor(str(s, 'title'), slug)} seed={slug} alt="" sizes="(max-width: 640px) 100vw, (max-width: 1100px) 50vw, 360px" style={{ width: '100%', height: '100%' }} />
                       {tags.length > 0 && (
                         <div className="badges">
                           {tags.map((t) => (

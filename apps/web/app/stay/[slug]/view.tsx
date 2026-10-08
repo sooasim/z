@@ -8,7 +8,9 @@ import { useAuth } from '@/lib/auth';
 import { post } from '@/lib/api';
 import { item, items, str, num, f } from '@/lib/shape';
 import { propertyView } from '@/lib/domain';
-import { postcardSet } from '@/lib/art';
+import { postcardSet, realize } from '@/lib/art';
+import { useMediaMap } from '@/lib/media';
+import { Photo, PhotoLightbox } from '@/components/media';
 import { addDays, eachNight, formatMoney, formatPriceShort, isoDate, nightsBetween } from '@/lib/format';
 import { quoteView, stashQuote, type QuoteView } from '@/lib/quote';
 import { ApiError, errorMessage } from '@/lib/errors';
@@ -19,7 +21,7 @@ import { ComplianceBadge, isCompliant } from '@/components/cards';
 import { HeartButton } from '@/components/favorites';
 import { calendarDays } from '@/components/calendar';
 import { MapView } from '@/components/map';
-import { Alert, Avatar, Badge, Button, ButtonLink, DateRangeField, GuestsField, Icon, Lightbox, MobileActionBar, Modal, PriceBreakdown, Section, Skeleton, amenityIcon, useMediaQuery, useToast, type Guests, type IconName } from '@/components/ui';
+import { Alert, Avatar, Badge, Button, ButtonLink, DateRangeField, GuestsField, Icon, MobileActionBar, Modal, PriceBreakdown, Section, Skeleton, amenityIcon, useMediaQuery, useToast, type Guests, type IconName } from '@/components/ui';
 import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { ReviewsSection } from '@/components/public/Reviews';
 import { policyName, propertyTypeLabel, refundLines } from '@/components/public/labels';
@@ -30,6 +32,7 @@ const BLOCKED = ['paid', 'exchange', 'block', 'hold', 'unavail'];
 
 function Mosaic({ images, title }: { images: string[]; title: string }) {
   const { L } = useI18n();
+  useMediaMap();
   const [open, setOpen] = useState<number | null>(null);
   const shown = images.slice(0, 5);
   return (
@@ -37,7 +40,7 @@ function Mosaic({ images, title }: { images: string[]; title: string }) {
       <div className="mosaic">
         {shown.map((src, i) => (
           <button key={i} className={i === 0 ? 'm0' : 'mx'} onClick={() => setOpen(i)} aria-label={`${L('사진 크게 보기', 'Open photo')} ${i + 1}`}>
-            <img src={src} alt={i === 0 ? title : ''} loading={i ? 'lazy' : 'eager'} onError={(e) => { const el = e.currentTarget; if (!el.dataset.fallback) { el.dataset.fallback = '1'; el.src = '/art/postcards/coast.svg'; } }} />
+            <Photo src={src} seed={`${title}:${i}`} alt={i === 0 ? title : ''} eager={i === 0} sizes={i === 0 ? '(max-width: 900px) 100vw, 600px' : '(max-width: 900px) 50vw, 300px'} onError={(e) => { const el = e.currentTarget; if (!el.dataset.fallback) { el.dataset.fallback = '1'; el.removeAttribute('srcset'); el.src = '/art/postcards/coast.svg'; } }} />
           </button>
         ))}
         {images.length > 1 && (
@@ -46,7 +49,7 @@ function Mosaic({ images, title }: { images: string[]; title: string }) {
           </button>
         )}
       </div>
-      {open !== null && <Lightbox images={images} index={open} onClose={() => setOpen(null)} title={title} />}
+      {open !== null && <PhotoLightbox items={images.map((src, i) => ({ src: realize(src, `${title}:${i}`), alt: title }))} index={open} onClose={() => setOpen(null)} title={title} />}
     </>
   );
 }

@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { useI18n } from '@/lib/i18n';
 import { GUIDE_TYPE_LABEL, guideView, productView, propertyView } from '@/lib/domain';
 import { postcardFor, postcardSet, flagFor, langName } from '@/lib/art';
-import { f, str } from '@/lib/shape';
+import { guideCover, productPhotos, useMediaMap } from '@/lib/media';
+import { arr, f, str } from '@/lib/shape';
 import { placeLabel, countryLabel } from '@/lib/places';
 import { localizeExplanation } from '@/lib/enums';
 import { HeartButton } from './favorites';
@@ -12,10 +13,31 @@ import { Avatar, RatingStars } from './ui/display';
 import { Money } from './ui/base';
 import { Icon } from './ui/icons';
 import { AutoHeading } from './ui/heading';
+import { Photo } from './media/Photo';
 
 /** Seed data uses generic '/placeholder/N.svg' covers — treat them as missing so city postcards are used instead. */
 export function realImages(urls: Array<string | undefined | null>): string[] {
-  return urls.filter((u): u is string => !!u && !/^\/?placeholder\//.test(u.replace(/^https?:\/\/[^/]+/, '').replace(/^\//, '')));
+  return urls.filter((u): u is string => !!u && /^(\/|https?:\/\/)/.test(u) && !/^\/?placeholder\//.test(u.replace(/^https?:\/\/[^/]+/, '').replace(/^\//, '').replace(/^[^/]+\/(?=placeholder\/)/, '')));
+}
+
+/**
+ * Photos for a travel product card / gallery: the API's own media URLs first, then the media map's product
+ * photos (migrated WONT tours), then a real photo of the product's city (postcard art only as a last resort).
+ */
+export function productImages(p: any, n = 3): string[] {
+  const v = productView(p);
+  const fromApi = realImages([...arr<any>(p, 'mediaUrls', 'photoUrls', 'images', 'media', 'photos').map((m) => (typeof m === 'string' ? m : str(m, 'url', 'publicUrl', 'src'))), v.cover, str(p, 'heroUrl', 'data.heroUrl')]);
+  if (fromApi.length) return [...new Set(fromApi)].slice(0, 8);
+  const mapped = productPhotos(v.id);
+  if (mapped.length) return mapped.slice(0, 8);
+  return postcardSet(v.city || v.title, v.id || v.title, n);
+}
+
+/** Guide card cover: the API's cover photo, else the media map's guide cover, else a real photo of the guide's city. */
+export function guideCoverUrl(g: any): string {
+  const v = guideView(f(g, 'guide') ?? g);
+  const raw = f(g, 'guide') ?? g;
+  return realImages([str(raw, 'coverUrl', 'coverImageUrl', 'heroUrl')])[0] || guideCover(str(raw, 'guideId', 'userId', 'id') || v.id) || postcardFor(v.city, v.id);
 }
 
 const COMPLIANT = ['ALLOW', 'PASS', 'PASSED', 'COMPLIANT', 'APPROVED', 'VERIFIED', 'ELIGIBLE', 'OK'];
@@ -85,12 +107,15 @@ export function GuideCard({ g }: { g: any }) {
   // /v1/search/guides wraps each hit: { guide, score, explanation[], availability }
   const v = guideView(f(g, 'guide') ?? g);
   const { lang, L } = useI18n();
+  useMediaMap();
   // API explanations are English sentences: translate known templates, drop the rest in the Korean UI.
   const why = ((Array.isArray(g?.explanation) ? g.explanation : []) as string[]).map((x) => localizeExplanation(x, lang)).filter((x): x is string => !!x);
   const tl = GUIDE_TYPE_LABEL[v.type] ?? { ko: v.type, en: v.type, paid: false };
   return (
     <article className="gcard">
-      <div className="cover" style={{ backgroundImage: `url(${postcardFor(v.city, v.id)})` }} aria-hidden="true" />
+      <div className="cover" aria-hidden="true">
+        <Photo src={guideCoverUrl(g)} seed={v.id} alt="" sizes="(max-width: 640px) 92vw, 360px" style={{ display: 'block', width: '100%', height: '100%' }} />
+      </div>
       <div className="fav" style={{ position: 'absolute', top: 6, right: 6, zIndex: 2 }}>
         {v.id && <HeartButton targetType="GUIDE" targetId={v.id} />}
       </div>
@@ -153,13 +178,13 @@ export function GuideCard({ g }: { g: any }) {
 export function ProductCard({ p }: { p: any }) {
   const v = productView(p);
   const { L, lang } = useI18n();
-  const real = realImages([v.cover]);
+  useMediaMap();
   const KIND: Record<string, [string, string]> = { TOUR: ['투어', 'Tour'], TICKET: ['티켓', 'Ticket'], PACKAGE: ['패키지', 'Package'], ACTIVITY: ['액티비티', 'Activity'], TRANSFER: ['교통', 'Transfer'] };
   const k = KIND[v.kind.toUpperCase()];
   return (
     <ListingCard
       href={`/travel/${v.id}`}
-      images={real.length ? real : postcardSet(v.city || v.title, v.id, 2)}
+      images={productImages(p, 2)}
       title={v.title}
       meta={[placeLabel(v.city, lang), v.durationDays ? `${v.durationDays}${L('일', ' days')}` : '', v.supplier && `${L('공급', 'by')} ${v.supplier}`].filter(Boolean).join(' · ')}
       priceMinor={v.priceMinor}

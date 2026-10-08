@@ -6,15 +6,21 @@ import { formatMoney } from '@/lib/format';
 import { RatingStars } from './display';
 import { Icon } from './icons';
 import { AutoHeading } from './heading';
+import { Photo } from '@/components/media/Photo';
 
 const FALLBACK_ART = ['/art/postcards/coast.svg', '/art/postcards/mountain.svg', '/art/postcards/city.svg'];
+/** Card media is ~1 column on phones, 2–3 on tablets, 4 on desktop. */
+const CARD_SIZES = '(max-width: 640px) 92vw, (max-width: 1100px) 46vw, 320px';
 
 export interface CardBadge {
   label: string;
   tone?: 'ok' | 'warn' | 'danger' | 'info' | 'accent' | 'exchange' | 'solid';
 }
 
-/** Image carousel with dots, swipe and arrow buttons (arrows appear on hover / focus). */
+/**
+ * Image carousel with dots, swipe and arrow buttons (arrows appear on hover / focus). Images render through <Photo>:
+ * srcset + sizes, blurred placeholder, basePath-aware, and generated postcard art upgrades to a real photo.
+ */
 export function Carousel({ images, alt }: { images: string[]; alt: string }) {
   const { L } = useI18n();
   const [i, setI] = useState(0);
@@ -39,7 +45,25 @@ export function Carousel({ images, alt }: { images: string[]; alt: string }) {
         }}
       >
         {images.map((src, k) => (
-          <img key={k} src={src} alt={k === i ? alt : ''} data-on={k === i ? 'true' : undefined} aria-hidden={k === i ? undefined : true} loading={k === 0 ? undefined : 'lazy'} draggable={false} onError={(e) => { const el = e.currentTarget; if (!el.dataset.fallback) { el.dataset.fallback = '1'; el.src = FALLBACK_ART[k % FALLBACK_ART.length]; } }} />
+          <Photo
+            key={k}
+            src={src}
+            seed={`${alt}:${k}`}
+            sizes={CARD_SIZES}
+            alt={k === i ? alt : ''}
+            data-on={k === i ? 'true' : undefined}
+            aria-hidden={k === i ? undefined : true}
+            loading={k === 0 ? 'eager' : 'lazy'}
+            draggable={false}
+            onError={(e) => {
+              const el = e.currentTarget;
+              if (!el.dataset.fallback) {
+                el.dataset.fallback = '1';
+                el.removeAttribute('srcset');
+                el.src = FALLBACK_ART[k % FALLBACK_ART.length];
+              }
+            }}
+          />
         ))}
       </div>
       {n > 1 && (
@@ -100,7 +124,8 @@ export function ListingCard({
 }) {
   const { lang } = useI18n();
   return (
-    <article className="lcard" data-active={active ? 'true' : undefined} onMouseEnter={() => onHover?.(true)} onMouseLeave={() => onHover?.(false)} onFocus={() => onHover?.(true)} onBlur={() => onHover?.(false)}>
+    // minmax(0, 1fr): the photo track (one 100%-wide slide per image) must never widen the card's column.
+    <article className="lcard" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }} data-active={active ? 'true' : undefined} onMouseEnter={() => onHover?.(true)} onMouseLeave={() => onHover?.(false)} onFocus={() => onHover?.(true)} onBlur={() => onHover?.(false)}>
       <div className="media">
         <Carousel images={images} alt={title} />
         <Link href={href} tabIndex={-1} aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 1 }} />

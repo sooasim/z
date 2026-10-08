@@ -10,6 +10,10 @@ import { fieldErrors } from '@/lib/errors';
 import { Alert, Badge, Button, ErrorText, Section, DateRangeField, Qty, Icon, Illustration, Input, Textarea, type IconName } from '@/components/ui';
 import { Markdown } from '@/components/public/Markdown';
 import s from '@/components/public/public.module.css';
+import Link from 'next/link';
+import { charterPhotos, useMediaMap } from '@/lib/media';
+import { Photo, PhotoCredit } from '@/components/media';
+import m from '@/components/media/media.module.css';
 
 const FALLBACK = {
   ko: {
@@ -36,8 +40,23 @@ const FALLBACK = {
 const SECTION_ICON: IconName[] = ['users', 'plane', 'sparkle'];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
+/** Real charter / jet photos (media map 'charter' set) behind the hero. */
+function CharterHeroPhoto() {
+  useMediaMap();
+  const src = charterPhotos()[0];
+  if (!src) return null;
+  return (
+    <div className={m.heroPhoto} aria-hidden="true">
+      <Photo src={src} alt="" eager sizes="100vw" />
+      <PhotoCredit src={src} style={{ top: 10, bottom: 'auto' }} />
+    </div>
+  );
+}
+
 export default function CharterView() {
   const { L, lang } = useI18n();
+  useMediaMap();
+  const photos = charterPhotos();
   const { user } = useAuth();
   const st = useApi<any>('/v1/content/charter');
   const c = item(st.data);
@@ -91,6 +110,7 @@ export default function CharterView() {
   return (
     <>
       <section className="hero full-bleed" style={{ paddingBottom: 'var(--sp-12)' }}>
+        <CharterHeroPhoto />
         <div className="container">
           <p className="eyebrow">WONT Travel Club · JETPOOL</p>
           <h1>{title}</h1>
@@ -134,7 +154,13 @@ export default function CharterView() {
           <Section title={L('이런 상담을 받아요', 'What we can arrange')}>
             <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))' }}>
               {sections.map((x, i) => (
-                <article key={x.title} className="card flat stack">
+                <article key={x.title} className="card flat stack" style={{ overflow: 'hidden' }}>
+                  {photos[i + 1] && (
+                    <div style={{ margin: 'calc(-1 * var(--sp-5)) calc(-1 * var(--sp-5)) 0', aspectRatio: '16 / 10', overflow: 'hidden', position: 'relative' }}>
+                      <Photo src={photos[i + 1]} alt="" sizes="(max-width: 640px) 92vw, 300px" style={{ width: '100%', height: '100%' }} />
+                      <PhotoCredit src={photos[i + 1]} />
+                    </div>
+                  )}
                   <span className={s.icoTile} aria-hidden="true">
                     <Icon name={SECTION_ICON[i % SECTION_ICON.length]} size={20} />
                   </span>
@@ -144,6 +170,11 @@ export default function CharterView() {
               ))}
             </div>
           </Section>
+          <p className="small" style={{ marginTop: 'var(--sp-4)' }}>
+            <Link href="/about/charter-platform">{L('원여행클럽의 전세기 공유 플랫폼 이야기', 'The WONT charter sharing story')}</Link>
+            {' · '}
+            <Link href="/about/about-jetpool">{L('젯풀인터내셔날 · 특허', 'JETPOOL International & patent')}</Link>
+          </p>
           {routes.length > 0 && (
             <Section title={L('모집 중인 노선', 'Open routes')}>
               <div className="grid">

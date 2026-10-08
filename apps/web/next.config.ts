@@ -23,7 +23,8 @@ const csp = [
   "img-src 'self' data: blob: https:",
   "font-src 'self' data: https://cdn.jsdelivr.net",
   `connect-src 'self' ${apiOrigin} https://*.tosspayments.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org ${isDev ? 'ws: http://localhost:*' : ''}`,
-  'frame-src https://*.tosspayments.com https://*.tosspayments.co.kr',
+  // youtube-nocookie: privacy-enhanced lite embeds on migrated brand pages (player loads only on click)
+  'frame-src https://*.tosspayments.com https://*.tosspayments.co.kr https://www.youtube-nocookie.com',
   "worker-src 'self' blob:",
   "child-src 'self' blob: https://*.tosspayments.com",
   "object-src 'none'",
