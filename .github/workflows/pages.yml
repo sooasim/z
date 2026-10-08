@@ -27,6 +27,8 @@ env:
 jobs:
   build-deploy:
     name: Build static demo and publish to gh-pages
+    # deploy only verified states: manual dispatch or a commit message containing [deploy]
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy]') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -76,7 +78,7 @@ jobs:
             if [ "$code" = "200" ] && grep -q 'JETPOOL' page.html; then break; fi
             echo "attempt $i: HTTP $code"; sleep 15
           done
-          for path in "" "stay/" "exchange/" "guide-friends/" "travel/" "login/" "demo-backend.js" "demo-fixtures.json"; do
+          for path in "" "stay/" "exchange/" "guide-friends/" "travel/" "login/" "about/" "archive/" "credits/" "media-map.json" "demo-backend.js" "demo-fixtures.json"; do
             code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/$path")
             echo "$code $BASE/$path"
             test "$code" = "200"
