@@ -44,7 +44,7 @@ jobs:
           PLAYWRIGHT_MODULE: /tmp/pw/node_modules/playwright/index.mjs
         run: node scripts/legacy/capture-site.mjs --out out/legacy-raw --max-pages "${{ inputs.max_pages || '400' }}" --start https://www.wontc.co.kr/ --start https://www.wontc.co.kr/about_jetpool
       - name: Fetch openly-licensed real photos
-        if: ${{ github.event_name == 'push' || inputs.photos }}
+        if: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[photos]')) || (github.event_name == 'workflow_dispatch' && inputs.photos) }}
         run: node scripts/legacy/fetch-photos.mjs --out out/photos-raw --queries scripts/legacy/photo-queries.json
       - name: Summary
         run: |
@@ -64,7 +64,13 @@ jobs:
           # GitHub rejects files > 100 MB: keep them in the artifact only and list them
           find out -type f -size +95M -print > out/too-large.txt || true
           while read -r f; do [ -n "$f" ] && rm -f "$f"; done < out/too-large.txt
-          cd out
+          # keep what this run did not regenerate (e.g. photos-raw when photos were skipped)
+          git clone -q --depth 1 --branch legacy-assets "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" prev || mkdir prev
+          for d in legacy-raw photos-raw; do
+            if [ -d "out/$d" ]; then rm -rf "prev/$d"; cp -r "out/$d" "prev/$d"; fi
+          done
+          cp out/too-large.txt prev/ 2>/dev/null || true
+          cd prev && rm -rf .git
           git init -q -b legacy-assets
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

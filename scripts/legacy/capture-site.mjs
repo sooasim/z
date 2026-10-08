@@ -55,6 +55,7 @@ const normPage = (u) => {
 
 async function saveAsset(url, body, contentType, ctx) {
   if (!body || body.length === 0) return null;
+  if (/^text\/html/i.test(contentType || '')) return null;
   if (body.length > MAX_ASSET_BYTES) {
     manifest.failures.push({ url, reason: `too large (${body.length} bytes)` });
     return null;
@@ -132,7 +133,7 @@ while (queue.length && pageCount < MAX_PAGES) {
   page.on('response', (res) => {
     const ct = res.headers()['content-type'] || '';
     const rt = res.request().resourceType();
-    if ((rt === 'image' || rt === 'media' || isMediaType(ct)) && res.status() < 400) {
+    if ((rt === 'image' || rt === 'media' || isMediaType(ct)) && res.status() < 400 && res.status() !== 206 && !/^text\/html/i.test(ct)) {
       pending.push(
         res
           .body()
@@ -225,7 +226,10 @@ while (queue.length && pageCount < MAX_PAGES) {
   ];
   for (const [u, role, alt] of referenced) {
     if (!/^https?:/.test(u)) continue;
-    if (!manifest.byUrl[u]) await fetchAndSave(u, url, role);
+    if (u === url || normPage(u) === normPage(url)) continue; // empty src resolves to the page itself
+    const known = manifest.byUrl[u] && manifest.assets[manifest.byUrl[u]];
+    const brokenVideo = role === 'video' && known && known.bytes < 200000;
+    if (!manifest.byUrl[u] || brokenVideo) await fetchAndSave(u, url, role);
     const sha = manifest.byUrl[u];
     if (sha) {
       const a = manifest.assets[sha];
@@ -243,7 +247,11 @@ while (queue.length && pageCount < MAX_PAGES) {
 
 async function fetchAndSave(u, pageUrl, role) {
   try {
-    const r = await context.request.get(u, { headers: { referer: pageUrl }, timeout: 120000 });
+    const r = await context.request.get(u, { headers: { referer: pageUrl, range: 'bytes=0-' }, timeout: 300000, maxRetries: 2 });
+    if (r.status() === 206 && !/^bytes 0-\d+\/\d+$/.test(r.headers()['content-range'] || '')) {
+      manifest.failures.push({ url: u, pageUrl, reason: 'partial content' });
+      return null;
+    }
     if (!r.ok()) {
       manifest.failures.push({ url: u, pageUrl, reason: `HTTP ${r.status()}` });
       return null;
