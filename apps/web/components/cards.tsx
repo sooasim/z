@@ -11,6 +11,7 @@ import { ListingCard, type CardBadge } from './ui/listing-card';
 import { Avatar, RatingStars } from './ui/display';
 import { Money } from './ui/base';
 import { Icon } from './ui/icons';
+import { AutoHeading } from './ui/heading';
 
 /** Seed data uses generic '/placeholder/N.svg' covers — treat them as missing so city postcards are used instead. */
 export function realImages(urls: Array<string | undefined | null>): string[] {
@@ -96,12 +97,12 @@ export function GuideCard({ g }: { g: any }) {
       <div className="who">
         <Avatar name={v.name} src={v.avatar || undefined} size={64} verified={v.verified} />
         <div className="grow">
-          <h3>
+          <AutoHeading className="gcard-title">
             <Link href={`/guides/${v.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
               {v.name}
               <span style={{ position: 'absolute', inset: 0 }} aria-hidden="true" />
             </Link>
-          </h3>
+          </AutoHeading>
           <p className="xs muted" style={{ margin: 0 }}>
             {placeLabel(v.city, lang) || L('지역 미정', 'Area TBD')}
           </p>

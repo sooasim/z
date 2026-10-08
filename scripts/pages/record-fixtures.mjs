@@ -12,6 +12,8 @@
  *   provider, an inquiry thread, favorites, home exchanges, guide requests/offers, a tour order). Only use
  *   it against an isolated recording database — scripts/pages/record.sh sets that up.
  * - Tokens/secrets are scrubbed. Identical bodies are stored once in a body table.
+ * - Side effect: the admin AAL2 step-up ENROLLS a TOTP factor for admin@jetpool.dev on the target database. Pass
+ *   --no-admin-mfa when recording against a shared dev API (admin screens are then recorded at AAL1).
  */
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -121,7 +123,7 @@ async function loginAll() {
     }
     sessions[key] = { email, accessToken: r.body.accessToken, refreshToken: r.body.refreshToken, user: r.body.user, aal: r.body.aal, login: r.body };
   }
-  if (sessions.admin) await stepUpAdmin();
+  if (sessions.admin && !flag('no-admin-mfa')) await stepUpAdmin();
 }
 
 async function totpCode(secret) {

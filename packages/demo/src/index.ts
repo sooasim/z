@@ -77,7 +77,8 @@ declare global {
     },
   };
 
-  const ready = loadFixtures(`${BASE}/demo-fixtures.json`, BASE).catch((e) => {
+  const fixturesUrl = script?.getAttribute('data-fixtures') || `${BASE}/demo-fixtures.json`;
+  const ready = loadFixtures(fixturesUrl, BASE).catch((e) => {
     console.error('[JETPOOL demo] could not load fixtures', e);
     throw e;
   });

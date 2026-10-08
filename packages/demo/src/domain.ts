@@ -2,7 +2,7 @@
  * Stateful demo behaviour for the core flows. Every handler returns a Response, or `null` to fall through to
  * the recorded fixtures. Shapes mirror the real API DTOs (apps/api) as captured in the fixtures/templates.
  */
-import { F, anyBody, lookup, lookupFor } from './fixtures';
+import { F, anyBody, lookup, lookupFor, userName } from './fixtures';
 import { persona, personaByUserId, type Persona } from './auth';
 import { QuoteError, catalog, computeQuote, hostIdOf, invalidateCatalog, propertyDetail, publicCalendar, searchItemOf, searchProperties, suggest, locallyBookedNights } from './catalog';
 import { S, entities, entity, putEntity, save, type Kind } from './store';
@@ -59,7 +59,7 @@ function recordedDetail(c: Ctx, path: string, canSee?: (it: Obj) => boolean): Ob
   return undefined;
 }
 function personaName(userId: string): string {
-  return personaByUserId(userId)?.displayName ?? '회원';
+  return personaByUserId(userId)?.displayName ?? userName(userId) ?? '회원';
 }
 function poolId(kind: string): string {
   const s = S();

@@ -8,6 +8,7 @@ import { knownEnumLabel } from '@/lib/enums';
 import { StatusPill } from './status';
 import { Stepper } from './display';
 import { Icon, type IconName } from './icons';
+import { HeadingLevel } from './heading';
 
 export function PageHeader({ title, subtitle, actions, back }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; back?: string }) {
   const { t } = useI18n();
@@ -39,7 +40,7 @@ export function Section({ title, children, actions, id }: { title?: ReactNode; c
           {actions}
         </div>
       )}
-      {children}
+      <HeadingLevel level={title ? 3 : 2}>{children}</HeadingLevel>
     </section>
   );
 }
@@ -244,6 +245,19 @@ export function ChipGroup<T extends string>({ value, onChange, options, label, m
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * Phone-only sticky action bar (price + primary CTA) pinned above the bottom tab bar, e.g. on listing detail:
+ * `<MobileActionBar><div><strong>₩190,000</strong> / 박</div><Button variant="accent">예약하기</Button></MobileActionBar>`.
+ * Hidden from 1024px, where the booking card is sticky instead.
+ */
+export function MobileActionBar({ children, label }: { children: ReactNode; label?: string }) {
+  return (
+    <div className="mobile-action-bar" role="region" aria-label={label}>
+      <div className="container">{children}</div>
     </div>
   );
 }

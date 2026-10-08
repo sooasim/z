@@ -8,6 +8,7 @@ import { ApiError } from '@/lib/errors';
 import { useAuth } from '@/lib/auth';
 import { CardSkeleton } from './ui/skeleton';
 import { Icon } from './ui/icons';
+import { HeadingLevel } from './ui/heading';
 
 /** Horizontal scroll-snap discovery rail. Errors degrade to a quiet inline note so the home page never breaks. */
 export function Rail({ title, subtitle, path, query, render, href, emptyText, fallback, requireAuth }: { title: string; subtitle?: string; path: string; query?: Record<string, any>; render: (row: any) => ReactNode; href?: string; emptyText?: string; fallback?: ReactNode; requireAuth?: boolean }) {
@@ -61,11 +62,13 @@ export function Rail({ title, subtitle, path, query, render, href, emptyText, fa
           </p>
         )
       ) : (
-        <div className="rail" ref={ref} tabIndex={0} aria-label={`${title} — ${L('좌우로 스크롤', 'scroll horizontally')}`}>
-          {rows.slice(0, 16).map((r, i) => (
-            <div key={r.id ?? i}>{render(r)}</div>
-          ))}
-        </div>
+        <HeadingLevel level={3}>
+          <div className="rail" ref={ref} tabIndex={0} aria-label={`${title} — ${L('좌우로 스크롤', 'scroll horizontally')}`}>
+            {rows.slice(0, 16).map((r, i) => (
+              <div key={r.id ?? i}>{render(r)}</div>
+            ))}
+          </div>
+        </HeadingLevel>
       )}
     </section>
   );

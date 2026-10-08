@@ -17,6 +17,7 @@
  * real titles. Output: dist-pages/ with .nojekyll and 404.html.
  */
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { cp, mkdir, readdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -232,7 +233,13 @@ log(`generateStaticParams added to ${pages.length} dynamic pages (${prerender} p
 // 7) demo runtime first thing in <head>
 const layoutPath = ['layout.tsx', 'layout.jsx', 'layout.js'].map((x) => path.join(appDir, x)).find((x) => existsSync(x));
 let layout = await readFile(layoutPath, 'utf8');
-const tag = `<script src="${BASE}/demo-backend.js" data-jetpool-demo="" />`;
+// Cache-busting: GitHub Pages serves with max-age=600, so a redeploy must not mix an old runtime with new fixtures.
+const fixturesJson = JSON.stringify(fx);
+const runtimeJs = await readFile(path.join(DEMO, 'dist/demo-backend.js'), 'utf8');
+const ver = createHash('sha256').update(runtimeJs).update(fixturesJson).digest('hex').slice(0, 10);
+const runtimeSrc = `${BASE}/demo-backend.js?v=${ver}`;
+const fixturesSrc = `${BASE}/demo-fixtures.json?v=${ver}`;
+const tag = `<script src="${runtimeSrc}" data-jetpool-demo="" data-fixtures="${fixturesSrc}" />`;
 if (/<head(\s[^>]*)?>/.test(layout)) layout = layout.replace(/<head(\s[^>]*)?>/, (m) => `${m}\n        ${tag}`);
 else if (/<html[^>]*>/.test(layout)) layout = layout.replace(/<html[^>]*>/, (m) => `${m}\n      <head>${tag}</head>`);
 else throw new Error('could not find <head> or <html> in app/layout');
@@ -242,7 +249,7 @@ await writeFile(layoutPath, layout);
 const pub = path.join(COPY, 'public');
 await mkdir(pub, { recursive: true });
 await cp(path.join(DEMO, 'dist/demo-backend.js'), path.join(pub, 'demo-backend.js'));
-await writeFile(path.join(pub, 'demo-fixtures.json'), JSON.stringify(fx));
+await writeFile(path.join(pub, 'demo-fixtures.json'), fixturesJson);
 await writeFile(
   path.join(pub, 'sw.js'),
   `/* Static demo: no offline cache. Removes any previously installed JETPOOL service worker. */\nself.addEventListener('install', () => self.skipWaiting());\nself.addEventListener('activate', (e) => e.waitUntil(self.registration.unregister().then(() => self.clients.matchAll()).then((cs) => cs.forEach((c) => c.navigate && c.navigate(c.url)))));\n`,
@@ -286,7 +293,7 @@ let injected = 0;
 for (const f of (await walk(OUT)).filter((x) => x.endsWith('.html'))) {
   const html = await readFile(f, 'utf8');
   if (html.includes('data-jetpool-demo-early')) continue;
-  const next = html.replace(/<head>/, `<head><script src="${BASE}/demo-backend.js" data-jetpool-demo-early=""></script>`);
+  const next = html.replace(/<head>/, `<head><script src="${runtimeSrc}" data-jetpool-demo-early="" data-fixtures="${fixturesSrc}"></script>`);
   if (next !== html) {
     await writeFile(f, next);
     injected++;

@@ -11,3 +11,4 @@ export * from './display';
 export * from './charts';
 export * from './pickers';
 export * from './listing-card';
+export * from './heading';

@@ -61,13 +61,26 @@ function shiftDates(v: any, days: number): any {
 }
 export let shiftDays = 0;
 
+/** userId → display name, harvested from every recorded body (conversation members, requester/responder, …). */
+const names = new Map<string, string>();
+function indexNames(v: any) {
+  if (Array.isArray(v)) v.forEach(indexNames);
+  else if (v && typeof v === 'object') {
+    const id = v.userId ?? v.id;
+    if (typeof v.displayName === 'string' && typeof id === 'string' && !names.has(id)) names.set(id, v.displayName);
+    for (const x of Object.values(v)) if (x && typeof x === 'object') indexNames(x);
+  }
+}
+export const userName = (id: string): string | undefined => names.get(id);
+
 export async function loadFixtures(url: string, base: string): Promise<void> {
-  const res = await nativeFetch(url, { cache: 'force-cache' });
+  const res = await nativeFetch(url);
   if (!res.ok) throw new Error(`demo fixtures: HTTP ${res.status}`);
   F = await res.json();
   shiftDays = Math.max(0, Math.floor((Date.now() - Date.parse(F.recordedAt)) / 86400000));
   for (const k of Object.keys(F.bodies)) F.bodies[k] = rewriteAssets(shiftDays ? shiftDates(F.bodies[k], shiftDays) : F.bodies[k], base);
   F.templates = rewriteAssets(shiftDays ? shiftDates(F.templates || {}, shiftDays) : F.templates || {}, base);
+  for (const k of Object.keys(F.bodies)) indexNames(F.bodies[k]);
   for (const key of Object.keys(F.responses)) {
     const bar = key.indexOf('|GET ');
     const persona = key.slice(0, bar);

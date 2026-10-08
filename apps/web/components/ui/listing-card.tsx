@@ -5,6 +5,7 @@ import { useI18n } from '@/lib/i18n';
 import { formatMoney } from '@/lib/format';
 import { RatingStars } from './display';
 import { Icon } from './icons';
+import { AutoHeading } from './heading';
 
 const FALLBACK_ART = ['/art/postcards/coast.svg', '/art/postcards/mountain.svg', '/art/postcards/city.svg'];
 
@@ -117,7 +118,7 @@ export function ListingCard({
       </div>
       <Link href={href} className="body" style={{ textDecoration: 'none', color: 'inherit' }}>
         <div className="title-row">
-          <h3>{title}</h3>
+          <AutoHeading className="lcard-title">{title}</AutoHeading>
           {(rating !== undefined || reviewCount !== undefined) && <RatingStars value={rating} count={reviewCount || undefined} compact />}
         </div>
         {meta && <p className="meta">{meta}</p>}
