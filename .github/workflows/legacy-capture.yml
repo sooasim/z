@@ -4,6 +4,11 @@
 name: legacy-capture
 
 on:
+  push:
+    branches: [claude/eager-ride-bjce41]
+    paths:
+      - 'scripts/legacy/**'
+      - '.github/workflows/legacy-capture.yml'
   workflow_dispatch:
     inputs:
       max_pages:
@@ -37,9 +42,9 @@ jobs:
       - name: Capture legacy site (pages, images, videos, embeds)
         env:
           PLAYWRIGHT_MODULE: /tmp/pw/node_modules/playwright/index.mjs
-        run: node scripts/legacy/capture-site.mjs --out out/legacy-raw --max-pages "${{ inputs.max_pages }}" --start https://www.wontc.co.kr/ --start https://www.wontc.co.kr/about_jetpool
+        run: node scripts/legacy/capture-site.mjs --out out/legacy-raw --max-pages "${{ inputs.max_pages || '400' }}" --start https://www.wontc.co.kr/ --start https://www.wontc.co.kr/about_jetpool
       - name: Fetch openly-licensed real photos
-        if: ${{ inputs.photos }}
+        if: ${{ github.event_name == 'push' || inputs.photos }}
         run: node scripts/legacy/fetch-photos.mjs --out out/photos-raw --queries scripts/legacy/photo-queries.json
       - name: Summary
         run: |
