@@ -1,0 +1,65 @@
+# Static GitHub Pages demo of the real apps/web UI (no server). See docs/DEMO.md.
+# The recorded API fixtures (packages/demo/fixtures/api.json) are committed, so this job needs no PostgreSQL.
+# One-time setup: Settings → Pages → Build and deployment → Source: "GitHub Actions".
+name: pages
+
+on:
+  push:
+    branches: [claude/eager-ride-bjce41]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  build:
+    name: Build static demo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+      - name: Build (next export + demo runtime)
+        run: node scripts/pages/build.mjs
+        env:
+          NEXT_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+          PAGES_ORIGIN: ${{ steps.pages.outputs.origin }}
+      - name: Sanity check
+        run: |
+          test -f dist-pages/index.html
+          test -f dist-pages/404.html
+          test -f dist-pages/.nojekyll
+          test -f dist-pages/demo-backend.js
+          test -f dist-pages/demo-fixtures.json
+          grep -q 'demo-backend.js' dist-pages/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist-pages
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
