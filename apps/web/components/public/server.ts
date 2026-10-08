@@ -23,6 +23,26 @@ export const probe = cache(async (path: string): Promise<{ status: number; data:
   }
 });
 
+/**
+ * public/media-map.json read on the server (once per request), for share images (og:image) of entities whose API
+ * payload carries only media ids (travel products) or no photo at all (guide profiles). Null when unavailable.
+ */
+const mediaMap = cache(async (): Promise<{ products?: Record<string, string[]>; guides?: Record<string, string> } | null> => {
+  try {
+    const [{ readFile }, path] = await Promise.all([import('node:fs/promises'), import('node:path')]);
+    return JSON.parse(await readFile(path.join(process.cwd(), 'public/media-map.json'), 'utf8'));
+  } catch {
+    return null;
+  }
+});
+
+/** Root-relative real-photo URL ('/photos/…', '/legacy/…') for a travel product or guide share image, or ''. */
+export async function sharePhoto(kind: 'product' | 'guide', id: string): Promise<string> {
+  const m = await mediaMap();
+  const v = kind === 'product' ? m?.products?.[id]?.[0] : m?.guides?.[id];
+  return typeof v === 'string' && v.startsWith('/') ? v : '';
+}
+
 /** True when the API confirmed the entity does not exist (404, or 400 for a malformed id such as a non-UUID). */
 export const isMissing = (status: number, malformedIs404 = false) => status === 404 || (malformedIs404 && status === 400);
 

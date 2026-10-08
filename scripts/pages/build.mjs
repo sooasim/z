@@ -102,8 +102,9 @@ function startFixtureServer() {
     if (!byPath.has(p)) byPath.set(p, []);
     byPath.get(p).push({ params: new URLSearchParams(q < 0 ? '' : rest.slice(q + 1)), r });
   }
-  const assetRe = new RegExp(`^/(${PUBLIC_DIRS.map((d) => d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})/`);
-  const prefix = (v) => (typeof v === 'string' ? (assetRe.test(v) ? BASE + v : v) : Array.isArray(v) ? v.map(prefix) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, prefix(x)])) : v);
+  // Bodies are served exactly as recorded (root-relative '/photos/…', '/legacy/…', no basePath): build-time fetches
+  // only feed generateMetadata/sitemap, where Next resolves og:image against metadataBase (NEXT_PUBLIC_SITE_URL, which
+  // already ends in the basePath) — prefixing here produced https://<owner>.github.io/z/z/… share images.
   const server = createServer((req, res) => {
     const u = new URL(req.url, 'http://x');
     const cands = byPath.get(u.pathname) ?? [];
@@ -120,7 +121,7 @@ function startFixtureServer() {
       return res.end(JSON.stringify({ status: 404, code: 'NOT_FOUND' }));
     }
     res.writeHead(best.r.status, { 'content-type': 'application/json' });
-    res.end(JSON.stringify(prefix(fx.bodies[best.r.body])));
+    res.end(JSON.stringify(fx.bodies[best.r.body]));
   });
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server)));
 }

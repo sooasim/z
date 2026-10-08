@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import { useI18n } from '@/lib/i18n';
-import { altFor, isDocLike, useMediaMap } from '@/lib/media';
+import { altFor, archiveItem, entryFor, isDocLike, isSiteChrome, useMediaMap } from '@/lib/media';
 import { Photo } from './Photo';
 import { LiteYouTube } from './LiteYouTube';
 import { IMG, parseMarkdown, safeUrl, sameAsset, type MdBlock, type MdImage } from './markdown';
@@ -61,20 +61,32 @@ export function inline(text: string, key = 'i'): ReactNode[] {
 // ------------------------------------------------------------------------------------------------ renderer
 
 /**
+ * Bare UI scraps captured from the old site builder (popup-close glyphs, grey template bars, loading spinners): every
+ * one is still shown in /archive (all 273 migrated assets), but an article body leaves them out.
+ */
+function isUiScrap(src: string): boolean {
+  if (!isSiteChrome(src)) return false;
+  const e = entryFor(src);
+  return archiveItem(src)?.category === 'ui-element' || (!!e?.width && !!e?.height && Math.max(e.width, e.height) < 100);
+}
+
+/**
  * Safe Markdown renderer for migrated CMS pages and stories: real <Photo> images (srcset, placeholder, lazy),
  * click-to-zoom lightbox over every image in the body, lite YouTube embeds, and NO raw HTML injection.
  * `baseLevel` maps the body's top heading level to h2 (page has its own h1) without skipping levels.
  */
 export function RichMarkdown({ source, compact, baseLevel = 2, dropTitle, omit, sizes = '(max-width: 820px) 100vw, 780px' }: { source: string; compact?: boolean; baseLevel?: 2 | 3; dropTitle?: string; /** Images shown elsewhere on the page (e.g. the hero). */ omit?: string[]; sizes?: string }) {
   const { L } = useI18n();
-  useMediaMap();
+  const map = useMediaMap();
   const omitKey = (omit ?? []).join('|');
   const blocks = useMemo(() => {
     const skip = omitKey ? omitKey.split('|') : [];
     return parseMarkdown(source, { dropTitle })
-      .map((b) => (b.t === 'images' && skip.length ? { ...b, images: b.images.filter((img) => !skip.some((o) => sameAsset(o, img.src))) } : b))
+      .map((b) => (b.t === 'images' ? { ...b, images: b.images.filter((img) => !isUiScrap(img.src) && !skip.some((o) => sameAsset(o, img.src))) } : b))
       .filter((b) => b.t !== 'images' || b.images.length > 0);
-  }, [source, dropTitle, omitKey]);
+    // `map`: classifications (site chrome / scraps) are known once the media map has loaded.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source, dropTitle, omitKey, map]);
   const [open, setOpen] = useState<number | null>(null);
   const gallery: LightboxItem[] = useMemo(() => blocks.flatMap((b) => (b.t === 'images' ? b.images.map((i) => ({ src: i.src, alt: i.alt || i.title || '', caption: i.title || i.alt })) : [])), [blocks]);
   const minLevel = Math.min(6, ...blocks.filter((b): b is Extract<MdBlock, { t: 'h' }> => b.t === 'h').map((b) => b.level));
@@ -130,9 +142,11 @@ export function RichMarkdown({ source, compact, baseLevel = 2, dropTitle, omit, 
             imgIndex += b.images.length;
             const one = (img: MdImage, k: number, single = b.images.length === 1) => {
               const alt = img.alt || altFor(img.src) || '';
-              const pic = <Photo src={img.src} alt={alt} sizes={single ? sizes : '(max-width: 640px) 50vw, 390px'} intrinsic />;
+              // Icons / logos from the old site keep their own size instead of being stretched to the column width.
+              const natural = isSiteChrome(img.src) ? entryFor(img.src)?.width : undefined;
+              const pic = <Photo src={img.src} alt={alt} sizes={natural ? `${natural}px` : single ? sizes : '(max-width: 640px) 50vw, 390px'} intrinsic style={natural ? { width: natural } : undefined} />;
               return (
-                <figure key={k} className={s.figure} style={single ? undefined : { margin: '0 0 10px', breakInside: 'avoid' }}>
+                <figure key={k} className={natural ? `${s.figure} ${s.narrow}` : s.figure} style={single ? undefined : { margin: '0 0 10px', breakInside: 'avoid' }}>
                   {img.href ? (
                     <A href={img.href}>{pic}</A>
                   ) : (
@@ -148,7 +162,7 @@ export function RichMarkdown({ source, compact, baseLevel = 2, dropTitle, omit, 
             // Photos pair up in two columns; letter scans / posters stay full width so they remain readable.
             const runs: Array<{ doc: boolean; items: Array<[MdImage, number]> }> = [];
             b.images.forEach((img, k) => {
-              const doc = isDocLike(img.src);
+              const doc = isDocLike(img.src) || isSiteChrome(img.src);
               const last = runs[runs.length - 1];
               if (last && !doc && !last.doc) last.items.push([img, k]);
               else runs.push({ doc, items: [[img, k]] });

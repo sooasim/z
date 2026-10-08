@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useI18n } from '@/lib/i18n';
 import { useApi } from '@/lib/hooks';
 import { arr, items, str } from '@/lib/shape';
-import { archive, assetId, embeds, heroPhotos, isDocLike, isSiteChrome, photoPool, pick, useMediaMap } from '@/lib/media';
+import { archive, assetId, embeds, entryFor, heroPhotos, isDocLike, isSiteChrome, photoPool, pick, useMediaMap } from '@/lib/media';
 import { AutoHeading, ButtonLink, HeadingLevel, Icon } from '@/components/ui';
 import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { LEGACY_PAGES, LiteYouTube, Photo, PhotoCredit, markdownCover, markdownExcerpt } from '@/components/media';
@@ -14,6 +14,16 @@ export const BRAND_SLUGS = ['about-jetpool', 'about-wontc', 'about-ceo', 'won-st
 export const SERVICE_SLUGS = ['local-life', 'member-stay', 'jetpool-host', 'charter-platform', 'premium-lounge', 'tour-ticket', 'tour-consulting', 'customer-center'];
 /** PAGE entries that are not standalone brand pages (home blocks, charter copy, the archive which has /archive). */
 const HIDDEN = new Set(['wont-home', 'jetpool-charter', 'brand-archive']);
+
+/** Same picture in another crop/size (the old site re-served photos at several sizes): same average colour + shape. */
+function sameShot(a: string, b: string): boolean {
+  const x = entryFor(a);
+  const y = entryFor(b);
+  if (!x?.colorAvg || !y?.colorAvg || !x.width || !x.height || !y.width || !y.height) return false;
+  const rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const [p, q] = [rgb(x.colorAvg), rgb(y.colorAvg)];
+  return p.every((v, i) => Math.abs(v - q[i]) <= 4) && Math.abs(x.width / x.height - y.width / y.height) < 0.05;
+}
 
 /** Cover for a CMS entry: data.heroUrl → coverUrl → first body image → first gallery image. */
 export function entryCover(e: unknown): string {
@@ -149,9 +159,15 @@ export default function AboutIndexView() {
             </ButtonLink>
           </div>
           <Link href="/archive" aria-label={L('브랜드 아카이브 열기', 'Open the brand archive')} className={s.archiveStrip}>
-            {arch.slice(0, 16).map((a, i) => (
-              <Photo key={a.url + i} src={a.url} alt="" aspect="1 / 1" sizes="160px" style={{ width: '100%', height: '100%', borderRadius: 'var(--r-sm)' }} />
-            ))}
+            {/* Preview: photographs only (site chrome such as the popup-close icon, and letter scans, live in /archive). */}
+            {/* …and one copy per picture (the old site served the same photo at several sizes). */}
+            {arch
+              .filter((a) => !isSiteChrome(a.url) && !isDocLike(a.url))
+              .filter((a, i, list) => !list.slice(0, i).some((b) => sameShot(a.url, b.url)))
+              .slice(0, 16)
+              .map((a, i) => (
+                <Photo key={a.url + i} src={a.url} alt="" aspect="1 / 1" sizes="160px" style={{ width: '100%', height: '100%', borderRadius: 'var(--r-sm)' }} />
+              ))}
           </Link>
         </section>
 

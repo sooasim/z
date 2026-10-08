@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
-import { str } from '@/lib/shape';
+import { arr, str } from '@/lib/shape';
 import { ensureExists, isMissing, probe } from '@/components/public/server';
 import StayDetailView from './view';
 
@@ -13,7 +13,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   if (isMissing(status)) return { title: '숙소를 찾을 수 없음', robots: { index: false } };
   const title = str(p, 'title', 'name') || '숙소';
   const description = (str(p, 'summary', 'description') || `${title} — JETPOOL 검증 숙소`).slice(0, 160);
-  const image = str(p, 'coverUrl', 'coverImageUrl', 'media.0.url');
+  // Share thumbnail: the listing's cover photo (str() cannot index arrays, so read media[0] explicitly).
+  const image = str(p, 'coverUrl', 'coverImageUrl') || str(arr<any>(p, 'media')[0], 'url');
   return {
     title,
     description,

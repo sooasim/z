@@ -40,7 +40,8 @@ export function CmsExtras({ e, hero, galleryTitle, headingLevel = 2, all }: { e:
   const shown = [hero ?? '', ...inBody.images].filter(Boolean);
   const gallery = arr<any>(e, 'data.gallery')
     .map((x) => (typeof x === 'string' ? x : str(x, 'url', 'src')))
-    .filter((u, i, all) => u && all.indexOf(u) === i && !shown.some((v) => sameAsset(u, v)) && (all || !isSiteChrome(u)));
+    // (the array parameter must not be named `all`: it would shadow the prop and keep site chrome everywhere)
+    .filter((u, i, list) => u && list.indexOf(u) === i && !shown.some((v) => sameAsset(u, v)) && (all || !isSiteChrome(u)));
   const H = `h${headingLevel}` as 'h2' | 'h3';
   return (
     <>

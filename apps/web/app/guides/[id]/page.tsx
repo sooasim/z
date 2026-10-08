@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { str } from '@/lib/shape';
 import { placeLabel } from '@/lib/places';
-import { ensureExists, isMissing, probe } from '@/components/public/server';
+import { ensureExists, isMissing, probe, sharePhoto } from '@/components/public/server';
 import View from './view';
 
 const path = (id: string) => `/v1/guides/${encodeURIComponent(id)}`;
@@ -16,7 +16,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const city = placeLabel(str(g, 'city'), 'ko');
   const title = name ? `${name}${city ? ` · ${city} 가이드` : ' · 가이드'}` : '가이드 프로필';
   const description = (str(g, 'headline') || str(g, 'bio') || '로컬 가이드 프렌드와 함께 걷는 여행').slice(0, 160);
-  return { title, description, alternates: { canonical: `/guides/${id}` }, openGraph: { title, description } };
+  const image = str(g, 'coverUrl', 'avatarUrl') || (await sharePhoto('guide', id));
+  return { title, description, alternates: { canonical: `/guides/${id}` }, openGraph: { title, description, images: image ? [image] : undefined } };
 }
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {

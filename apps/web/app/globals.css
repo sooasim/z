@@ -787,8 +787,9 @@ body:has(.popover) .map-fab, body:has(.overlay) .map-fab { display: none; }
 .lcard .dots span[data-on='true'] { background: #fff; transform: scale(1.25); }
 .lcard .badges { position: absolute; top: 12px; left: 12px; display: flex; gap: 6px; flex-wrap: wrap; z-index: 2; max-width: calc(100% - 64px); }
 .lcard .fav { position: absolute; top: 8px; right: 8px; z-index: 3; }
-.lcard .body { display: grid; gap: 2px; }
-.lcard .title-row { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+/* minmax(0, 1fr) + min-width 0: a long nowrap title / meta line ellipsizes instead of widening the text column past the card. */
+.lcard .body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; min-width: 0; }
+.lcard .title-row { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; min-width: 0; }
 .lcard h3, .lcard .lcard-title { font-size: var(--fs-base); font-weight: 700; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: 0; line-height: var(--lh-snug); }
 .lcard .meta { color: var(--text-muted); font-size: var(--fs-sm); margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lcard .price { margin-top: 4px; font-size: var(--fs-sm); }
