@@ -751,8 +751,8 @@ tr:last-child td { border-bottom: 0; }
 /* Mode tabs (hero): icon + label; equal-width 2×2 grid on narrow phones so nothing is clipped. */
 .seg button svg { flex: 0 0 auto; }
 @media (max-width: 479px) {
-  .search-card .seg.modes { display: grid; grid-template-columns: 1fr 1fr; border-radius: var(--r-lg); width: 100%; max-width: none; overflow: visible; margin: 0 0 10px; }
-  .search-card .seg.modes button { justify-content: center; border-radius: var(--r-md); padding: 9px 8px; }
+  .search-card .seg.modes, .sheet-search .seg.modes { display: grid; grid-template-columns: 1fr 1fr; border-radius: var(--r-lg); width: 100%; max-width: none; overflow: visible; margin: 0 0 10px; }
+  .search-card .seg.modes button, .sheet-search .seg.modes button { justify-content: center; border-radius: var(--r-md); padding: 9px 8px; }
 }
 @media (max-width: 859px) { .search-card.has-pill > .seg.modes { display: none; } }
 /* Hide the floating map button whenever a popover or dialog is open over the page. */

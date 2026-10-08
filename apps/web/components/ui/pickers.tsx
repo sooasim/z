@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useI18n } from '@/lib/i18n';
-import { addDays, formatDate, formatDateLong, formatRange, isoDate, monthGrid, nightsBetween } from '@/lib/format';
+import { addDays, formatDate, formatDateLong, formatRange, isoDate, monthWeeks as weeksOf, nightsBetween } from '@/lib/format';
 import { get } from '@/lib/api';
 import { items, str, num } from '@/lib/shape';
 import { canonicalPlace, findPlace, placeLabel } from '@/lib/places';
@@ -287,7 +287,7 @@ export function RangeCalendar({ start, end, onChange, isBlocked, months = 2, min
                     {d}
                   </div>
                 ))}
-                {monthGrid(v.y, v.m).map((d) => {
+                {weeksOf(v.y, v.m).map((d) => {
                   const out = Number(d.slice(5, 7)) - 1 !== v.m;
                   if (out) return <div key={d} className="day out" aria-hidden="true" />;
                   const selectingEnd = !!start && !end;

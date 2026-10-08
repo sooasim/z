@@ -187,6 +187,15 @@ export function monthGrid(year: number, month0: number): string[] {
   return out;
 }
 
+/** Like monthGrid but without trailing weeks that hold no day of the month (5-row months stay 5 rows). */
+export function monthWeeks(year: number, month0: number): string[] {
+  const g = monthGrid(year, month0);
+  const inMonth = (d: string) => Number(d.slice(5, 7)) - 1 === month0;
+  let n = 6;
+  while (n > 4 && !g.slice((n - 1) * 7, n * 7).some(inMonth)) n--;
+  return g.slice(0, n * 7);
+}
+
 export function initials(name: string): string {
   return (name || '?').trim().slice(0, 1).toUpperCase();
 }

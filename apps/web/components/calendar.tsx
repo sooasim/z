@@ -1,6 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { monthGrid, isoDate, parseDateRange, formatDateLong, formatPriceShort } from '@/lib/format';
+import { monthWeeks as weeksOf, isoDate, parseDateRange, formatDateLong, formatPriceShort } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { f, str } from '@/lib/shape';
 import { Icon } from './ui/icons';
@@ -120,7 +120,7 @@ export function MonthCalendar({
       </div>
       <div className={months > 1 ? 'grid-2 even' : ''}>
         {views.map((v) => {
-          const grid = monthGrid(v.y, v.m);
+          const grid = weeksOf(v.y, v.m);
           return (
             <div key={`${v.y}-${v.m}`} className={`cal ${tall ? 'tall' : ''}`} role="group" aria-label={fmtMonth(v.y, v.m)}>
               {dows.map((d, i) => (

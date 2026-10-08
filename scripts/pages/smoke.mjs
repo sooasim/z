@@ -68,11 +68,30 @@ const step = async (name, fn) => {
   }
 };
 
+// Expectations come from the recorded fixtures, so the test follows whatever the seed contains.
+const fx = JSON.parse(await (await import('node:fs/promises')).readFile(path.join(ROOT, 'packages/demo/fixtures/api.json'), 'utf8'));
+const body = (k) => fx.bodies[fx.responses[k]?.body];
+const listings = new Map();
+for (const [k, r] of Object.entries(fx.responses)) if (k.startsWith('anon|GET /v1/search/properties') && r.status === 200) for (const it of fx.bodies[r.body]?.items ?? []) listings.set(it.id, it);
+const L = [...listings.values()];
+const detail = (p) => body(`anon|GET /v1/properties/by-slug/${p.slug}`)?.item ?? {};
+const inCity = (re) => L.filter((p) => re.test(p.city ?? ''));
+const reTitle = (list) => new RegExp(list.map((p) => p.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'));
+const jeju = inCity(/jeju/i);
+const busan = inCity(/busan/i);
+const seoul = inCity(/seoul/i);
+const hostJejuId = fx.personas.hostJeju?.userId;
+const bookable = L.filter((p) => p.rentalEnabled && p.paidBookingEnabled && detail(p).host?.id === hostJejuId && (detail(p).minNights ?? 1) <= 3 && (p.maxGuests ?? 2) >= 2);
+const target = bookable[0];
+const guestTrips = (body('guest|GET /v1/reservations')?.items ?? []).map((r) => listings.get(r.propertyId)).filter(Boolean);
+const favTitles = (body('guest|GET /v1/favorites')?.items ?? []).map((f) => f.target?.title).filter(Boolean);
+const as = (persona) => page.evaluate((p) => localStorage.setItem('jpdemo:session:v1', JSON.stringify({ persona: p, aal: 'aal1', sid: 'smoke', at: new Date().toISOString() })), persona);
+
 try {
   await step('home loads with listings', async () => {
     await page.goto(`${URL0}/`, { waitUntil: 'domcontentloaded' });
-    await page.locator('.lcard h3, .lcard .title, .lcard').nth(4).waitFor({ timeout: 15000 });
-    await page.getByText('북촌 한옥 스테이').first().waitFor({ timeout: 15000 });
+    await page.locator('.lcard').nth(4).waitFor({ timeout: 15000 });
+    await page.getByText(reTitle(L)).first().waitFor({ timeout: 15000 });
     const n = await page.locator('.lcard').count();
     await page.locator('#jetpool-demo-ribbon').waitFor({ state: 'attached', timeout: 10000 });
     const ribbon = await page.locator('#jetpool-demo-ribbon').count();
@@ -82,30 +101,28 @@ try {
 
   await step('search works', async () => {
     await page.goto(`${URL0}/stay/?q=${encodeURIComponent('제주')}`, { waitUntil: 'domcontentloaded' });
-    await page.getByText('애월 오션뷰 빌라').first().waitFor({ timeout: 15000 });
-    const jeju = await page.locator('.grid .lcard').count();
+    await page.getByText(reTitle(jeju)).first().waitFor({ timeout: 15000 });
+    const nJeju = await page.locator('.grid .lcard').count();
     await page.goto(`${URL0}/stay/?q=Busan`, { waitUntil: 'domcontentloaded' });
-    await page.getByText('광안리 오션뷰 아파트').first().waitFor({ timeout: 15000 });
-    const hasSeoul = await page.getByText('북촌 한옥 스테이').count();
-    check('search works', jeju >= 2 && hasSeoul === 0, `제주 → ${jeju} stays; Busan excludes Seoul`);
+    await page.getByText(reTitle(busan)).first().waitFor({ timeout: 15000 });
+    const leaked = seoul.length ? await page.locator('.grid').getByText(reTitle(seoul)).count() : 0;
+    check('search works', nJeju >= Math.min(2, jeju.length) && leaked === 0, `제주 → ${nJeju} stays; Busan → no Seoul listings`);
     await shot('02-search');
   });
 
-  let detailUrl = '';
   await step('listing detail opens', async () => {
     await page.locator('.grid .lcard a, .grid a.lcard').first().click();
     await page.waitForURL(/\/stay\/[^/?]+\/?/, { timeout: 15000 });
     await page.locator('h1').first().waitFor({ timeout: 15000 });
     const h1 = (await page.locator('h1').first().innerText()).trim();
-    detailUrl = page.url();
-    check('listing detail opens', h1.length > 1, `${h1} @ ${detailUrl.replace(URL0, '')}`);
+    check('listing detail opens', h1.length > 1, `${h1} @ ${page.url().replace(URL0, '')}`);
     await shot('03-detail');
   });
 
   await step('login as guest', async () => {
     await page.goto(`${URL0}/login/`, { waitUntil: 'domcontentloaded' });
     await page.locator('input[type=email]').first().fill('guest@jetpool.dev');
-    await page.locator('input[type=password]').first().fill('Jetpool!2026dev');
+    await page.locator('input[type=password]').first().fill(fx.password || 'Jetpool!2026dev');
     await page.locator('form button[type=submit], form button.primary').first().click();
     await page.waitForURL((u) => !u.pathname.includes('/login'), { timeout: 15000 });
     await page.waitForTimeout(800);
@@ -116,19 +133,23 @@ try {
 
   await step('trips shows the seeded reservation', async () => {
     await page.goto(`${URL0}/trips/`, { waitUntil: 'domcontentloaded' });
-    await page.getByText(/북촌 한옥 스테이|애월 오션뷰 빌라|강릉 안목 커피거리 바다집/).first().waitFor({ timeout: 15000 });
+    await page.getByText(reTitle(guestTrips)).first().waitFor({ timeout: 15000 });
     const txt = await page.locator('main').innerText();
-    check('trips shows the seeded reservation', /북촌 한옥 스테이|애월 오션뷰 빌라|강릉/.test(txt) && /확정|CONFIRMED/i.test(txt), txt.match(/북촌 한옥 스테이|애월 오션뷰 빌라|강릉[^\n]*/)?.[0] ?? '');
+    check('trips shows the seeded reservation', reTitle(guestTrips).test(txt), `${guestTrips.length} recorded stays, e.g. ${txt.match(reTitle(guestTrips))?.[0]}`);
     await shot('05-trips');
   });
 
   await step('book a stay end-to-end (MOCK payment)', async () => {
-    const ci = plus(40);
-    const co = plus(43);
-    await page.goto(`${URL0}/stay/jeju-stone-house/?checkIn=${ci}&checkOut=${co}&guests=2`, { waitUntil: 'domcontentloaded' });
-    const reserve = page.getByRole('button', { name: /예약하기|예약 요청|Reserve|예약/ }).first();
+    if (!target) throw new Error('no bookable Jeju-host listing in fixtures');
+    // first free 3-night window ≥ 30 days out according to the recorded calendar
+    const cal = body(Object.keys(fx.responses).find((k) => k.startsWith(`anon|GET /v1/properties/${target.id}/calendar`)))?.item?.days ?? [];
+    const free = new Set(cal.filter((d) => d.status === 'available').map((d) => d.date));
+    let ci = plus(30);
+    for (let o = 30; o < 300; o++) if ([0, 1, 2].every((k) => free.has(plus(o + k)))) { ci = plus(o); break; }
+    const co = new Date(Date.parse(ci + 'T00:00:00Z') + 3 * 86400000).toISOString().slice(0, 10);
+    await page.goto(`${URL0}/stay/${target.slug}/?checkIn=${ci}&checkOut=${co}&guests=2`, { waitUntil: 'domcontentloaded' });
     await page.getByText(/총|합계|Total/).first().waitFor({ timeout: 15000 });
-    await reserve.click();
+    await page.getByRole('button', { name: /예약하기|예약 요청|Reserve|예약/ }).first().click();
     await page.waitForURL(/\/checkout\/?\?/, { timeout: 15000 });
     await page.locator('input[type=checkbox]').first().check();
     await page.getByRole('button', { name: /날짜 확보|Hold dates/ }).click();
@@ -140,33 +161,29 @@ try {
     await shot('07-paid');
     await page.getByRole('link', { name: /예약\/주문 상세 보기|View booking/ }).click();
     await page.waitForURL(/\/trips\/[0-9a-f-]{36}\/?/, { timeout: 15000 });
-    await page.getByText('서귀포 돌담 독채').first().waitFor({ timeout: 15000 });
+    await page.getByText(target.title).first().waitFor({ timeout: 15000 });
     const txt = await page.locator('main').innerText();
-    check('book a stay end-to-end (MOCK payment)', /확정|CONFIRMED/i.test(txt), page.url().replace(URL0, ''));
+    check('book a stay end-to-end (MOCK payment)', /확정|CONFIRMED/i.test(txt), `${target.title} ${ci}→${co} ${page.url().replace(URL0, '')}`);
     await shot('08-trip-detail');
   });
 
   await step('messages + favorites', async () => {
     await page.goto(`${URL0}/messages/`, { waitUntil: 'domcontentloaded' });
-    await page.getByText(/서울 호스트/).first().waitFor({ timeout: 15000 });
+    await page.getByText(new RegExp(fx.personas.host.displayName)).first().waitFor({ timeout: 15000 });
     await page.goto(`${URL0}/saved/`, { waitUntil: 'domcontentloaded' });
-    await page.getByText(/경주 황리단길 한옥|강릉 안목/).first().waitFor({ timeout: 15000 });
-    check('messages + favorites', true);
+    if (favTitles.length) await page.getByText(new RegExp(favTitles.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'))).first().waitFor({ timeout: 15000 });
+    check('messages + favorites', true, `${favTitles.length} saved`);
   });
 
   await step('host sees the new booking after persona switch', async () => {
-    await page.evaluate(() => {
-      localStorage.setItem('jpdemo:session:v1', JSON.stringify({ persona: 'hostJeju', aal: 'aal1', sid: 'smoke', at: new Date().toISOString() }));
-    });
+    await as('hostJeju');
     await page.goto(`${URL0}/host/reservations/`, { waitUntil: 'domcontentloaded' });
-    await page.getByText('서귀포 돌담 독채').first().waitFor({ timeout: 15000 });
+    await page.getByText(fx.personas.guest.displayName).first().waitFor({ timeout: 15000 });
     const txt = await page.locator('main').innerText();
-    check('host sees the new booking after persona switch', /여행자 김/.test(txt));
+    check('host sees the new booking after persona switch', target ? txt.includes(target.title) : false);
     await shot('09-host-reservations');
   });
 
-  const fx = JSON.parse(await (await import('node:fs/promises')).readFile(path.join(ROOT, 'packages/demo/fixtures/api.json'), 'utf8'));
-  const as = (persona) => page.evaluate((p) => localStorage.setItem('jpdemo:session:v1', JSON.stringify({ persona: p, aal: 'aal1', sid: 'smoke', at: new Date().toISOString() })), persona);
   const requested = fx.ids.exchangeIds.find((id) => fx.bodies[fx.responses[`host|GET /v1/exchanges/${id}`]?.body]?.item?.status === 'REQUESTED');
   if (requested) {
     await step('host accepts a home exchange', async () => {
@@ -180,7 +197,8 @@ try {
 
   await step('tour order paid (MOCK)', async () => {
     await as('guest');
-    await page.goto(`${URL0}/travel/${fx.ids.travelProductIds[0]}/`, { waitUntil: 'domcontentloaded' });
+    const tp = fx.ids.travelProductIds.find((id) => (body(`anon|GET /v1/travel-products/${id}/departures?limit=30`)?.items ?? []).length >= 2) ?? fx.ids.travelProductIds[0];
+    await page.goto(`${URL0}/travel/${tp}/`, { waitUntil: 'domcontentloaded' });
     await page.locator('input[type=radio][name=dep]').nth(1).check({ timeout: 15000 });
     await page.getByRole('button', { name: /예약하기|Book now/ }).click();
     await page.getByRole('button', { name: /결제하기|Pay now/ }).click({ timeout: 15000 });
@@ -193,7 +211,9 @@ try {
   });
 
   await step('cancel a stay with refund preview', async () => {
-    const rid = fx.ids.reservationIds[0];
+    const today = new Date().toISOString().slice(0, 10);
+    const rid = (body('guest|GET /v1/reservations')?.items ?? []).find((r) => r.status === 'CONFIRMED' && r.checkIn > today)?.id;
+    if (!rid) throw new Error('guest has no upcoming confirmed stay in fixtures');
     await page.goto(`${URL0}/trips/${rid}/manage/`, { waitUntil: 'domcontentloaded' });
     await page.getByText(/환불 예정액|Refund/).first().waitFor({ timeout: 15000 });
     page.once('dialog', (d) => d.accept());

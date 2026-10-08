@@ -554,8 +554,11 @@ async function recordAll(templates) {
     for (const it of itemsOf(body)) {
       const o = it?.guide ?? it?.property ?? it;
       if (coll === 'guides' || p === '/v1/search/guides') add(persona, 'guides', o.guideId ?? o.userId ?? o.id);
-      else if (p === '/v1/search/properties' || p === '/v1/exchange/homes' || p === '/v1/host/properties' || p === '/v1/favorites') {
-        add(persona, 'properties', o.id ?? o.propertyId ?? o.targetId);
+      else if (p === '/v1/favorites') {
+        if (String(it.targetType).toUpperCase() === 'PROPERTY') add(persona, 'properties', it.targetId);
+        if (it.target?.slug && String(it.targetType).toUpperCase() === 'PROPERTY') add(persona, 'by-slug', it.target.slug);
+      } else if (p === '/v1/search/properties' || p === '/v1/exchange/homes' || p === '/v1/host/properties') {
+        add(persona, 'properties', o.id ?? o.propertyId);
         if (o.slug) add(persona, 'by-slug', o.slug);
         if (o.hostId) add(persona, 'hosts', o.hostId);
       } else if (p.startsWith('/v1/content/')) {

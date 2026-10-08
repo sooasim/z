@@ -123,7 +123,7 @@ log(`basePath "${BASE || '/'}", origin ${ORIGIN}`);
 await run(process.execPath, [path.join(DEMO, 'build.mjs')], { cwd: DEMO });
 
 // 2) fresh copy of apps/web (node_modules is symlinked, never reinstalled)
-await rm(WORK, { recursive: true, force: true });
+await rm(WORK, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
 await mkdir(COPY, { recursive: true });
 await cp(WEB, COPY, {
   recursive: true,
@@ -168,6 +168,14 @@ export default {
 );
 
 // 5) source patches (copy only)
+// Root-relative URLs of anything served from public/ (/art/…, /fonts/…, /icons/…, /manifest.webmanifest, …) must carry
+// the basePath; next/link and the router add it themselves, plain strings in TS/CSS do not.
+const publicEntries = existsSync(path.join(COPY, 'public')) ? (await readdir(path.join(COPY, 'public'), { withFileTypes: true })) : [];
+const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const pubDirs = publicEntries.filter((e) => e.isDirectory()).map((e) => esc(e.name));
+const pubFiles = publicEntries.filter((e) => e.isFile()).map((e) => esc(e.name));
+const dirRe = pubDirs.length ? new RegExp(`(['"\`(])\\/(${pubDirs.join('|')})\\/`, 'g') : null;
+const fileRe = pubFiles.length ? new RegExp(`(['"\`(])\\/(${pubFiles.join('|')})(?=['"\`)?#])`, 'g') : null;
 const files = (await walk(COPY)).filter((f) => /\.(tsx?|css)$/.test(f) && !f.includes(`${path.sep}node_modules${path.sep}`));
 let patchedAssets = 0;
 let patchedLoc = 0;
@@ -175,8 +183,8 @@ for (const f of files) {
   let s = await readFile(f, 'utf8');
   const before = s;
   if (BASE) {
-    s = s.replace(/(['"`(])\/(art|placeholder|icons)\//g, (_, q, d) => `${q}${BASE}/${d}/`);
-    s = s.replace(/(['"`])\/(manifest\.webmanifest|sw\.js|offline\.html)\b/g, (_, q, n) => `${q}${BASE}/${n}`);
+    if (dirRe) s = s.replace(dirRe, (_, q, d) => `${q}${BASE}/${d}/`);
+    if (fileRe) s = s.replace(fileRe, (_, q, n) => `${q}${BASE}/${n}`);
   }
   if (s !== before) patchedAssets++;
   if (/\.tsx?$/.test(f)) {
