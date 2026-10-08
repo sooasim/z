@@ -1,5 +1,12 @@
 import { z } from 'zod';
 
+/**
+ * Boolean env var: 'true'/'1'/'yes'/'on' → true, 'false'/'0'/'no'/'off' → false (case-insensitive), unset or
+ * blank → `fallback`; anything else fails config validation. Real booleans (test overrides) pass through.
+ */
+const envBoolean = (fallback: boolean) =>
+  z.preprocess((v) => (typeof v === 'boolean' ? String(v) : typeof v === 'string' && v.trim() === '' ? undefined : typeof v === 'string' ? v.trim() : v), z.stringbool().default(fallback));
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
   PORT: z.coerce.number().default(4000),
@@ -16,6 +23,13 @@ const schema = z.object({
   PUBLIC_API_URL: z.string().default('http://localhost:4000'),
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
   RATE_LIMIT_PER_MIN: z.coerce.number().default(600),
+  /**
+   * Which hops may set X-Forwarded-For (req.ip feeds rate limits, sessions.ip, audit and consent evidence).
+   * Comma-separated addresses/CIDRs or proxy-addr names (loopback, linklocal, uniquelocal), a hop count, or
+   * 'true'/'false'. Default: only private-network proxies (k8s ingress / Fly proxy / BFF), so a client cannot
+   * pick its own IP by sending the header; set explicitly when a public CDN terminates in front of the API.
+   */
+  TRUST_PROXY: z.string().default('loopback,linklocal,uniquelocal'),
   // Payments (PAY-01). provider MOCK is rejected in production.
   PAYMENT_PROVIDER: z.enum(['TOSS', 'MOCK']).default('MOCK'),
   TOSS_SECRET_KEY: z.string().optional(),
@@ -32,7 +46,8 @@ const schema = z.object({
   KAKAO_CLIENT_SECRET: z.string().optional(),
   NAVER_CLIENT_ID: z.string().optional(),
   NAVER_CLIENT_SECRET: z.string().optional(),
-  OAUTH_MOCK: z.coerce.boolean().default(false),
+  // strict: z.coerce.boolean() is Boolean(str), so the deployed OAUTH_MOCK="false" (k8s/terraform) meant TRUE
+  OAUTH_MOCK: envBoolean(false),
   // Storage (STAY-02)
   S3_ENDPOINT: z.string().optional(),
   S3_REGION: z.string().default('ap-northeast-2'),
@@ -53,6 +68,8 @@ const schema = z.object({
   // Geo (PLAT-02)
   GEOCODER: z.enum(['NOMINATIM', 'KAKAO', 'STATIC']).default('STATIC'),
   KAKAO_REST_API_KEY: z.string().optional(),
+  /** Secret key for the public-coordinate privacy fuzz (>= 32 chars). Unset → derived from DATA_ENCRYPTION_KEY. */
+  GEO_FUZZ_SECRET: z.string().min(32).optional(),
   // Workers
   OUTBOX_POLL_MS: z.coerce.number().default(1000),
   LOG_LEVEL: z.string().default('info'),

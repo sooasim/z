@@ -2,12 +2,21 @@ import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireAuth, requireRole, getActor } from '../../platform/auth.js';
-import { ctxFromRequest } from '../../platform/context.js';
+import { ctxFromRequest, systemCtx } from '../../platform/context.js';
+import { onEvent } from '../../platform/outbox.js';
+import { registerJob } from '../../platform/jobs.js';
 import {
-  PROPERTY_TYPES, ROOM_TYPES, archiveProperty, assertValidNights, blockProperty, createProperty, getProperty, getPublicBySlug,
+  PROPERTY_TYPES, ROOM_TYPES, archiveProperty, assertValidNights, backfillGeoJurisdictions, blockProperty, createProperty, enforceHostStanding, getProperty, getPublicBySlug,
   listAmenities, listCancellationPolicies, listHostProperties, listPublicProperties, publishProperty, setAmenities, unblockProperty,
   unlistProperty, updateProperty, withdrawProperty,
 } from './service.js';
+
+/**
+ * Events after which a host may no longer be in good standing. The consumer re-checks the host's standing (it is
+ * idempotent and only acts on adverse state) and takes live listings down: a sanctioned / suspended / deleted
+ * host's listings must not stay searchable and bookable.
+ */
+const HOST_STANDING_EVENTS = ['sanction.applied', 'user.suspended', 'role.revoked', 'privacy.requested', 'privacy.completed'] as const;
 
 const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'HH:MM');
 const address = z.object({
@@ -67,6 +76,18 @@ const STATUSES = ['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'UNLISTED', 'BLOCKED', 'ARC
 export default async function propertiesModule(app: FastifyInstance) {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const tags = ['STAY-01'];
+
+  for (const eventType of HOST_STANDING_EVENTS) {
+    onEvent(eventType, `properties.host-standing:${eventType}`, async (tx, ev, ctx) => {
+      const pl = (ev.payload ?? {}) as Record<string, any>;
+      const userId = typeof pl.userId === 'string' ? pl.userId : ev.aggregate_type === 'user' ? ev.aggregate_id : null;
+      if (!userId) return;
+      if (eventType === 'role.revoked' && pl.role !== 'HOST') return;
+      if (eventType.startsWith('privacy.') && pl.type !== 'DELETE') return;
+      await enforceHostStanding(tx, ctx, userId, eventType);
+    });
+  }
+  registerJob('properties.geo-jurisdiction-backfill', 60 * 60 * 1000, (appCtx) => backfillGeoJurisdictions(systemCtx(appCtx, `job-geo-backfill-${Date.now()}`)));
 
   r.get('/v1/amenities', { schema: { tags, summary: 'Amenity catalog' } }, async () => ({ items: await listAmenities(app.ctx.pool) }));
   r.get('/v1/properties/cancellation-policies', { schema: { tags, summary: 'Selectable cancellation policies' } }, async () => ({

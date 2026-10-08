@@ -5,11 +5,12 @@ import { requireAuth, requireRole, getActor } from '../../platform/auth.js';
 import { ctxFromRequest, systemCtx } from '../../platform/context.js';
 import { registerJob } from '../../platform/jobs.js';
 import { badRequest } from '../../platform/errors.js';
+import { isCalendarDate } from '../../platform/http.js';
 import {
   approveRule, createRule, decidePermit, evaluateForActor, listPermitQueue, listPermits, listRules, retireRule, runPermitExpiry, submitPermit,
 } from './service.js';
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD');
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD').refine(isCalendarDate, 'Not a valid calendar date (YYYY-MM-DD)');
 const jurisdiction = z.string().trim().regex(/^(\*|[A-Za-z]{2}(-[A-Za-z0-9]{1,3})?)$/, "e.g. 'KR', 'KR-11' or '*'");
 const staff = requireRole('COMPLIANCE', 'ADMIN'); // staff-only → AAL2 enforced
 

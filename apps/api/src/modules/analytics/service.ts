@@ -7,19 +7,34 @@ import { decodeCursor, encodeCursor } from '../../platform/http.js';
 
 /** OPS-04 analytics & audit. Analytics payloads must be non-PII (analytics_events comment in 0006). */
 
-export const EMAIL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+// Bounded quantifiers (RFC 5321 local part ≤ 64, domain ≤ 255): the unbounded `[..]+@` form backtracked
+// quadratically on long '@'-less runs (~1.2 s of event-loop CPU for one 2 MB anonymous batch).
+export const EMAIL_PATTERN = /[A-Z0-9._%+-]{1,64}@[A-Z0-9.-]{1,255}\.[A-Z]{2,24}/i;
 // 9+ digits with optional separators/country code: phone numbers (Korean and international)
 export const PHONE_PATTERN = /(?:\+?\d[\s.-]?){9,}\d/;
 // Korean resident registration number (주민등록번호) / card-like long digit runs
 const RRN_PATTERN = /\b\d{6}-?[1-4]\d{6}\b/;
+
+/** Shape limits for the anonymous ingest: keys per object, and the serialized size of one event's properties. */
+export const MAX_PROPERTY_KEYS = 50;
+export const MAX_EVENT_PROPERTIES_BYTES = 8 * 1024;
+const maxKeys = (o: Record<string, unknown>) => Object.keys(o).length <= MAX_PROPERTY_KEYS;
 const PII_KEYS = /^(e-?mail|phone|phone_?number|mobile|tel|name|full_?name|first_?name|last_?name|address|password|passwd|token|access_?token|refresh_?token|secret|card|card_?number|cvc|ssn|rrn|birth|birthday|dob)$/i;
 
 const scalar = z.union([z.string().max(500), z.number().finite(), z.boolean(), z.null()]);
-const propValue = z.union([scalar, z.array(scalar).max(50), z.record(z.string().max(64), z.union([scalar, z.array(scalar).max(50)]))]);
+const propValue = z.union([
+  scalar,
+  z.array(scalar).max(50),
+  z.record(z.string().max(64), z.union([scalar, z.array(scalar).max(50)])).refine(maxKeys, `at most ${MAX_PROPERTY_KEYS} keys`),
+]);
 
 export const analyticsEventSchema = z.object({
   name: z.string().regex(/^[a-z][a-z0-9_.]{1,63}$/, 'lowercase dotted event name'),
-  properties: z.record(z.string().max(64), propValue).default({}),
+  properties: z
+    .record(z.string().max(64), propValue)
+    .refine(maxKeys, `at most ${MAX_PROPERTY_KEYS} properties`)
+    .refine((o) => Buffer.byteLength(JSON.stringify(o)) <= MAX_EVENT_PROPERTIES_BYTES, `properties must serialize to at most ${MAX_EVENT_PROPERTIES_BYTES} bytes`)
+    .default({}),
   occurredAt: z.iso.datetime({ offset: true }).optional(),
 });
 export const analyticsBatchSchema = z.object({
@@ -29,7 +44,21 @@ export const analyticsBatchSchema = z.object({
 export type AnalyticsBatch = z.infer<typeof analyticsBatchSchema>;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const looksLikePii = (s: string) => !UUID_RE.test(s.trim()) && (EMAIL_PATTERN.test(s) || PHONE_PATTERN.test(s) || RRN_PATTERN.test(s));
+const LOCAL_CH = /[A-Z0-9._%+-]/i;
+const DOMAIN_CH = /[A-Z0-9.-]/i;
+const ALPHA = /[A-Z]/i;
+/** Same language as EMAIL_PATTERN (`x@y.zz`), decided in one linear pass per string (no regex backtracking). */
+export function looksLikeEmail(s: string): boolean {
+  for (let at = s.indexOf('@'); at !== -1; at = s.indexOf('@', at + 1)) {
+    if (at === 0 || !LOCAL_CH.test(s[at - 1])) continue;
+    let end = at + 1;
+    while (end < s.length && DOMAIN_CH.test(s[end])) end++;
+    // at least one domain char, then '.', then two letters
+    for (let j = at + 2; j < end - 2; j++) if (s[j] === '.' && ALPHA.test(s[j + 1]) && ALPHA.test(s[j + 2])) return true;
+  }
+  return false;
+}
+const looksLikePii = (s: string) => !UUID_RE.test(s.trim()) && (looksLikeEmail(s) || PHONE_PATTERN.test(s) || RRN_PATTERN.test(s));
 
 /** Remove PII-named keys and redact PII-looking values (recursively). Returns the stripped paths. */
 export function stripPii(props: Record<string, unknown>, prefix = ''): { clean: Record<string, unknown>; stripped: string[] } {

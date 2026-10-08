@@ -1,20 +1,55 @@
 import type { Db } from '../../platform/db.js';
 import { maybeOne, q } from '../../platform/db.js';
 import type { Ctx } from '../../platform/context.js';
-import type { Actor } from '../../platform/auth.js';
-import { isStaff } from '../../platform/auth.js';
+import type { Actor, Role } from '../../platform/auth.js';
+import { hasRole, isStaff } from '../../platform/auth.js';
+import { audit } from '../../platform/audit.js';
 import { forbidden, notFound, conflict } from '../../platform/errors.js';
 import { emit } from '../../platform/outbox.js';
 import { acquireBlock, releaseBlock } from '../../platform/inventory.js';
 import { assertRange, localToday } from './dates.js';
 import { loadProperty, nightlyInfo, type PropertyRow } from './pricing.js';
 
-export const staffOk = (actor: Actor | null) => !!actor && isStaff(actor) && actor.aal === 'aal2';
+/**
+ * Staff overrides in the booking module are role-scoped (least privilege), never "any staff role", and always
+ * need an AAL2 session:
+ *  READ      someone else's reservation detail / cancellation preview / host calendar (audited ELEVATED_ACCESS)
+ *  LIFECYCLE check-in / complete / no-show / hold release on behalf of a party; exact address in staff reads
+ *  CANCEL    staff cancellation = 100 % refund incl. the service fee → the PAY-02 staff-refund roles (ACCOUNTING/ADMIN)
+ *  MANAGE    price / availability / host-block writes on another host's listing (ADMIN only, audited)
+ * EDITOR and COMPLIANCE get none of them.
+ */
+export const STAFF_CAPABILITIES = {
+  READ: ['ADMIN', 'SUPPORT', 'ACCOUNTING'],
+  LIFECYCLE: ['ADMIN', 'SUPPORT'],
+  CANCEL: ['ADMIN', 'ACCOUNTING'],
+  MANAGE: ['ADMIN'],
+} as const satisfies Record<string, readonly Role[]>;
+export type StaffCapability = keyof typeof STAFF_CAPABILITIES;
 
-export async function loadManagedProperty(db: Db, actor: Actor, propertyId: string): Promise<PropertyRow> {
+export const staffOk = (actor: Actor | null | undefined, cap: StaffCapability = 'READ') =>
+  !!actor && actor.aal === 'aal2' && hasRole(actor, ...STAFF_CAPABILITIES[cap]);
+
+/** 403 for an actor without the capability; staff learn which roles the action needs. */
+export function staffDenied(actor: Actor | null | undefined, cap: StaffCapability) {
+  if (actor && isStaff(actor)) {
+    if (actor.aal !== 'aal2') return forbidden('AAL2_REQUIRED', 'Multi-factor authentication is required for this action');
+    return forbidden('ROLE_REQUIRED', `Requires one of: ${STAFF_CAPABILITIES[cap].join(', ')}`);
+  }
+  return forbidden();
+}
+
+/** Owner, or staff with `cap` (MANAGE for writes). Returns whether the access is a staff override. */
+export async function loadManagedProperty(db: Db, actor: Actor, propertyId: string, cap: 'READ' | 'MANAGE' = 'MANAGE'): Promise<PropertyRow & { staffOverride: boolean }> {
   const prop = await loadProperty(db, propertyId);
-  if (prop.host_id !== actor.userId && !staffOk(actor)) throw forbidden();
-  return prop;
+  if (prop.host_id === actor.userId) return { ...prop, staffOverride: false };
+  if (!staffOk(actor, cap)) throw staffDenied(actor, cap);
+  return { ...prop, staffOverride: true };
+}
+
+async function auditStaffWrite(db: Db, ctx: Ctx, prop: PropertyRow & { staffOverride: boolean }, action: string, after: unknown) {
+  if (!prop.staffOverride) return;
+  await audit(db, ctx, { action, resourceType: 'property', resourceId: prop.id, after: { hostId: prop.host_id, ...(after as object) }, category: 'PERMISSION' });
 }
 
 export interface AvailabilityRange {
@@ -30,7 +65,7 @@ export interface AvailabilityRange {
 /** STAY-06 bulk day-range upsert of host availability settings. */
 export async function setAvailability(tx: Db, ctx: Ctx, propertyId: string, ranges: AvailabilityRange[]) {
   const actor = ctx.actor!;
-  await loadManagedProperty(tx, actor, propertyId);
+  const prop = await loadManagedProperty(tx, actor, propertyId, 'MANAGE');
   let days = 0;
   for (const r of ranges) {
     assertRange(r.start, r.end, 400);
@@ -52,6 +87,7 @@ export async function setAvailability(tx: Db, ctx: Ctx, propertyId: string, rang
     );
     days += res.rowCount ?? 0;
   }
+  await auditStaffWrite(tx, ctx, prop, 'availability.staff_updated', { ranges });
   await emit(tx, ctx, {
     aggregateType: 'property',
     aggregateId: propertyId,
@@ -63,11 +99,12 @@ export async function setAvailability(tx: Db, ctx: Ctx, propertyId: string, rang
 
 export async function addHostBlock(tx: Db, ctx: Ctx, propertyId: string, b: { start: string; end: string; note?: string }) {
   const actor = ctx.actor!;
-  await loadManagedProperty(tx, actor, propertyId);
+  const prop = await loadManagedProperty(tx, actor, propertyId, 'MANAGE');
   assertRange(b.start, b.end, 400);
   const block = await acquireBlock(tx, {
     propertyId, start: b.start, end: b.end, blockType: 'HOST_BLOCK', sourceType: 'HOST', sourceId: null, createdBy: actor.userId, note: b.note,
   });
+  await auditStaffWrite(tx, ctx, prop, 'host_block.staff_added', { blockId: block.id, start: b.start, end: b.end });
   await emit(tx, ctx, {
     aggregateType: 'property',
     aggregateId: propertyId,
@@ -79,7 +116,7 @@ export async function addHostBlock(tx: Db, ctx: Ctx, propertyId: string, b: { st
 
 export async function removeHostBlock(tx: Db, ctx: Ctx, propertyId: string, blockId: string) {
   const actor = ctx.actor!;
-  await loadManagedProperty(tx, actor, propertyId);
+  const prop = await loadManagedProperty(tx, actor, propertyId, 'MANAGE');
   const block = await maybeOne<{ id: string; block_type: string; state: string; start: string; end: string }>(
     tx,
     `SELECT id, block_type, state, lower(stay_range)::text AS start, upper(stay_range)::text AS end
@@ -90,6 +127,7 @@ export async function removeHostBlock(tx: Db, ctx: Ctx, propertyId: string, bloc
   if (block.block_type !== 'HOST_BLOCK') throw forbidden('NOT_HOST_BLOCK', 'Only host blocks can be removed here');
   if (block.state !== 'ACTIVE') throw conflict('BLOCK_NOT_ACTIVE', 'Block is not active');
   await releaseBlock(tx, blockId, 'RELEASED');
+  await auditStaffWrite(tx, ctx, prop, 'host_block.staff_removed', { blockId, start: block.start, end: block.end });
   await emit(tx, ctx, {
     aggregateType: 'property',
     aggregateId: propertyId,
@@ -132,7 +170,7 @@ const covers = (b: { start: string; end: string }, d: string) => b.start <= d &&
 export async function publicCalendar(db: Db, actor: Actor | null, propertyId: string, from: string, to: string) {
   assertRange(from, to, 400);
   const prop = await loadProperty(db, propertyId);
-  const privileged = !!actor && (prop.host_id === actor.userId || staffOk(actor));
+  const privileged = !!actor && (prop.host_id === actor.userId || staffOk(actor, 'READ'));
   if (prop.status !== 'PUBLISHED' && !privileged) throw notFound('Property');
   const [nights, blocks, today] = await Promise.all([nightlyInfo(db, prop, from, to), activeBlocks(db, propertyId, from, to), localToday(db, prop.timezone)]);
   const days = nights.map((n) => {
@@ -146,10 +184,13 @@ export async function publicCalendar(db: Db, actor: Actor | null, propertyId: st
 }
 
 /** Host calendar overlaying RESERVATION / EXCHANGE / HOST_BLOCK / HOLD with source ids. */
-export async function hostCalendar(db: Db, actor: Actor, propertyId: string, from: string, to: string) {
+export async function hostCalendar(db: Db, actor: Actor, propertyId: string, from: string, to: string, ctx: Ctx) {
   assertRange(from, to, 400);
-  const prop = await loadManagedProperty(db, actor, propertyId);
+  const prop = await loadManagedProperty(db, actor, propertyId, 'READ');
   const [nights, blocks] = await Promise.all([nightlyInfo(db, prop, from, to), activeBlocks(db, propertyId, from, to)]);
+  if (prop.staffOverride) {
+    await audit(db, ctx, { action: 'host_calendar.read', resourceType: 'property', resourceId: propertyId, after: { from, to }, category: 'ELEVATED_ACCESS' });
+  }
   const blockDto = (b: BlockOverlay) => ({
     blockId: b.id,
     type: b.block_type,

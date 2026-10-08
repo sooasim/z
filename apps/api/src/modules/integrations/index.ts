@@ -7,6 +7,7 @@ import { withTx } from '../../platform/db.js';
 import { assertEnabled, isEnabled } from '../../platform/flags.js';
 import { registerJob } from '../../platform/jobs.js';
 import { badRequest, notFound } from '../../platform/errors.js';
+import { isoDate } from '../../platform/http.js';
 import {
   PROVIDERS,
   createAccount,
@@ -23,7 +24,8 @@ import {
 
 const TAG = ['INT-01'];
 const FLAG = 'integrations.pms';
-const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+// real calendar days only: 2026-02-30 is a 400, not a 22008 from the `::date` cast in acquireBlock
+const isoDay = isoDate;
 
 /** INT-01 PMS / supplier integrations (iCal import/export, generic HMAC webhook). */
 export default async function integrationsModule(app: FastifyInstance) {

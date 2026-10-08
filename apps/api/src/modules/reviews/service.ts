@@ -104,8 +104,13 @@ export async function checkEligibility(db: Db, authorId: string, transactionType
   return { targetId: derived!, completedAt };
 }
 
-/** Recompute the reputation projection for a target from PUBLISHED reviews (idempotent). */
+/**
+ * Recompute the reputation projection for a target from PUBLISHED reviews (idempotent).
+ * Writers are serialized per target (transaction-scoped advisory lock) so the aggregate is computed after any
+ * concurrent writer for the same target has committed; otherwise the last upsert wins with a stale count/avg.
+ */
 export async function recomputeReputation(db: Db, targetType: string, targetId: string) {
+  await db.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [`reputation:${targetType}:${targetId}`]);
   await db.query(
     `INSERT INTO reputation_scores(target_type, target_id, review_count, rating_avg, updated_at)
      SELECT $1, $2, count(*)::int, round(avg(rating)::numeric, 2), now() FROM reviews WHERE target_type = $1 AND target_id = $2 AND status = 'PUBLISHED'
@@ -121,6 +126,11 @@ export async function createReview(
 ) {
   const authorId = ctx.actor!.userId;
   const el = await checkEligibility(tx, authorId, input.transactionType, input.transactionId, input.targetType, input.targetId);
+  if (input.transactionType === 'EXCHANGE') {
+    // both partners may review at the same moment: serialize per exchange so the second writer's "both reviewed?"
+    // count sees the first writer's committed review and exchange.reviews.completed is emitted exactly once
+    await tx.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [`review:EXCHANGE:${input.transactionId}`]);
+  }
   await tx.query('SAVEPOINT review_insert');
   let review: any;
   try {
@@ -190,7 +200,18 @@ export async function report(tx: Tx, ctx: Ctx, reviewId: string, reason: string)
   return ins.rows[0];
 }
 
+/** Staff may not moderate a review they wrote or one about something they own (same rule as other staff decisions). */
+async function assertNoModerationConflict(db: Db, ctx: Ctx, review: { author_id: string; target_type: string; target_id: string }) {
+  const me = ctx.actor!.userId;
+  if (review.author_id === me || (await reviewTargetOwners(db, review.target_type, review.target_id)).includes(me)) {
+    throw forbidden('CONFLICT_OF_INTEREST', 'You cannot moderate a review you wrote or one about your own listing or profile');
+  }
+}
+
 export async function moderate(tx: Tx, ctx: Ctx, reviewId: string, input: { action: 'HIDE' | 'REMOVE' | 'RESTORE'; reason: string }) {
+  const current = await maybeOne(tx, `SELECT author_id, target_type, target_id FROM reviews WHERE id = $1`, [reviewId]);
+  if (!current) throw notFound('Review');
+  await assertNoModerationConflict(tx, ctx, current);
   const to: ReviewStatus = input.action === 'HIDE' ? 'HIDDEN' : input.action === 'REMOVE' ? 'REMOVED' : 'PUBLISHED';
   const { row, from } = await reviewMachine.transition(tx, ctx, {
     table: 'reviews',
@@ -211,6 +232,13 @@ export async function moderate(tx: Tx, ctx: Ctx, reviewId: string, input: { acti
 }
 
 export async function dismissReport(tx: Tx, ctx: Ctx, reportId: string) {
+  const open = await maybeOne(
+    tx,
+    `SELECT v.author_id, v.target_type, v.target_id FROM review_reports rp JOIN reviews v ON v.id = rp.review_id WHERE rp.id = $1 AND rp.status = 'OPEN'`,
+    [reportId],
+  );
+  if (!open) throw new AppError(404, 'NOT_FOUND', 'Open report not found');
+  await assertNoModerationConflict(tx, ctx, open);
   const r = await maybeOne(tx, `UPDATE review_reports SET status = 'DISMISSED' WHERE id = $1 AND status = 'OPEN' RETURNING *`, [reportId]);
   if (!r) throw new AppError(404, 'NOT_FOUND', 'Open report not found');
   await audit(tx, ctx, { action: 'review_report.dismissed', resourceType: 'review', resourceId: r.review_id, after: { reportId }, category: 'CONTENT' });

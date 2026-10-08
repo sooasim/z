@@ -1,5 +1,5 @@
-import type { Db } from '../../platform/db.js';
-import { maybeOne, one } from '../../platform/db.js';
+import type pg from 'pg';
+import { maybeOne, one, withTx } from '../../platform/db.js';
 import type { AppContext, Ctx } from '../../platform/context.js';
 import { emit } from '../../platform/outbox.js';
 import { notFound } from '../../platform/errors.js';
@@ -55,11 +55,15 @@ export interface AssistantResult {
 /**
  * AI-01: parse intent → live read-only search → explainable suggestions. NEVER creates holds, payments or
  * bookings (explicit user confirmation required); persists the session and the recommendation snapshot.
+ *
+ * No transaction is open while the LLM is called: the session check and the read-only searches use the pool
+ * (a connection per query), and only the final writes run in one short transaction. Holding a pooled connection
+ * "idle in transaction" across two outbound LLM calls (up to ~80 s) let ~20 concurrent prompts exhaust the pool.
  */
-export async function runTravelAssistant(db: Db, ctx: Ctx, args: { userId: string; message: string; sessionId?: string }): Promise<AssistantResult> {
+export async function runTravelAssistant(pool: pg.Pool, ctx: Ctx, args: { userId: string; message: string; sessionId?: string }): Promise<AssistantResult> {
   const app = ctx.app;
   if (args.sessionId) {
-    const s = await maybeOne(db, `SELECT id FROM ai_sessions WHERE id = $1 AND user_id = $2`, [args.sessionId, args.userId]);
+    const s = await maybeOne(pool, `SELECT id FROM ai_sessions WHERE id = $1 AND user_id = $2`, [args.sessionId, args.userId]);
     if (!s) throw notFound('Assistant session');
   }
   const today = todayIn();
@@ -80,9 +84,9 @@ export async function runTravelAssistant(db: Db, ctx: Ctx, args: { userId: strin
   const per = 3;
   const suggestions: Suggestion[] = [];
   for (const mode of intent.modes) {
-    if (mode === 'stay' || mode === 'exchange') suggestions.push(...(await searchStays(db, intent, { userId: args.userId, snapshotAt, mode, limit: per })));
-    if (mode === 'guide') suggestions.push(...(await searchGuides(db, intent, { userId: args.userId, snapshotAt, limit: per })));
-    if (mode === 'travel') suggestions.push(...(await searchTravelProducts(db, intent, { userId: args.userId, snapshotAt, limit: per })));
+    if (mode === 'stay' || mode === 'exchange') suggestions.push(...(await searchStays(pool, intent, { userId: args.userId, snapshotAt, mode, limit: per })));
+    if (mode === 'guide') suggestions.push(...(await searchGuides(pool, intent, { userId: args.userId, snapshotAt, limit: per })));
+    if (mode === 'travel') suggestions.push(...(await searchTravelProducts(pool, intent, { userId: args.userId, snapshotAt, limit: per })));
   }
 
   let reply = templateReply(intent, suggestions);
@@ -95,30 +99,35 @@ export async function runTravelAssistant(db: Db, ctx: Ctx, args: { userId: strin
   }
 
   const now = new Date().toISOString();
-  const session = args.sessionId
-    ? await one<{ id: string }>(
-        db,
-        `UPDATE ai_sessions SET messages = (SELECT coalesce(jsonb_agg(e ORDER BY ord), '[]'::jsonb) FROM (
-             SELECT e, ord FROM jsonb_array_elements(messages || $2::jsonb) WITH ORDINALITY AS t(e, ord)
-             ORDER BY ord DESC LIMIT ${MAX_HISTORY}) x), updated_at = now()
-          WHERE id = $1 RETURNING id`,
-        [args.sessionId, JSON.stringify([{ role: 'user', content: args.message.slice(0, 2000), at: now }])],
-      )
-    : await one<{ id: string }>(db, `INSERT INTO ai_sessions(user_id, messages) VALUES ($1,$2) RETURNING id`, [args.userId, JSON.stringify([{ role: 'user', content: args.message.slice(0, 2000), at: now }])]);
-  const rec = await one<{ id: string }>(
-    db,
-    `INSERT INTO ai_recommendations(session_id, user_id, intent, items, availability_snapshot_at, model) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-    [session.id, args.userId, JSON.stringify(intent), JSON.stringify(suggestions), snapshotAt, model],
-  );
-  await db.query(`UPDATE ai_sessions SET messages = messages || $2::jsonb WHERE id = $1`, [
-    session.id,
-    JSON.stringify([{ role: 'assistant', content: reply, recommendationId: rec.id, at: new Date().toISOString() }]),
-  ]);
-  await emit(db, ctx, {
-    aggregateType: 'ai_recommendation',
-    aggregateId: rec.id,
-    eventType: 'ai.recommendation.created',
-    payload: { recommendationId: rec.id, sessionId: session.id, userId: args.userId, model, itemCount: suggestions.length, modes: intent.modes, availabilitySnapshotAt: snapshotAt },
+  const { session, rec } = await withTx(pool, async (db) => {
+    // ownership is re-checked by the UPDATE itself (the session row may have changed while the LLM ran)
+    const session = args.sessionId
+      ? await maybeOne<{ id: string }>(
+          db,
+          `UPDATE ai_sessions SET messages = (SELECT coalesce(jsonb_agg(e ORDER BY ord), '[]'::jsonb) FROM (
+               SELECT e, ord FROM jsonb_array_elements(messages || $2::jsonb) WITH ORDINALITY AS t(e, ord)
+               ORDER BY ord DESC LIMIT ${MAX_HISTORY}) x), updated_at = now()
+            WHERE id = $1 AND user_id = $3 RETURNING id`,
+          [args.sessionId, JSON.stringify([{ role: 'user', content: args.message.slice(0, 2000), at: now }]), args.userId],
+        )
+      : await one<{ id: string }>(db, `INSERT INTO ai_sessions(user_id, messages) VALUES ($1,$2) RETURNING id`, [args.userId, JSON.stringify([{ role: 'user', content: args.message.slice(0, 2000), at: now }])]);
+    if (!session) throw notFound('Assistant session');
+    const rec = await one<{ id: string }>(
+      db,
+      `INSERT INTO ai_recommendations(session_id, user_id, intent, items, availability_snapshot_at, model) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+      [session.id, args.userId, JSON.stringify(intent), JSON.stringify(suggestions), snapshotAt, model],
+    );
+    await db.query(`UPDATE ai_sessions SET messages = messages || $2::jsonb WHERE id = $1`, [
+      session.id,
+      JSON.stringify([{ role: 'assistant', content: reply, recommendationId: rec.id, at: new Date().toISOString() }]),
+    ]);
+    await emit(db, ctx, {
+      aggregateType: 'ai_recommendation',
+      aggregateId: rec.id,
+      eventType: 'ai.recommendation.created',
+      payload: { recommendationId: rec.id, sessionId: session.id, userId: args.userId, model, itemCount: suggestions.length, modes: intent.modes, availabilitySnapshotAt: snapshotAt },
+    });
+    return { session, rec };
   });
   return {
     sessionId: session.id,

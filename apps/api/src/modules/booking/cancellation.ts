@@ -1,8 +1,8 @@
 import type { Db, Tx } from '../../platform/db.js';
 import { maybeOne, one } from '../../platform/db.js';
 import type { Ctx } from '../../platform/context.js';
-import type { Actor } from '../../platform/auth.js';
-import { forbidden, notFound } from '../../platform/errors.js';
+import { audit } from '../../platform/audit.js';
+import { notFound } from '../../platform/errors.js';
 import { emit } from '../../platform/outbox.js';
 import { notify } from '../../platform/notify.js';
 import { applyBps } from '../../platform/money.js';
@@ -10,6 +10,7 @@ import { releaseBlock } from '../../platform/inventory.js';
 import { requestRefund } from '../payments/service.js';
 import { reservationMachine } from './fsm.js';
 import { lockReservation, roleOf, type ReservationRole, type ReservationRow } from './reservations.js';
+import { staffDenied, staffOk } from './availability.js';
 
 export interface CancellationEvaluation {
   actorRole: ReservationRole;
@@ -23,8 +24,12 @@ export interface CancellationEvaluation {
   totalMinor: number;
   alreadyRefundedMinor: number;
   platformFeeMinor: number;
+  /** tax charged on the service fee (part of the fee component) */
+  serviceFeeTaxMinor: number;
   refundableBaseMinor: number;
   refundMinor: number;
+  /** the part of refundMinor that returns the service fee + its tax (PAY-02 component refund; the rest is payee gross) */
+  feeRefundMinor: number;
   nonRefundableMinor: number;
   currency: string;
   basis: 'GUEST_POLICY' | 'HOST_CANCELLATION' | 'STAFF_CANCELLATION';
@@ -34,8 +39,10 @@ export interface CancellationEvaluation {
 /**
  * STAY-10 policy evaluation from the immutable cancellation_policy_snapshot (never the live policy).
  * Guest: refund % of the first tier whose min_hours_before ≤ hours remaining until check-in
- * (check-in date + check-in time in the property timezone). The guest service (platform) fee is
- * excluded from the refund base unless the policy marks it refundable. Host/staff: 100% refund.
+ * (check-in date + check-in time in the property timezone). The refund has two components that the ledger reverses
+ * separately (finance postRefundReversal): the stay gross (nights + cleaning = total − service fee − its tax) and the
+ * service fee + its tax. A guest gets pct of the gross, and pct of the fee component only when the policy marks the
+ * service fee refundable (a kept fee keeps its fee revenue AND its output VAT). Host/staff: 100 % of both.
  */
 export async function evaluateCancellation(db: Db, r: ReservationRow, role: ReservationRole, at?: Date): Promise<CancellationEvaluation> {
   const snap = r.cancellation_policy_snapshot ?? {};
@@ -49,21 +56,29 @@ export async function evaluateCancellation(db: Db, r: ReservationRow, role: Rese
   );
   const hours = Number(t.hours);
   const total = r.total_minor;
-  const remaining = total - r.refunded_minor;
-  const platformFee: number = r.quote_snapshot?.platformFeeMinor ?? 0;
+  const remaining = Math.max(0, total - r.refunded_minor);
+  const platformFee = Math.max(0, Math.trunc(Number(r.quote_snapshot?.platformFeeMinor ?? 0)));
+  const feeTax = Math.max(0, Math.trunc(Number(r.quote_snapshot?.taxMinor ?? 0)));
+  const feePart = Math.min(total, platformFee + feeTax);
+  const grossPart = total - feePart;
   const serviceFeeRefundable = snap.service_fee_refundable === true;
   let tier: CancellationEvaluation['tier'] = null;
   let pct = 100;
   let base = total;
+  let feeRefund = feePart;
+  let grossRefund = grossPart;
   const basis: CancellationEvaluation['basis'] = role === 'HOST' ? 'HOST_CANCELLATION' : role === 'STAFF' ? 'STAFF_CANCELLATION' : 'GUEST_POLICY';
   if (role === 'GUEST') {
     const tiers: Array<{ min_hours_before: number; refund_pct: number }> = Array.isArray(snap.tiers) ? [...snap.tiers] : [];
     tiers.sort((a, b) => b.min_hours_before - a.min_hours_before);
     tier = tiers.find((x) => hours >= x.min_hours_before) ?? null;
     pct = tier ? Math.max(0, Math.min(100, Math.trunc(tier.refund_pct))) : 0;
-    base = serviceFeeRefundable ? total : total - platformFee;
+    base = serviceFeeRefundable ? total : grossPart;
+    grossRefund = applyBps(grossPart, pct * 100);
+    feeRefund = serviceFeeRefundable ? applyBps(feePart, pct * 100) : 0;
   }
-  const refund = Math.max(0, Math.min(remaining, applyBps(base, pct * 100)));
+  const refund = Math.max(0, Math.min(remaining, grossRefund + feeRefund));
+  const feeRefundMinor = Math.min(feeRefund, refund);
   return {
     actorRole: role,
     policyCode: snap.code ?? null,
@@ -76,8 +91,10 @@ export async function evaluateCancellation(db: Db, r: ReservationRow, role: Rese
     totalMinor: total,
     alreadyRefundedMinor: r.refunded_minor,
     platformFeeMinor: platformFee,
+    serviceFeeTaxMinor: feeTax,
     refundableBaseMinor: base,
     refundMinor: refund,
+    feeRefundMinor,
     nonRefundableMinor: remaining - refund,
     currency: r.currency,
     basis,
@@ -85,7 +102,8 @@ export async function evaluateCancellation(db: Db, r: ReservationRow, role: Rese
   };
 }
 
-export async function cancellationPreview(db: Db, actor: Actor, id: string) {
+export async function cancellationPreview(db: Db, ctx: Ctx, id: string) {
+  const actor = ctx.actor!;
   const r = await maybeOne<ReservationRow>(
     db,
     `SELECT id, property_id, host_id, guest_id, status, check_in::text AS check_in, check_out::text AS check_out, total_minor, refunded_minor,
@@ -93,17 +111,26 @@ export async function cancellationPreview(db: Db, actor: Actor, id: string) {
     [id],
   );
   if (!r) throw notFound('Reservation');
-  const role = roleOf(actor, r);
-  if (!role) throw forbidden();
+  const role = roleOf(actor, r, 'READ');
+  if (!role) throw staffDenied(actor, 'READ');
   const evaluation = await evaluateCancellation(db, r, role);
-  return { reservationId: id, status: r.status, cancellable: reservationMachine.can(r.status, 'CANCELLED'), evaluation };
+  if (role === 'STAFF') {
+    await audit(db, ctx, { action: 'reservation.cancellation_preview.read', resourceType: 'reservation', resourceId: id, category: 'ELEVATED_ACCESS' });
+  }
+  // a staff member without the CANCEL capability sees the evaluation but cannot execute it
+  const cancellable = reservationMachine.can(r.status, 'CANCELLED') && (role !== 'STAFF' || staffOk(actor, 'CANCEL'));
+  return { reservationId: id, status: r.status, cancellable, evaluation };
 }
 
+/**
+ * Cancel a CONFIRMED reservation. Guest → policy refund; host → full refund + penalty record; staff (CANCEL capability:
+ * ADMIN/ACCOUNTING — the PAY-02 staff-refund roles, since it refunds 100 % incl. the service fee) → full refund, MONEY audit.
+ */
 export async function cancelReservation(tx: Tx, ctx: Ctx, id: string, reason: string) {
   const actor = ctx.actor!;
   const r = await lockReservation(tx, id);
-  const role = roleOf(actor, r);
-  if (!role) throw forbidden();
+  const role = roleOf(actor, r, 'CANCEL');
+  if (!role) throw staffDenied(actor, 'CANCEL');
   reservationMachine.assert(r.status, 'CANCELLED');
   const ev = await evaluateCancellation(tx, r, role);
   const actorType = role === 'STAFF' ? 'ADMIN' : 'USER';
@@ -130,7 +157,18 @@ export async function cancelReservation(tx: Tx, ctx: Ctx, id: string, reason: st
       metadata: { refundMinor: ev.refundMinor, idempotencyKey },
     });
     // PAY-02 contract: payments owns the refund FSM and calls onRefunded when the provider completes it
-    refund = await requestRefund(tx, ctx, { subjectType: 'RESERVATION', subjectId: id, amountMinor: ev.refundMinor, reason: `cancellation: ${reason}`.slice(0, 500), idempotencyKey });
+    // component refund: the ledger reverses only the refunded gross / fee parts (a kept service fee keeps its revenue + VAT)
+    refund = await requestRefund(tx, ctx, {
+      subjectType: 'RESERVATION', subjectId: id, amountMinor: ev.refundMinor, feeRefundMinor: ev.feeRefundMinor,
+      reason: `cancellation: ${reason}`.slice(0, 500), idempotencyKey,
+    });
+  }
+  if (role === 'STAFF') {
+    await audit(tx, ctx, {
+      action: 'reservation.staff_cancelled', resourceType: 'reservation', resourceId: id, before: { status: r.status },
+      after: { refundMinor: ev.refundMinor, feeRefundMinor: ev.feeRefundMinor, currency: r.currency, refundId: refund?.refundId ?? null, hostId: r.host_id, guestId: r.guest_id },
+      reason, category: 'MONEY',
+    });
   }
   await tx.query(
     `INSERT INTO reservation_adjustments(reservation_id, adjustment_type, amount_minor, currency, policy_evaluation, refund_id, created_by)

@@ -17,7 +17,9 @@
  *  - the out-of-band e-mail code sender is replaced by an in-memory capture (the documented
  *    `identity.codeSender` adapter) so the e-mail verification code can be read, as a user would from their inbox;
  *  - the dev "presigned PUT" is performed with t.app.inject (it is unauthenticated, the HMAC token is in the URL);
- *  - the MOCK payment provider's call log is inspected to prove no provider confirmation happened.
+ *  - the MOCK payment provider's call log is inspected to prove no provider confirmation happened;
+ *  - the passage of time until check-out is simulated by moving the booked stay dates into the past (one UPDATE):
+ *    a stay can only be completed once its check-out date has arrived in the listing timezone.
  * Approved compliance and finance rules are created and approved through their APIs (four-eyes / maker-checker).
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -643,6 +645,13 @@ describe('G4 E2E — paid stay chain (HTTP only)', () => {
     expect(reviewEarly.status).toBe(422);
     expect(reviewEarly.body.code).toBe('TRANSACTION_NOT_COMPLETED');
 
+    // completing on the check-in day (before the stay was delivered) is refused
+    const notEnded = await call(t, host, 'POST', `/v1/reservations/${reservationId}/complete`, { reason: 'guest checked out' });
+    expect(notEnded.status).toBe(409);
+    expect(notEnded.body.code).toBe('STAY_NOT_ENDED');
+    // time passes: the 2-night stay is over (check-out today in Asia/Seoul)
+    await t.pool.query(`UPDATE reservations SET check_in = $2, check_out = $3 WHERE id = $1`, [reservationId, seoulDay(-2), seoulDay(0)]);
+
     corrIds.complete = corr('complete');
     const done = await call(t, host, 'POST', `/v1/reservations/${reservationId}/complete`, { reason: 'guest checked out' }, { 'x-correlation-id': corrIds.complete });
     expect(done.status, show(done)).toBe(200);
@@ -799,14 +808,14 @@ describe('G4 E2E — paid stay chain (HTTP only)', () => {
     await t.drain();
     expect((await searchStay(ci, co)).items.map((i: any) => i.id)).not.toContain(propertyId);
 
-    // MODERATE: 24h ≤ notice < 120h → 50% of (total − non-refundable service fee)
-    const expectedRefund = applyBps(TOTAL - PLATFORM_FEE, 5000);
+    // MODERATE: 24h ≤ notice < 120h → 50% of the stay gross (total − non-refundable service fee − its VAT)
+    const expectedRefund = applyBps(FEE_BASE, 5000);
     const prev = await call(t, guest, 'GET', `/v1/reservations/${rid}/cancellation-preview`);
     expect(prev.status, show(prev)).toBe(200);
     expect(prev.body.item.cancellable).toBe(true);
     expect(prev.body.item.evaluation).toMatchObject({
       actorRole: 'GUEST', policyCode: 'MODERATE', refundPct: 50, serviceFeeRefundable: false, platformFeeMinor: PLATFORM_FEE,
-      refundableBaseMinor: TOTAL - PLATFORM_FEE, refundMinor: expectedRefund, nonRefundableMinor: TOTAL - expectedRefund, timezone: 'Asia/Seoul',
+      refundableBaseMinor: FEE_BASE, refundMinor: expectedRefund, feeRefundMinor: 0, nonRefundableMinor: TOTAL - expectedRefund, timezone: 'Asia/Seoul',
     });
     expect(prev.body.item.evaluation.tier).toEqual({ min_hours_before: 24, refund_pct: 50 });
 
@@ -848,7 +857,7 @@ describe('G4 E2E — paid stay chain (HTTP only)', () => {
     // the provider-completed refund carries the correlation id of the cancellation request
     expect(r.history.at(-1).correlationId).toBe(r.history.at(-2).correlationId);
 
-    // compensating ledger entries, proportional to the approval credits, balanced
+    // compensating ledger entries for the refunded components only, balanced
     const lt = await call(t, acctA, 'GET', `/v1/admin/ledger/transactions?sourceType=REFUND&sourceId=${refundId}`);
     expect(lt.status, show(lt)).toBe(200);
     expect(lt.body.items).toHaveLength(1);
@@ -856,11 +865,14 @@ describe('G4 E2E — paid stay chain (HTTP only)', () => {
     const appr = await call(t, acctA, 'GET', `/v1/admin/ledger/transactions?sourceType=PAYMENT&sourceId=${pid}`);
     expect(appr.body.items).toHaveLength(1);
     expect(rev).toMatchObject({ type: 'REFUND', reversesTransactionId: appr.body.items[0].id });
-    const credits = appr.body.items[0].entries.filter((e: any) => e.creditMinor > 0).sort((a: any, b: any) => (a.account < b.account ? -1 : 1));
-    const parts = allocate(expectedRefund, credits.map((e: any) => e.creditMinor));
-    for (const [i, e] of credits.entries()) {
-      expect(rev.entries.find((x: any) => x.account === e.account), `reversal of ${e.account}`).toMatchObject({ debitMinor: parts[i], creditMinor: 0 });
-    }
+    // the refunded stay gross reverses the host payable and its commission pro rata; the kept service fee keeps its
+    // FEE_REVENUE and its output VAT (TAX_PAYABLE untouched)
+    const [hostPart, commissionPart] = allocate(expectedRefund, [HOST_NET, HOST_FEE]);
+    const debitOf = (account: string) => rev.entries.find((x: any) => x.account === account)?.debitMinor ?? 0;
+    expect(debitOf(`PAYEE:${host.id}:PAYABLE:KRW`)).toBe(hostPart);
+    expect(debitOf('PLATFORM:FEE_REVENUE:KRW')).toBe(commissionPart);
+    expect(debitOf('PLATFORM:TAX_PAYABLE:KRW')).toBe(0);
+    expect(rev.entries.every((x: any) => x.creditMinor === 0 || x.account === 'PLATFORM:PG_CLEARING:KRW')).toBe(true);
     expect(rev.entries.find((x: any) => x.account === 'PLATFORM:PG_CLEARING:KRW')).toMatchObject({ debitMinor: 0, creditMinor: expectedRefund });
     expect(rev.entries.reduce((a: number, e: any) => a + e.debitMinor, 0)).toBe(expectedRefund);
     expect(rev.entries.reduce((a: number, e: any) => a + e.creditMinor, 0)).toBe(expectedRefund);

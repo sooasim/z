@@ -36,13 +36,26 @@ export function verifyWebhookSignature(secret: string, rawBody: string, headers:
   return false;
 }
 
-/** Strip per-payment secrets before persisting the payload. */
-function redact(body: any): any {
-  if (!body || typeof body !== 'object') return body;
-  const clone = JSON.parse(JSON.stringify(body));
-  if ('secret' in clone) clone.secret = '[REDACTED]';
-  if (clone.data && typeof clone.data === 'object' && 'secret' in clone.data) clone.data.secret = '[REDACTED]';
-  return clone;
+/** Same shapes the confirm route accepts; anything else cannot belong to one of our payments. */
+const ORDER_ID_RE = /^[A-Za-z0-9_-]{6,64}$/;
+const PAYMENT_KEY_RE = /^[A-Za-z0-9_\-.]{1,200}$/;
+const STORED_DATA_FIELDS = ['orderId', 'paymentKey', 'status', 'method', 'totalAmount', 'balanceAmount', 'approvedAt', 'lastTransactionKey', 'transactionKey'] as const;
+
+/**
+ * The persisted copy of an (unauthenticated) webhook: a whitelist of short scalar fields only. Never the raw body —
+ * no per-payment secret, no attacker-chosen blobs. Authoritative state always comes from the provider re-fetch.
+ */
+function storedPayload(body: any, data: any, eventType: string): Record<string, unknown> {
+  const scalar = (v: unknown) => (typeof v === 'string' ? v.slice(0, 200) : typeof v === 'number' && Number.isFinite(v) ? v : typeof v === 'boolean' ? v : undefined);
+  const picked: Record<string, unknown> = {};
+  for (const k of STORED_DATA_FIELDS) {
+    const v = scalar(data?.[k]);
+    if (v !== undefined) picked[k] = v;
+  }
+  const out: Record<string, unknown> = { eventType, data: picked };
+  const createdAt = scalar(body?.createdAt);
+  if (createdAt !== undefined) out.createdAt = createdAt;
+  return out;
 }
 
 export interface WebhookOutcome { status: number; body: Record<string, unknown> }
@@ -55,17 +68,28 @@ export async function handleTossWebhook(ctx: Ctx, rawBody: string, body: any, he
   }
   if (!body || typeof body !== 'object') throw badRequest('INVALID_WEBHOOK', 'Malformed webhook body');
   const data = body.data && typeof body.data === 'object' ? body.data : body;
-  const eventType: string = String(body.eventType ?? (body.secret ? 'DEPOSIT_CALLBACK' : 'UNKNOWN')).slice(0, 100);
-  const orderId: string | undefined = typeof data.orderId === 'string' ? data.orderId : undefined;
-  const paymentKeyHint: string | undefined = typeof data.paymentKey === 'string' ? data.paymentKey : undefined;
+  const eventType: string = String(typeof body.eventType === 'string' ? body.eventType : body.secret ? 'DEPOSIT_CALLBACK' : 'UNKNOWN').slice(0, 100);
+  const orderId: string | undefined = typeof data.orderId === 'string' && ORDER_ID_RE.test(data.orderId) ? data.orderId : undefined;
+  const paymentKeyHint: string | undefined = typeof data.paymentKey === 'string' && PAYMENT_KEY_RE.test(data.paymentKey) ? data.paymentKey : undefined;
+
+  // Look the payment up BEFORE persisting anything: an anonymous caller must not be able to write rows (or trigger
+  // provider calls) for payments that do not exist.
+  const payment = orderId
+    ? await maybeOne<PaymentRow>(app.pool, `SELECT * FROM payments WHERE provider_order_id = $1`, [orderId])
+    : paymentKeyHint
+      ? await maybeOne<PaymentRow>(app.pool, `SELECT * FROM payments WHERE payment_key = $1`, [paymentKeyHint])
+      : null;
+  if (!payment) return { status: 200, body: { received: true, ignored: 'UNKNOWN_ORDER' } };
+
   const payloadHash = sha256(rawBody);
-  const externalId = String(body.eventId ?? body.id ?? payloadHash).slice(0, 200);
+  const rawEventId = typeof body.eventId === 'string' || typeof body.eventId === 'number' ? body.eventId : typeof body.id === 'string' || typeof body.id === 'number' ? body.id : null;
+  const externalId = String(rawEventId ?? payloadHash).slice(0, 200);
 
   const inserted = await withTx(app.pool, async (tx) => {
     const ins = await tx.query(
       `INSERT INTO webhook_events(provider, external_event_id, event_type, payload_hash, payload, signature_valid)
        VALUES ('TOSS',$1,$2,$3,$4,$5) ON CONFLICT (provider, external_event_id) DO NOTHING RETURNING id`,
-      [externalId, eventType, payloadHash, JSON.stringify(redact(body)), !!secret],
+      [externalId, eventType, payloadHash, JSON.stringify(storedPayload(body, data, eventType)), !!secret],
     );
     if (ins.rows[0]) return { id: ins.rows[0].id as string, processed: false };
     const prev = await maybeOne<{ id: string; processed_at: Date | null }>(
@@ -84,15 +108,6 @@ export async function handleTossWebhook(ctx: Ctx, rawBody: string, body: any, he
       valid,
     ]);
 
-  const payment = orderId
-    ? await maybeOne<PaymentRow>(app.pool, `SELECT * FROM payments WHERE provider_order_id = $1`, [orderId])
-    : paymentKeyHint
-      ? await maybeOne<PaymentRow>(app.pool, `SELECT * FROM payments WHERE payment_key = $1`, [paymentKeyHint])
-      : null;
-  if (!payment) {
-    await markProcessed('UNKNOWN_ORDER', false);
-    return { status: 200, body: { received: true, ignored: 'UNKNOWN_ORDER' } };
-  }
   const paymentKey = payment.payment_key ?? paymentKeyHint;
   if (!paymentKey) {
     await markProcessed('NO_PAYMENT_KEY', false);

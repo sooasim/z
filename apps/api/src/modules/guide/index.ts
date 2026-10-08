@@ -20,7 +20,7 @@ import { searchGuides, RANK_WEIGHTS } from './search.js';
 import { createRequest, createOffer, counterOffer, acceptOffer, declineRequest, cancelRequest, getRequestFor, listRequests, expireRequests } from './requests.js';
 import {
   guideBookingPaymentSubject, getBookingFor, listBookings, startBooking, completeBooking, cancelBooking, disputeBooking,
-  handleReviewCreated, runBookingLifecycle,
+  handleReviewCreated, handleGuideDisputeResolved, runBookingLifecycle,
 } from './bookings.js';
 
 export { evaluateGuideEligibility } from './eligibility.js';
@@ -54,6 +54,8 @@ export default async function guideModule(app: FastifyInstance) {
 
   registerPaymentSubject('GUIDE_BOOKING', guideBookingPaymentSubject);
   onEvent('review.created', 'guide.review-tracker', handleReviewCreated);
+  // TRUST-03 dispute resolution lifts the DISPUTED freeze of a guide booking
+  onEvent('dispute.resolved', 'guide.dispute-resolution', handleGuideDisputeResolved);
   registerJob('guide.request-expiry', 60_000, expireRequests);
   registerJob('guide.booking-lifecycle', 60_000, runBookingLifecycle);
   registerJob('guide.qualification-expiry', 3_600_000, runQualificationExpiry);
@@ -226,6 +228,7 @@ export default async function guideModule(app: FastifyInstance) {
 
   r.post('/v1/guide-bookings/:id/dispute', { schema: { tags: ['GUIDE-05'], params: idParams, body: S.disputeBody }, preHandler: requireAuth }, async (req) => {
     const actor = getActor(req), ctx = ctxFromRequest(req);
-    return { item: await withTx(pool, (tx) => disputeBooking(tx, ctx, actor, req.params.id, req.body.reason)) };
+    const out = await withTx(pool, (tx) => disputeBooking(tx, ctx, actor, req.params.id, req.body.reason));
+    return { item: out.booking, disputeId: out.disputeId };
   });
 }

@@ -9,8 +9,13 @@ const str = (v: string) => JSON.stringify(v); // Meilisearch filter string liter
 export class MeiliSearchAdapter implements SearchAdapter {
   readonly name = 'meilisearch' as const;
   private client: Meilisearch;
-  constructor(host: string, apiKey?: string, private uid = PROPERTY_INDEX) {
-    this.client = new Meilisearch({ host, apiKey });
+  readonly transactional = false;
+  /**
+   * Every HTTP call is bounded (meilisearch-js has NO default timeout: a hung node would otherwise block callers for
+   * minutes). Projection writes never run inside a DB transaction anyway (see SearchAdapter.transactional).
+   */
+  constructor(host: string, apiKey?: string, private uid = PROPERTY_INDEX, timeoutMs = 5000) {
+    this.client = new Meilisearch({ host, apiKey, timeout: timeoutMs });
   }
   private get index() {
     return this.client.index<Record<string, any>>(this.uid);

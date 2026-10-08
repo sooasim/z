@@ -1,5 +1,5 @@
 import type pg from 'pg';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { Secret, TOTP } from 'otpauth';
 import type { Db, Tx } from '../../platform/db.js';
 import { maybeOne, one, q, withTx } from '../../platform/db.js';
@@ -11,6 +11,7 @@ import { signAccessToken } from '../../platform/auth.js';
 import { decrypt, encrypt, hashPassword, randomDigits, randomToken, safeEqual, sha256, verifyPassword } from '../../platform/crypto.js';
 import { AppError, badRequest, conflict, forbidden, notFound, unauthorized, unprocessable } from '../../platform/errors.js';
 import { assertRequiredConsents, recordConsents, type ConsentInput } from '../privacy/service.js';
+import type { NotifierRegistry } from '../notifications/providers.js';
 import { accountSummary, issueSession, revokeAllSessions, revokeSession, type AuthMethod, type IssuedSession } from './users.js';
 import { oauthAdapter, oauthRedirectUri, type OAuthProvider } from './oauth.js';
 
@@ -26,6 +27,11 @@ export const OTP_MAX_PER_HOUR = 5;
 export const RESET_TTL_SEC = 30 * 60;
 export const OAUTH_STATE_TTL_SEC = 10 * 60;
 export const RECOVERY_CODE_COUNT = 10;
+/**
+ * A just-rotated refresh token presented again within this window, while its session is still live and it is the
+ * session's most recent superseded token, is a benign client race (two tabs refreshing at once), not theft.
+ */
+export const REFRESH_REUSE_GRACE_SEC = 10;
 const TOTP_PERIOD = 30;
 
 const ACCOUNT_LOCKED = (until: Date) =>
@@ -48,6 +54,12 @@ export function validatePasswordPolicy(password: string, email?: string | null) 
 
 const normEmail = (e: string) => e.trim().toLowerCase();
 
+/**
+ * Neutral public handle for accounts that did not choose a display name. Never derived from the email address:
+ * display names are public (profiles, reviews, host pages) and the email local-part is personal data.
+ */
+export const defaultDisplayName = () => `Traveler ${randomBytes(2).toString('hex').toUpperCase()}`;
+
 let dummyHash: Promise<string> | null = null;
 /** Equalize timing for unknown accounts. */
 const burnPasswordCheck = async (password: string) => {
@@ -56,8 +68,10 @@ const burnPasswordCheck = async (password: string) => {
 };
 
 // ---------------------------------------------------------------------------------------------------------
-// Out-of-band code delivery. Codes are NEVER returned in API responses. Override with
-// app.ctx.adapters.set('identity.codeSender', fn) (e.g. a Novu/SMTP adapter, or a capture in tests).
+// Out-of-band code delivery. Codes are NEVER returned in API responses, NEVER written to notifications (any
+// session of the account can read those, which would turn "has a session" into "has every code") and never
+// logged in production. Override with app.ctx.adapters.set('identity.codeSender', fn) (e.g. a dedicated
+// SMTP/SES adapter, or a capture in tests).
 // ---------------------------------------------------------------------------------------------------------
 export interface CodeMessage {
   userId: string | null;
@@ -65,6 +79,8 @@ export interface CodeMessage {
   purpose: 'EMAIL_OTP' | 'PASSWORD_RESET' | 'EMAIL_VERIFY';
   code: string;
   expiresAt: Date;
+  /** auth_challenges.id — stable idempotency key for the delivery provider */
+  challengeId?: string;
 }
 export type CodeSender = (tx: Tx, ctx: Ctx, msg: CodeMessage) => Promise<void>;
 
@@ -74,35 +90,90 @@ const TEMPLATES: Record<CodeMessage['purpose'], { key: string; title: string }> 
   EMAIL_VERIFY: { key: 'auth.email_verify', title: 'JETPOOL 이메일 인증' },
 };
 
-export const defaultCodeSender: CodeSender = async (tx, ctx, msg) => {
-  if (ctx.app.config.NODE_ENV !== 'production') {
-    // dev-only log line; production never logs the code.
-    ctx.app.log.info({ devAuthCode: { purpose: msg.purpose, email: msg.email, value: msg.code } }, 'dev auth code issued');
-  }
-  if (msg.userId) {
-    await notify(tx, ctx, {
-      userId: msg.userId,
+const CODE_DELIVERY_UNAVAILABLE = () => new AppError(503, 'CODE_DELIVERY_UNAVAILABLE', 'Verification codes cannot be delivered right now');
+const CODE_DELIVERY_FAILED = () => new AppError(503, 'CODE_DELIVERY_FAILED', 'The verification code could not be delivered; try again later');
+
+/** The configured EMAIL channel provider (Novu / transactional email), ignoring the development log provider. */
+function emailProvider(ctx: Ctx) {
+  const reg = ctx.app.adapters.get('notifier') as NotifierRegistry | undefined;
+  const n = reg?.get('EMAIL');
+  return n && n.name !== 'log' ? n : null;
+}
+
+/**
+ * Default delivery: straight to the inbox through the EMAIL channel provider (a direct send, not a
+ * notification row). Outside production without an email provider the code goes to the dev log only.
+ * Production without an email provider fails closed (503) instead of silently dropping or leaking codes.
+ */
+export const defaultCodeSender: CodeSender = async (_tx, ctx, msg) => {
+  const email = emailProvider(ctx);
+  if (email) {
+    await email.send({
+      notificationId: msg.challengeId ?? randomUUID(),
+      channel: 'EMAIL',
       templateKey: TEMPLATES[msg.purpose].key,
       category: 'SECURITY',
-      title: TEMPLATES[msg.purpose].title,
+      to: { userId: msg.userId ?? '', email: msg.email, locale: 'ko-KR' },
+      subject: TEMPLATES[msg.purpose].title,
       body: `${msg.code} (valid until ${msg.expiresAt.toISOString()})`,
-      data: { purpose: msg.purpose, channel: 'EMAIL' },
+      data: { purpose: msg.purpose, code: msg.code, expiresAt: msg.expiresAt.toISOString() },
     });
+    return;
   }
+  if (ctx.app.config.NODE_ENV === 'production') throw CODE_DELIVERY_UNAVAILABLE();
+  // dev-only log line; production never logs the code.
+  ctx.app.log.info({ devAuthCode: { purpose: msg.purpose, email: msg.email, value: msg.code } }, 'dev auth code issued');
 };
+
+/**
+ * Fail closed up front (before any account lookup, so the answer does not depend on whether the account exists)
+ * when production has no way to deliver codes out-of-band.
+ */
+function assertCodeDelivery(ctx: Ctx) {
+  if (ctx.app.adapters.get('identity.codeSender')) return;
+  if (ctx.app.config.NODE_ENV === 'production' && !emailProvider(ctx)) throw CODE_DELIVERY_UNAVAILABLE();
+}
 
 async function sendCode(tx: Tx, ctx: Ctx, msg: CodeMessage) {
   const sender = (ctx.app.adapters.get('identity.codeSender') as CodeSender | undefined) ?? defaultCodeSender;
-  await sender(tx, ctx, msg);
+  try {
+    await sender(tx, ctx, msg);
+  } catch (err: any) {
+    if (err instanceof AppError) throw err;
+    // never log the code or the address
+    ctx.app.log.warn({ purpose: msg.purpose, reason: String(err?.message ?? err).slice(0, 200) }, 'auth code delivery failed');
+    throw CODE_DELIVERY_FAILED();
+  }
+}
+
+/** Anti-enumeration endpoints answer 202 whatever happens; a transient delivery failure must not change that. */
+async function swallowDeliveryFailure(p: Promise<void>) {
+  try {
+    await p;
+  } catch (err) {
+    if (err instanceof AppError && err.code === 'CODE_DELIVERY_FAILED') return;
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------
 // Challenges (auth_challenges)
 // ---------------------------------------------------------------------------------------------------------
+
+/**
+ * Serialize code issuance per (purpose, subject) for the rest of the transaction, so the hourly cap
+ * (count-then-insert) and "only the latest code works" hold under concurrent requests.
+ */
+async function lockChallengeSubject(tx: Tx, purpose: string, subject: string) {
+  await tx.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [`auth_challenge:${purpose}:${subject}`]);
+}
+
 async function createChallenge(
   tx: Tx,
   c: { purpose: 'EMAIL_OTP' | 'PASSWORD_RESET' | 'EMAIL_VERIFY' | 'OAUTH_STATE' | 'ACCOUNT_LINK'; subject: string; secret: string; ttlSec: number; data?: unknown },
 ) {
+  // OAUTH_STATE challenges are independent (subject = provider); everything else is one-open-code-per-subject
+  if (c.purpose !== 'OAUTH_STATE') await lockChallengeSubject(tx, c.purpose, c.subject);
   // invalidate earlier open challenges of the same purpose/subject (only the latest code works)
   await tx.query(
     `UPDATE auth_challenges SET consumed_at = now() WHERE purpose = $1 AND subject = $2 AND consumed_at IS NULL AND purpose <> 'OAUTH_STATE'`,
@@ -115,7 +186,10 @@ async function createChallenge(
   );
 }
 
-type ChallengeResult = { ok: true; row: any } | { ok: false; code: 'CODE_INVALID' | 'CODE_EXPIRED' | 'TOO_MANY_ATTEMPTS' };
+type ChallengeResult =
+  | { ok: true; row: any }
+  /** `guessed`: a live code was actually compared against the input (counts toward account lockout) */
+  | { ok: false; code: 'CODE_INVALID' | 'CODE_EXPIRED' | 'TOO_MANY_ATTEMPTS'; guessed?: boolean };
 
 /** Verify the latest open challenge; failed attempts are counted and committed by the caller's tx. */
 async function checkChallenge(tx: Tx, purpose: string, subject: string, secret: string, maxAttempts = OTP_MAX_ATTEMPTS): Promise<ChallengeResult> {
@@ -129,7 +203,7 @@ async function checkChallenge(tx: Tx, purpose: string, subject: string, secret: 
   if (!safeEqual(row.code_hash, sha256(secret))) {
     const attempts = row.attempts + 1;
     await tx.query(`UPDATE auth_challenges SET attempts = $2, consumed_at = CASE WHEN $2::int >= $3::int THEN now() END WHERE id = $1`, [row.id, attempts, maxAttempts]);
-    return { ok: false, code: attempts >= maxAttempts ? 'TOO_MANY_ATTEMPTS' : 'CODE_INVALID' };
+    return { ok: false, code: attempts >= maxAttempts ? 'TOO_MANY_ATTEMPTS' : 'CODE_INVALID', guessed: true };
   }
   await tx.query(`UPDATE auth_challenges SET consumed_at = now() WHERE id = $1`, [row.id]);
   return { ok: true, row };
@@ -171,7 +245,7 @@ async function createAccount(
     tx,
     `INSERT INTO users(email, password_hash, display_name, locale, email_verified_at, password_changed_at)
      VALUES ($1,$2,$3,$4, CASE WHEN $5 THEN now() END, CASE WHEN $2::text IS NOT NULL THEN now() END) RETURNING id`,
-    [a.email, a.passwordHash, a.displayName ?? (a.email ? a.email.split('@')[0] : null), a.locale ?? 'ko-KR', a.emailVerified],
+    [a.email, a.passwordHash, a.displayName?.trim() || defaultDisplayName(), a.locale ?? 'ko-KR', a.emailVerified],
   );
   await tx.query(`INSERT INTO user_profiles(user_id) VALUES ($1) ON CONFLICT DO NOTHING`, [u.id]);
   await tx.query(`INSERT INTO user_preferences(user_id) VALUES ($1) ON CONFLICT DO NOTHING`, [u.id]);
@@ -188,6 +262,7 @@ export async function signup(
 ): Promise<AuthResult> {
   const email = normEmail(input.email);
   validatePasswordPolicy(input.password, email);
+  assertCodeDelivery(ctx);
   await assertRequiredConsents(pool, ctx, input.consents);
   const passwordHash = await hashPassword(input.password);
   return withTx(pool, async (tx) => {
@@ -230,32 +305,95 @@ export async function passwordLogin(pool: pg.Pool, ctx: Ctx, input: { email: str
   return r.ok!;
 }
 
+// ---- Proof of email ownership --------------------------------------------------------------------------------
+/**
+ * The first proof of inbox control on an account whose email was never verified (email OTP login, password
+ * reset). Anyone can type someone else's address at signup, so everything attached to the account before
+ * that proof may have been planted by a squatter (pre-account-takeover): drop it so only the proven owner
+ * holds credentials — other sessions, linked social identities, MFA factors and (OTP path) the password.
+ */
+async function claimUnverifiedAccount(tx: Tx, ctx: Ctx, userId: string, via: 'EMAIL_OTP' | 'PASSWORD_RESET') {
+  const passwordCleared =
+    via === 'EMAIL_OTP' ? ((await tx.query(`UPDATE users SET password_hash = NULL, password_changed_at = now() WHERE id = $1 AND password_hash IS NOT NULL`, [userId])).rowCount ?? 0) > 0 : false;
+  const sessionsRevoked = await revokeAllSessions(tx, userId, 'EMAIL_OWNERSHIP_PROVEN');
+  const providers = (await q<{ provider: string }>(tx, `DELETE FROM oauth_identities WHERE user_id = $1 RETURNING provider`, [userId])).map((p) => p.provider);
+  const factors = await q<{ id: string }>(tx, `UPDATE mfa_factors SET status = 'REVOKED', recovery_codes_hash = '{}' WHERE user_id = $1 AND status <> 'REVOKED' RETURNING id`, [userId]);
+  await tx.query(`UPDATE users SET failed_mfa_attempts = 0, mfa_locked_until = NULL WHERE id = $1`, [userId]);
+  if (!passwordCleared && !providers.length && !factors.length && !sessionsRevoked) return;
+  const after = { via, passwordCleared, sessionsRevoked, providersRemoved: providers, mfaFactorsRevoked: factors.length };
+  await audit(tx, ctx, { action: 'identity.unverified_credentials_removed', resourceType: 'user', resourceId: userId, after, category: 'SECURITY', actorId: userId });
+  await emit(tx, ctx, { aggregateType: 'user', aggregateId: userId, eventType: 'identity.credentials.reset', payload: { userId, ...after } });
+  if (factors.length) {
+    await emit(tx, ctx, { aggregateType: 'user', aggregateId: userId, eventType: 'identity.mfa.changed', payload: { userId, factorId: factors[0].id, factorType: 'TOTP', change: 'DISABLED' } });
+  }
+  await notify(tx, ctx, {
+    userId,
+    templateKey: 'auth.account_secured',
+    category: 'SECURITY',
+    title: '이메일 인증으로 계정이 보호되었습니다',
+    body: 'Your email address was verified. Sign-in methods added before verification (password, linked social logins, two-factor authentication) and other sessions were removed. Set them up again from account settings.',
+  });
+}
+
+/**
+ * Adding sign-in credentials (linking a social identity, enrolling an authenticator) requires a proven email when
+ * the account claims one; otherwise an address squatter could plant credentials the real owner never sees.
+ */
+async function assertEmailProven(db: Db, userId: string) {
+  const u = await maybeOne(db, `SELECT email, email_verified_at FROM users WHERE id = $1`, [userId]);
+  if (u?.email && !u.email_verified_at) throw forbidden('EMAIL_NOT_VERIFIED', 'Verify your email address before adding sign-in methods');
+}
+
 // ---- Email OTP --------------------------------------------------------------------------------------------
 export async function requestEmailOtp(pool: pg.Pool, ctx: Ctx, rawEmail: string) {
   const email = normEmail(rawEmail);
-  await withTx(pool, async (tx) => {
-    const u = await maybeOne(tx, `SELECT id, status FROM users WHERE email = $1`, [email]);
-    // Always answer 202 (no account enumeration); silently drop for unknown/inactive accounts or over rate.
-    if (!u || u.status === 'SUSPENDED' || u.status === 'DELETED') return;
-    if ((await recentChallengeCount(tx, 'EMAIL_OTP', email)) >= OTP_MAX_PER_HOUR) return;
-    const code = randomDigits(6);
-    const ch = await createChallenge(tx, { purpose: 'EMAIL_OTP', subject: email, secret: code, ttlSec: OTP_TTL_SEC, data: { userId: u.id } });
-    await sendCode(tx, ctx, { userId: u.id, email, purpose: 'EMAIL_OTP', code, expiresAt: new Date(ch.expires_at) });
-  });
+  assertCodeDelivery(ctx);
+  await swallowDeliveryFailure(
+    withTx(pool, async (tx) => {
+      // serialize per subject so concurrent requests cannot exceed the hourly cap or leave several codes open
+      await lockChallengeSubject(tx, 'EMAIL_OTP', email);
+      const u = await maybeOne(tx, `SELECT id, status FROM users WHERE email = $1`, [email]);
+      // Always answer 202 (no account enumeration); silently drop for unknown/inactive accounts or over rate.
+      if (!u || u.status === 'SUSPENDED' || u.status === 'DELETED') return;
+      if ((await recentChallengeCount(tx, 'EMAIL_OTP', email)) >= OTP_MAX_PER_HOUR) return;
+      const code = randomDigits(6);
+      const ch = await createChallenge(tx, { purpose: 'EMAIL_OTP', subject: email, secret: code, ttlSec: OTP_TTL_SEC, data: { userId: u.id } });
+      await sendCode(tx, ctx, { userId: u.id, email, purpose: 'EMAIL_OTP', code, expiresAt: new Date(ch.expires_at), challengeId: ch.id });
+    }),
+  );
 }
 
 export async function verifyEmailOtp(pool: pg.Pool, ctx: Ctx, input: { email: string; code: string }): Promise<AuthResult> {
   const email = normEmail(input.email);
   const r = await withTx(pool, async (tx) => {
-    const u = await maybeOne(tx, `SELECT id, status, locked_until FROM users WHERE email = $1 FOR UPDATE`, [email]);
+    const u = await maybeOne(tx, `SELECT id, status, locked_until, failed_login_attempts, email_verified_at FROM users WHERE email = $1 FOR UPDATE`, [email]);
     if (u?.locked_until && new Date(u.locked_until) > new Date()) return { err: ACCOUNT_LOCKED(new Date(u.locked_until)) };
     const c = await checkChallenge(tx, 'EMAIL_OTP', email, input.code);
     if (!c.ok || !u) {
-      if (u) await audit(tx, ctx, { action: 'auth.otp_failed', resourceType: 'user', resourceId: u.id, category: 'SECURITY', actorId: null });
-      return { err: challengeError(c.ok ? 'CODE_INVALID' : c.code) };
+      if (!u) return { err: challengeError(c.ok ? 'CODE_INVALID' : c.code) };
+      // Wrong guesses against a live code count toward the same per-account lockout as passwords, so the
+      // hourly code budget cannot be turned into an unbounded brute force of the 6-digit space.
+      let lockSec: number | null = null;
+      let lockedUntil: Date | null = null;
+      if (!c.ok && c.guessed) {
+        const failures = u.failed_login_attempts + 1;
+        lockSec = lockoutSeconds(failures);
+        const upd = await one(
+          tx,
+          `UPDATE users SET failed_login_attempts = $2, locked_until = CASE WHEN $3::int IS NULL THEN locked_until ELSE now() + make_interval(secs => $3::int) END
+            WHERE id = $1 RETURNING locked_until`,
+          [u.id, failures, lockSec],
+        );
+        lockedUntil = upd.locked_until ? new Date(upd.locked_until) : null;
+      }
+      await audit(tx, ctx, { action: 'auth.otp_failed', resourceType: 'user', resourceId: u.id, after: { locked: lockSec !== null }, category: 'SECURITY', actorId: null });
+      const code = c.ok ? 'CODE_INVALID' : c.code;
+      if (lockSec !== null && lockedUntil && code !== 'TOO_MANY_ATTEMPTS') return { err: ACCOUNT_LOCKED(lockedUntil) };
+      return { err: challengeError(code) };
     }
     if (u.status === 'SUSPENDED' || u.status === 'DELETED') return { err: forbidden('ACCOUNT_SUSPENDED', 'Account is not active') };
-    // possession of the inbox proves the email address
+    // possession of the inbox proves the email address; on the first proof, drop anything planted before it
+    if (!u.email_verified_at) await claimUnverifiedAccount(tx, ctx, u.id, 'EMAIL_OTP');
     await tx.query(`UPDATE users SET email_verified_at = coalesce(email_verified_at, now()), failed_login_attempts = 0, locked_until = NULL WHERE id = $1`, [u.id]);
     const s = await issueSession(tx, ctx, { userId: u.id, authMethod: 'EMAIL_OTP' });
     await audit(tx, ctx, { action: 'auth.login', resourceType: 'session', resourceId: s.sessionId, after: { method: 'EMAIL_OTP' }, category: 'SECURITY', actorId: u.id });
@@ -269,14 +407,16 @@ export async function verifyEmailOtp(pool: pg.Pool, ctx: Ctx, input: { email: st
 async function requestEmailVerificationTx(tx: Tx, ctx: Ctx, userId: string, email: string) {
   const code = randomDigits(6);
   const ch = await createChallenge(tx, { purpose: 'EMAIL_VERIFY', subject: email, secret: code, ttlSec: 24 * 3600, data: { userId } });
-  await sendCode(tx, ctx, { userId, email, purpose: 'EMAIL_VERIFY', code, expiresAt: new Date(ch.expires_at) });
+  await sendCode(tx, ctx, { userId, email, purpose: 'EMAIL_VERIFY', code, expiresAt: new Date(ch.expires_at), challengeId: ch.id });
 }
 
 export async function requestEmailVerification(pool: pg.Pool, ctx: Ctx, userId: string) {
+  assertCodeDelivery(ctx);
   await withTx(pool, async (tx) => {
     const u = await one(tx, `SELECT email, email_verified_at FROM users WHERE id = $1`, [userId]);
     if (!u.email) throw unprocessable('NO_EMAIL', 'The account has no email address');
     if (u.email_verified_at) throw conflict('ALREADY_VERIFIED', 'Email is already verified');
+    await lockChallengeSubject(tx, 'EMAIL_VERIFY', normEmail(u.email));
     if ((await recentChallengeCount(tx, 'EMAIL_VERIFY', normEmail(u.email))) >= OTP_MAX_PER_HOUR) throw new AppError(429, 'RATE_LIMITED', 'Too many codes requested');
     await requestEmailVerificationTx(tx, ctx, userId, normEmail(u.email));
   });
@@ -299,15 +439,19 @@ export async function confirmEmailVerification(pool: pg.Pool, ctx: Ctx, userId: 
 // ---- Password reset / change -------------------------------------------------------------------------------
 export async function requestPasswordReset(pool: pg.Pool, ctx: Ctx, rawEmail: string) {
   const email = normEmail(rawEmail);
-  await withTx(pool, async (tx) => {
-    const u = await maybeOne(tx, `SELECT id, status FROM users WHERE email = $1`, [email]);
-    if (!u || u.status === 'DELETED') return;
-    if ((await recentChallengeCount(tx, 'PASSWORD_RESET', email)) >= OTP_MAX_PER_HOUR) return;
-    const token = randomToken(24);
-    const ch = await createChallenge(tx, { purpose: 'PASSWORD_RESET', subject: email, secret: token, ttlSec: RESET_TTL_SEC, data: { userId: u.id } });
-    await sendCode(tx, ctx, { userId: u.id, email, purpose: 'PASSWORD_RESET', code: token, expiresAt: new Date(ch.expires_at) });
-    await audit(tx, ctx, { action: 'auth.password_reset_requested', resourceType: 'user', resourceId: u.id, category: 'SECURITY', actorId: null });
-  });
+  assertCodeDelivery(ctx);
+  await swallowDeliveryFailure(
+    withTx(pool, async (tx) => {
+      await lockChallengeSubject(tx, 'PASSWORD_RESET', email);
+      const u = await maybeOne(tx, `SELECT id, status FROM users WHERE email = $1`, [email]);
+      if (!u || u.status === 'DELETED') return;
+      if ((await recentChallengeCount(tx, 'PASSWORD_RESET', email)) >= OTP_MAX_PER_HOUR) return;
+      const token = randomToken(24);
+      const ch = await createChallenge(tx, { purpose: 'PASSWORD_RESET', subject: email, secret: token, ttlSec: RESET_TTL_SEC, data: { userId: u.id } });
+      await sendCode(tx, ctx, { userId: u.id, email, purpose: 'PASSWORD_RESET', code: token, expiresAt: new Date(ch.expires_at), challengeId: ch.id });
+      await audit(tx, ctx, { action: 'auth.password_reset_requested', resourceType: 'user', resourceId: u.id, category: 'SECURITY', actorId: null });
+    }),
+  );
 }
 
 export async function confirmPasswordReset(pool: pg.Pool, ctx: Ctx, input: { email: string; token: string; newPassword: string }) {
@@ -317,8 +461,10 @@ export async function confirmPasswordReset(pool: pg.Pool, ctx: Ctx, input: { ema
   const r = await withTx(pool, async (tx) => {
     const c = await checkChallenge(tx, 'PASSWORD_RESET', email, input.token, 3);
     if (!c.ok) return { err: challengeError(c.code) };
-    const u = await maybeOne(tx, `SELECT id, status FROM users WHERE email = $1 FOR UPDATE`, [email]);
+    const u = await maybeOne(tx, `SELECT id, status, email_verified_at FROM users WHERE email = $1 FOR UPDATE`, [email]);
     if (!u || u.id !== c.row.data?.userId || u.status === 'DELETED') return { err: challengeError('CODE_INVALID') };
+    // first proof of inbox control: linked identities / MFA factors added before it may belong to a squatter
+    if (!u.email_verified_at) await claimUnverifiedAccount(tx, ctx, u.id, 'PASSWORD_RESET');
     await tx.query(
       `UPDATE users SET password_hash = $2, password_changed_at = now(), failed_login_attempts = 0, locked_until = NULL,
               email_verified_at = coalesce(email_verified_at, now()) WHERE id = $1`,
@@ -361,7 +507,20 @@ export async function refreshSession(pool: pg.Pool, ctx: Ctx, refreshToken: stri
       [h],
     );
     if (!s) {
-      const hist = await maybeOne(tx, `SELECT h.session_id, s.user_id FROM session_refresh_history h JOIN sessions s ON s.id = h.session_id WHERE h.token_hash = $1`, [h]);
+      const hist = await maybeOne(
+        tx,
+        `SELECT h.session_id, s.user_id,
+                (s.revoked_at IS NULL AND s.expires_at > now()
+                 AND h.rotated_at > now() - make_interval(secs => $2)
+                 AND NOT EXISTS (SELECT 1 FROM session_refresh_history h2 WHERE h2.session_id = h.session_id AND h2.rotated_at > h.rotated_at)) AS benign_race
+           FROM session_refresh_history h JOIN sessions s ON s.id = h.session_id WHERE h.token_hash = $1`,
+        [h, REFRESH_REUSE_GRACE_SEC],
+      );
+      if (hist?.benign_race) {
+        // Two clients (tabs) refreshed with the same token at once and the other one won: the session is fine.
+        // Not theft — nothing is revoked; the client should pick up the token pair the winner stored.
+        return { err: conflict('REFRESH_TOKEN_SUPERSEDED', 'This refresh token was just rotated by a concurrent request; use the latest token') };
+      }
       if (hist) {
         // A superseded token was replayed: assume theft. Revoke the whole session family (all sessions of the user).
         const n = await revokeAllSessions(tx, hist.user_id, 'REFRESH_TOKEN_REUSE');
@@ -445,6 +604,7 @@ function newRecoveryCodes(): { plain: string[]; hashes: string[] } {
 export async function enrollTotp(pool: pg.Pool, ctx: Ctx) {
   const actor = ctx.actor!;
   return withTx(pool, async (tx) => {
+    await assertEmailProven(tx, actor.userId);
     const u = await one(tx, `SELECT email, display_name FROM users WHERE id = $1`, [actor.userId]);
     if (await maybeOne(tx, `SELECT 1 FROM mfa_factors WHERE user_id = $1 AND status = 'VERIFIED'`, [actor.userId])) {
       throw conflict('MFA_ALREADY_ENROLLED', 'A verified authenticator already exists; disable it first');
@@ -610,6 +770,7 @@ export async function startOAuth(
   input: { mode: 'login' | 'link'; consents?: ConsentInput[]; returnTo?: string },
 ) {
   if (input.mode === 'link' && !ctx.actor) throw unauthorized();
+  if (input.mode === 'link') await assertEmailProven(pool, ctx.actor!.userId);
   const cfg = ctx.app.config;
   const adapter = oauthAdapter(cfg, provider, ctx.app.adapters);
   const state = randomToken(24);
@@ -666,6 +827,7 @@ export async function oauthCallback(
     const existing = await maybeOne(tx, `SELECT user_id FROM oauth_identities WHERE provider = $1 AND provider_subject = $2`, [provider, profile.subject]);
     if (st.mode === 'link') {
       const userId = st.userId!;
+      await assertEmailProven(tx, userId);
       if (existing && existing.user_id !== userId) throw conflict('OAUTH_IDENTITY_IN_USE', 'This social account is linked to another JETPOOL account');
       if (existing) return { status: 200, body: { linked: true, provider, alreadyLinked: true } };
       if (await maybeOne(tx, `SELECT 1 FROM oauth_identities WHERE user_id = $1 AND provider = $2`, [userId, provider])) {
@@ -689,11 +851,15 @@ export async function oauthCallback(
     }
     const consents = input.consents ?? st.consents ?? [];
     await assertRequiredConsents(tx, ctx, consents);
+    // An address the provider does not vouch for (Naver never does, Kakao may not) is not proof of ownership:
+    // it must not claim users.email, or the real owner would be locked out (EMAIL_TAKEN) and pushed into a
+    // recovery flow on an account a squatter controls. It is kept on the oauth identity only.
+    const verifiedEmail = email && profile.emailVerified ? email : null;
     const userId = await createAccount(tx, ctx, {
-      email,
+      email: verifiedEmail,
       passwordHash: null,
       displayName: profile.displayName ?? null,
-      emailVerified: !!email && profile.emailVerified,
+      emailVerified: !!verifiedEmail,
       consents,
       method: `OAUTH_${provider.toUpperCase()}`,
     });

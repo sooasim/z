@@ -9,14 +9,15 @@ import { idempotencyKeyFrom, withIdempotency } from '../../platform/idempotency.
 import { onEvent } from '../../platform/outbox.js';
 import { registerJob } from '../../platform/jobs.js';
 import { audit } from '../../platform/audit.js';
-import { decodeCursor, idParams, page, pagination } from '../../platform/http.js';
+import { cursorColumns, decodeCursor, idParams, page, pagination } from '../../platform/http.js';
 import { MockProvider, TossProvider } from './provider.js';
 import {
   confirmPayment,
-  executeRefund,
   expirePayments,
   paymentDto,
   preparePayment,
+  processRefund,
+  processVoid,
   providerOf,
   reconcileConfirming,
   reconcileFromProvider,
@@ -25,6 +26,7 @@ import {
   refundableRemaining,
   requestRefund,
   retryRefunds,
+  retryVoids,
   type PaymentRow,
   type RefundRow,
 } from './service.js';
@@ -105,12 +107,20 @@ export default async function paymentsModule(app: FastifyInstance) {
         done(err, undefined);
       }
     });
-    sub.post('/v1/webhooks/toss', { schema: { tags: [TAG_PAY], summary: 'TossPayments status-change webhook (verified via provider re-fetch)' } }, async (req, reply) => {
-      const ctx = ctxFromRequest(req);
-      const raw = (req as any).rawBody ?? JSON.stringify(req.body ?? {});
-      const out = await handleTossWebhook(ctx, raw, req.body, req.headers as any);
-      return reply.status(out.status).send(out.body);
-    });
+    sub.post(
+      '/v1/webhooks/toss',
+      {
+        // unauthenticated intake: its own (per client IP) budget, independent of the global limit
+        config: { rateLimit: { max: 300, timeWindow: '1 minute' } },
+        schema: { tags: [TAG_PAY], summary: 'TossPayments status-change webhook (verified via provider re-fetch)' },
+      },
+      async (req, reply) => {
+        const ctx = ctxFromRequest(req);
+        const raw = (req as any).rawBody ?? JSON.stringify(req.body ?? {});
+        const out = await handleTossWebhook(ctx, raw, req.body, req.headers as any);
+        return reply.status(out.status).send(out.body);
+      },
+    );
   });
 
   r.get(
@@ -121,7 +131,7 @@ export default async function paymentsModule(app: FastifyInstance) {
       const c = decodeCursor(req.query.cursor);
       const rows = await q<PaymentRow>(
         app.ctx.pool,
-        `SELECT * FROM payments WHERE payer_id = $1 AND ($2::text IS NULL OR status = $2)
+        `SELECT *, ${cursorColumns()} FROM payments WHERE payer_id = $1 AND ($2::text IS NULL OR status = $2)
            AND ($3::timestamptz IS NULL OR (created_at, id) < ($3::timestamptz, $4::uuid))
          ORDER BY created_at DESC, id DESC LIMIT $5`,
         [actor.userId, req.query.status ?? null, c?.createdAt ?? null, c?.id ?? null, req.query.limit + 1],
@@ -168,6 +178,11 @@ export default async function paymentsModule(app: FastifyInstance) {
       const res = await withIdempotency(app.ctx.pool, `payments.refund:${req.params.id}`, key, req.body, async (tx) => {
         const p = await maybeOne<PaymentRow>(tx, `SELECT * FROM payments WHERE id = $1 FOR UPDATE`, [req.params.id]);
         if (!p) throw notFound('Payment');
+        // staff refunds bypass the subject's cancellation policy: never on a payment the actor paid or is paid from
+        if (p.payer_id === actor.userId) throw forbidden('SELF_REFUND_FORBIDDEN', 'Staff cannot refund a payment they made');
+        if ((p.payable_snapshot?.split ?? []).some((s) => s.payeeId === actor.userId)) {
+          throw forbidden('SELF_REFUND_FORBIDDEN', 'Staff cannot refund a payment they receive proceeds from');
+        }
         const out = await requestRefund(tx, ctx, {
           subjectType: p.subject_type,
           subjectId: p.subject_id,
@@ -202,7 +217,7 @@ export default async function paymentsModule(app: FastifyInstance) {
       const c = decodeCursor(req.query.cursor);
       const rows = await q<PaymentRow>(
         app.ctx.pool,
-        `SELECT * FROM payments WHERE ($1::text IS NULL OR status = $1) AND ($2::text IS NULL OR subject_type = $2) AND ($3::uuid IS NULL OR subject_id = $3)
+        `SELECT *, ${cursorColumns()} FROM payments WHERE ($1::text IS NULL OR status = $1) AND ($2::text IS NULL OR subject_type = $2) AND ($3::uuid IS NULL OR subject_id = $3)
            AND ($4::timestamptz IS NULL OR (created_at, id) < ($4::timestamptz, $5::uuid))
          ORDER BY created_at DESC, id DESC LIMIT $6`,
         [req.query.status ?? null, req.query.subjectType ?? null, req.query.subjectId ?? null, c?.createdAt ?? null, c?.id ?? null, req.query.limit + 1],
@@ -245,11 +260,14 @@ export default async function paymentsModule(app: FastifyInstance) {
   );
 
   // ---- events: execute refunds; accept refund intents emitted by other modules
-  onEvent('refund.requested', 'payments.refund-executor', async (tx, ev, ctx) => {
+  onEvent('refund.requested', 'payments.refund-executor', async (tx, ev, ctx, hooks) => {
     const p = ev.payload ?? {};
     if (p.refundId) {
-      // our own intent (emitted by requestRefund): run the provider cancel
-      await executeRefund(tx, ctx, p.refundId);
+      // our own intent (emitted by requestRefund): run the provider cancel once this outbox batch has committed, in its
+      // own short transactions (no batch / payment / refund lock is held while the PG is called). If that run is lost,
+      // the refund stays REQUESTED and the retry job picks it up.
+      const refundId = String(p.refundId);
+      hooks?.afterCommit(() => processRefund(ctx.app, ctx, refundId));
       return;
     }
     // a domain emitted an intent instead of calling requestRefund: record it (idempotent per event)
@@ -282,7 +300,14 @@ export default async function paymentsModule(app: FastifyInstance) {
     }
   });
 
+  // voids of captured money we must not keep (duplicate / mismatched / late captures): executed after commit, retried by job
+  onEvent('payment.void_requested', 'payments.void-executor', async (_tx, ev, ctx, hooks) => {
+    const voidId = ev.payload?.voidId;
+    if (typeof voidId === 'string') hooks?.afterCommit(() => processVoid(ctx.app, ctx, voidId));
+  });
+
   registerJob('payments.expire', 60_000, (appCtx) => expirePayments(appCtx, systemCtx(appCtx, `job-payments-expire-${Date.now()}`)));
   registerJob('payments.reconcile-confirming', 60_000, (appCtx) => reconcileConfirming(appCtx, systemCtx(appCtx, `job-payments-reconcile-${Date.now()}`)));
   registerJob('payments.refund-retry', 60_000, (appCtx) => retryRefunds(appCtx, systemCtx(appCtx, `job-refund-retry-${Date.now()}`)));
+  registerJob('payments.void-retry', 60_000, (appCtx) => retryVoids(appCtx, systemCtx(appCtx, `job-void-retry-${Date.now()}`)));
 }

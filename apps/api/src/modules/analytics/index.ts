@@ -14,7 +14,8 @@ export default async function analyticsModule(app: FastifyInstance) {
   const pool = app.ctx.pool;
 
   // Anonymous or authenticated; PII is stripped server-side before persistence.
-  r.post('/v1/analytics/events', { schema: { tags: TAG, body: analyticsBatchSchema } }, async (req, reply) => {
+  // unauthenticated: own body cap (50 events x 8 KB properties fits) and a tighter per-IP rate limit than the global one
+  r.post('/v1/analytics/events', { schema: { tags: TAG, body: analyticsBatchSchema }, bodyLimit: 512 * 1024, config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (req, reply) => {
     const res = await ingestEvents(pool, { userId: req.actor?.userId ?? null, batch: req.body });
     return reply.status(202).send(res);
   });

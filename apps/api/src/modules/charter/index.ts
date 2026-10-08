@@ -10,7 +10,7 @@ import { emit } from '../../platform/outbox.js';
 import { notify } from '../../platform/notify.js';
 import { audit } from '../../platform/audit.js';
 import { StateMachine, recordTransition } from '../../platform/fsm.js';
-import { decodeCursor, idParams, isoDate, page, pagination } from '../../platform/http.js';
+import { cursorColumns, decodeCursor, idParams, isoDate, page, pagination } from '../../platform/http.js';
 
 const TAG = 'JET-01';
 export const CHARTER_FLAG = 'charter.direct_booking';
@@ -174,7 +174,7 @@ export default async function charterModule(app: FastifyInstance) {
       const c = decodeCursor(req.query.cursor);
       const rows = await q(
         pool,
-        `SELECT * FROM charter_requests WHERE ($1::text IS NULL OR status = $1) AND ($2::timestamptz IS NULL OR (created_at, id) < ($2::timestamptz, $3::uuid))
+        `SELECT *, ${cursorColumns()} FROM charter_requests WHERE ($1::text IS NULL OR status = $1) AND ($2::timestamptz IS NULL OR (created_at, id) < ($2::timestamptz, $3::uuid))
           ORDER BY created_at DESC, id DESC LIMIT $4`,
         [req.query.status ?? null, c?.createdAt ?? null, c?.id ?? null, req.query.limit + 1],
       );

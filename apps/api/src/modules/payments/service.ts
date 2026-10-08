@@ -165,15 +165,19 @@ export async function preparePayment(tx: Tx, ctx: Ctx, input: { subjectType: Pay
   const snap = await handler.payable(tx, ctx, input.subjectId);
   if (snap.payerId !== actor.userId) throw forbidden('NOT_PAYER', 'Only the buyer can pay for this item');
   validateSnapshot(snap);
+  // FAILED payments with a retryable code (the PG never received the confirm) could still be confirmed by a late
+  // browser retry: a new prepare supersedes them too, so at most one payment of the subject can ever be captured.
   const existing = await q<PaymentRow>(
     tx,
-    `SELECT * FROM payments WHERE subject_type = $1 AND subject_id = $2 AND status IN ('CREATED','CONFIRMING','APPROVED','PARTIALLY_REFUNDED','REFUNDED') FOR UPDATE`,
-    [input.subjectType, input.subjectId],
+    `SELECT * FROM payments WHERE subject_type = $1 AND subject_id = $2
+        AND (status IN ('CREATED','CONFIRMING','APPROVED','PARTIALLY_REFUNDED','REFUNDED') OR (status = 'FAILED' AND failure_code = ANY($3::text[])))
+      FOR UPDATE`,
+    [input.subjectType, input.subjectId, [...RETRYABLE_FAILURE_CODES]],
   );
   if (existing.some((p) => APPROVED_STATES.includes(p.status))) throw conflict('ALREADY_PAID', 'This item has already been paid');
   if (existing.some((p) => p.status === 'CONFIRMING')) throw conflict('PAYMENT_IN_PROGRESS', 'A payment for this item is being confirmed');
-  for (const p of existing.filter((x) => x.status === 'CREATED')) {
-    await PaymentFSM.transition(tx, ctx, { table: 'payments', id: p.id, from: 'CREATED', to: 'CANCELLED', reason: 'SUPERSEDED', versioned: true });
+  for (const p of existing.filter((x) => x.status === 'CREATED' || x.status === 'FAILED')) {
+    await PaymentFSM.transition(tx, ctx, { table: 'payments', id: p.id, from: p.status, to: 'CANCELLED', reason: 'SUPERSEDED', versioned: true });
   }
   const cfg = ctx.app.config;
   const payment = await one<PaymentRow>(
@@ -285,11 +289,10 @@ export async function approvePayment(tx: Tx, ctx: Ctx, payment: PaymentRow, pp: 
     [payment.subject_type, payment.subject_id, payment.id],
   );
   if (dup) {
-    // a second, duplicate charge for an already-paid subject: void it at the PG
-    await providerOf(ctx.app)
-      .cancel({ paymentKey: pp.paymentKey, cancelAmount: pp.balanceAmount, cancelReason: 'DUPLICATE_PAYMENT', idempotencyKey: `dup-${payment.id}` })
-      .catch((e) => ctx.app.log.error({ err: e, paymentId: payment.id }, 'duplicate payment cancel failed'));
-    return markFailed(tx, ctx, payment, { code: 'DUPLICATE_PAYMENT', message: 'Subject already paid; duplicate charge voided', notifySubject: false, to: 'CANCELLED', providerStatus: 'CANCELED' });
+    // a second, duplicate charge for an already-paid subject: record a durable void of the captured money; the PG
+    // cancel runs (and is retried) outside this transaction, and provider_status says CANCELED only once it landed
+    await recordVoid(tx, ctx, { payment, paymentKey: pp.paymentKey, amountMinor: pp.balanceAmount, reason: 'DUPLICATE_PAYMENT', idempotencyKey: `dup-${payment.id}` });
+    return markFailed(tx, ctx, payment, { code: 'DUPLICATE_PAYMENT', message: 'Subject already paid; the duplicate charge is being voided', notifySubject: false, to: 'CANCELLED', providerStatus: pp.status });
   }
   const { row } = await PaymentFSM.transition(tx, ctx, {
     table: 'payments',
@@ -321,6 +324,9 @@ export async function approvePayment(tx: Tx, ctx: Ctx, payment: PaymentRow, pp: 
     await tx.query('RELEASE SAVEPOINT pay_subject');
   } catch (err: any) {
     await tx.query('ROLLBACK TO SAVEPOINT pay_subject');
+    // a deadlock / serialization failure / lock or statement timeout is not the subject refusing the payment: abort
+    // the whole approval so withTx retries it (or the payment stays CONFIRMING for the reconciliation job)
+    if (isTransientDbError(err)) throw err;
     subjectRejected = err?.code ?? err?.message ?? 'SUBJECT_REJECTED';
     ctx.app.log.warn({ paymentId: approved.id, reason: subjectRejected }, 'subject rejected approved payment; auto-refunding');
   }
@@ -387,9 +393,8 @@ export async function reconcileFromProvider(tx: Tx, ctx: Ctx, payment: PaymentRo
     if (unapproved) {
       const mismatch = providerMatches(payment, pp);
       if (mismatch) {
-        await providerOf(ctx.app)
-          .cancel({ paymentKey: pp.paymentKey, cancelAmount: pp.balanceAmount, cancelReason: mismatch, idempotencyKey: `mismatch-${payment.id}` })
-          .catch(() => {});
+        // money captured for a payment we cannot accept: durable, retried void (never fire-and-forget)
+        await recordVoid(tx, ctx, { payment, paymentKey: pp.paymentKey, amountMinor: pp.balanceAmount, reason: mismatch, idempotencyKey: `mismatch-${payment.id}` });
         await markFailed(tx, ctx, payment, { code: mismatch, message: 'Provider payment does not match the order', notifySubject: true, providerStatus: pp.status });
         action = mismatch;
       } else if (pp.balanceAmount > 0 || pp.status === 'DONE') {
@@ -404,6 +409,12 @@ export async function reconcileFromProvider(tx: Tx, ctx: Ctx, payment: PaymentRo
     if (APPROVED_STATES.includes(payment.status) && pp.status !== 'DONE') {
       const synced = await syncProviderCancels(tx, ctx, payment, pp);
       if (synced) action = action === 'APPROVED' ? 'APPROVED+REFUND_SYNCED' : 'REFUND_SYNCED';
+    }
+    if (payment.status === 'CANCELLED' && pp.balanceAmount > 0) {
+      // the PG holds captured money for a payment we consider cancelled (superseded / duplicate / late capture):
+      // make sure a void exists (no-op when one was already recorded, e.g. for a duplicate)
+      const voidId = await recordVoid(tx, ctx, { payment, paymentKey: pp.paymentKey, amountMinor: pp.balanceAmount, reason: 'CAPTURED_AFTER_CANCEL', idempotencyKey: `late-capture-${payment.id}` });
+      if (voidId) action = 'VOID_REQUESTED';
     }
   } else if (pp.status === 'ABORTED' || pp.status === 'EXPIRED') {
     if (unapproved && payment.status !== 'FAILED') {
@@ -564,13 +575,15 @@ export async function confirmPayment(ctx: Ctx, input: { paymentKey: string; orde
 
   const mismatch = providerMatches(payment, pp);
   if (mismatch || pp.paymentKey !== input.paymentKey) {
-    await provider
-      .cancel({ paymentKey: input.paymentKey, cancelAmount: pp.balanceAmount || pp.totalAmount, cancelReason: mismatch ?? 'PAYMENT_KEY_MISMATCH', idempotencyKey: `mismatch-${payment.id}` })
-      .catch((err) => ctx.app.log.error({ err, paymentId: payment.id }, 'cancel after provider mismatch failed'));
+    const code = mismatch ?? 'PAYMENT_KEY_MISMATCH';
     const failed = await withTx(pool, async (tx) => {
       const p = await lockPayment(tx, payment.id);
+      // the PG captured money we will not accept: durable void, executed and retried after commit
+      if (!APPROVED_STATES.includes(p.status)) {
+        await recordVoid(tx, ctx, { payment: p, paymentKey: input.paymentKey, amountMinor: pp.balanceAmount || pp.totalAmount, reason: code, idempotencyKey: `mismatch-${payment.id}` });
+      }
       if (p.status !== 'CONFIRMING') return p;
-      return markFailed(tx, ctx, p, { code: mismatch ?? 'PAYMENT_KEY_MISMATCH', message: 'Provider response does not match the order', notifySubject: true, providerStatus: pp.status });
+      return markFailed(tx, ctx, p, { code, message: 'Provider response does not match the order', notifySubject: true, providerStatus: pp.status });
     });
     return finish(502, { item: paymentDto(failed), code: 'PROVIDER_MISMATCH' });
   }
@@ -680,32 +693,75 @@ export async function requestRefund(
 }
 
 const refundTag = (refundId: string) => `[jp:${refundId}]`;
+/**
+ * ONE PG idempotency key per refund for every attempt: if an earlier cancel landed although we saw a timeout, the PG
+ * replays that result instead of cancelling a second time.
+ */
+export const refundIdempotencyKey = (refundId: string) => `refund-${refundId}`;
+/** While a refund is PROVIDER_PENDING its next_attempt_at is a lease: another executor only takes it over once it expired. */
+const REFUND_LEASE_SEC = 300;
+
+/** PostgreSQL errors that are transient (the operation may succeed when retried), never a business rejection. */
+export function isTransientDbError(err: any): boolean {
+  if (!err || err instanceof AppError) return false;
+  const code = typeof err.code === 'string' ? err.code : '';
+  return ['40001', '40P01', '55P03', '57014'].includes(code) || code.startsWith('08');
+}
+
+function asRetryable(err: unknown, what: string): ProviderError {
+  const e = err as any;
+  return new ProviderError(e?.code && typeof e.code === 'string' ? e.code : 'VERIFY_FAILED', `${what}: ${e?.message ?? String(err)}`.slice(0, 300), true, e?.httpStatus);
+}
 
 /**
- * Execute a refund at the provider. Safe to call repeatedly / concurrently: the refund row is locked,
- * completed refunds are skipped, and a previous attempt that reached the PG is detected via the tag in
- * cancelReason before calling cancel again.
+ * Execute a refund at the provider (outbox consumer after commit, retry job). Three steps so no transaction or row
+ * lock is held while the PG is called:
+ *  1. claim (short tx, `FOR UPDATE SKIP LOCKED`): REQUESTED/FAILED(due) → PROVIDER_PENDING, attempts + 1, lease;
+ *  2. PG call with no transaction open. When an earlier attempt may have reached the PG (attempts > 0 or a stale
+ *     PROVIDER_PENDING) the payment is read first and a cancel carrying this refund's tag counts as done; if that
+ *     verification read fails, NOTHING is sent (retryable failure). The cancel uses one stable idempotency key;
+ *  3. complete (short tx): re-lock the refund; if this claim still owns it, complete or record the failure + backoff.
+ * Safe to call repeatedly and concurrently; returns 'BUSY' when another executor holds the refund.
  */
-export async function executeRefund(tx: Tx, ctx: Ctx, refundId: string): Promise<RefundStatus> {
-  const refund = await maybeOne<RefundRow>(tx, `SELECT * FROM refunds WHERE id = $1 FOR UPDATE`, [refundId]);
-  if (!refund) throw notFound('Refund');
-  if (refund.status === 'REFUNDED' || refund.status === 'PARTIAL') return refund.status;
-  if (refund.status === 'FAILED' && refund.attempts >= MAX_REFUND_ATTEMPTS) return refund.status;
-  if (refund.status !== 'PROVIDER_PENDING') {
-    await RefundFSM.transition(tx, ctx, { table: 'refunds', id: refund.id, to: 'PROVIDER_PENDING', reason: 'EXECUTE', set: { attempts: refund.attempts + 1 } });
-  } else {
-    await tx.query(`UPDATE refunds SET attempts = attempts + 1 WHERE id = $1`, [refund.id]);
-  }
-  const payment = await lockPayment(tx, refund.payment_id);
-  const provider = providerOf(ctx.app);
+export async function processRefund(app: AppContext, ctx: Ctx, refundId: string): Promise<RefundStatus | 'BUSY'> {
+  const claim = await withTx(app.pool, async (tx) => {
+    const refund = await maybeOne<RefundRow>(tx, `SELECT * FROM refunds WHERE id = $1 FOR UPDATE SKIP LOCKED`, [refundId]);
+    if (!refund) {
+      if (!(await maybeOne(tx, `SELECT 1 FROM refunds WHERE id = $1`, [refundId]))) throw notFound('Refund');
+      return { skip: 'BUSY' as const };
+    }
+    if (refund.status === 'REFUNDED' || refund.status === 'PARTIAL') return { skip: refund.status };
+    if (refund.status === 'FAILED' && refund.attempts >= MAX_REFUND_ATTEMPTS) return { skip: refund.status };
+    // FAILED: backoff not elapsed; PROVIDER_PENDING: another executor's lease is still running
+    if (refund.status !== 'REQUESTED' && refund.next_attempt_at && new Date(refund.next_attempt_at).getTime() > Date.now()) return { skip: refund.status };
+    const payment = await maybeOne<PaymentRow>(tx, `SELECT * FROM payments WHERE id = $1`, [refund.payment_id]);
+    if (!payment) throw notFound('Payment');
+    const lease = new Date(Date.now() + REFUND_LEASE_SEC * 1000);
+    const row =
+      refund.status === 'PROVIDER_PENDING'
+        ? await one<RefundRow>(tx, `UPDATE refunds SET attempts = attempts + 1, next_attempt_at = $2 WHERE id = $1 RETURNING *`, [refund.id, lease])
+        : ((await RefundFSM.transition(tx, ctx, { table: 'refunds', id: refund.id, to: 'PROVIDER_PENDING', reason: 'EXECUTE', set: { attempts: refund.attempts + 1, next_attempt_at: lease } })).row as RefundRow);
+    return { row, paymentKey: payment.payment_key, verifyFirst: refund.attempts > 0 || refund.status === 'PROVIDER_PENDING' };
+  });
+  if ('skip' in claim) return claim.skip as RefundStatus | 'BUSY';
+  const refund = claim.row;
+
+  const provider = providerOf(app);
   const tag = refundTag(refund.id);
-  let providerRef: string | null = null;
+  let outcome: { ok: true; providerRef: string | null } | { ok: false; error: ProviderError };
   try {
-    if (!payment.payment_key) throw new ProviderError('NO_PAYMENT_KEY', 'Payment has no provider key', false);
+    if (!claim.paymentKey) throw new ProviderError('NO_PAYMENT_KEY', 'Payment has no provider key', false);
+    let providerRef: string | null = null;
     let done = false;
-    if (refund.attempts > 0) {
-      const cur = await provider.get(payment.payment_key).catch(() => null);
-      const prior = cur?.cancels.find((c) => (c.cancelReason ?? '').includes(tag));
+    if (claim.verifyFirst) {
+      let cur: ProviderPayment;
+      try {
+        cur = await provider.get(claim.paymentKey);
+      } catch (err) {
+        // the previous attempt may have landed: never cancel blind; retry later
+        throw asRetryable(err, 'Could not verify the previous refund attempt');
+      }
+      const prior = cur.cancels.find((c) => (c.cancelReason ?? '').includes(tag));
       if (prior) {
         done = true;
         providerRef = prior.transactionKey;
@@ -713,20 +769,29 @@ export async function executeRefund(tx: Tx, ctx: Ctx, refundId: string): Promise
     }
     if (!done) {
       const res = await provider.cancel({
-        paymentKey: payment.payment_key,
+        paymentKey: claim.paymentKey,
         cancelAmount: refund.amount_minor,
         cancelReason: `${refund.reason.slice(0, 150)} ${tag}`,
-        idempotencyKey: `refund-${refund.id}-${refund.attempts + 1}`,
+        idempotencyKey: refundIdempotencyKey(refund.id),
       });
-      providerRef = res.cancels.at(-1)?.transactionKey ?? null;
+      providerRef = res.cancels.find((c) => (c.cancelReason ?? '').includes(tag))?.transactionKey ?? res.cancels.at(-1)?.transactionKey ?? null;
     }
+    outcome = { ok: true, providerRef };
   } catch (err: any) {
-    const e = err instanceof ProviderError ? err : new ProviderError('UNKNOWN', String(err?.message ?? err), true);
-    const attempts = refund.attempts + 1;
+    outcome = { ok: false, error: err instanceof ProviderError ? err : new ProviderError('UNKNOWN', String(err?.message ?? err), true) };
+  }
+
+  return withTx(app.pool, async (tx) => {
+    const cur = await maybeOne<RefundRow>(tx, `SELECT * FROM refunds WHERE id = $1 FOR UPDATE`, [refund.id]);
+    // finished or taken over (lease expired) by another executor meanwhile: it owns the outcome
+    if (!cur || cur.status !== 'PROVIDER_PENDING' || cur.attempts !== refund.attempts) return (cur?.status ?? 'BUSY') as RefundStatus | 'BUSY';
+    if (outcome.ok) return completeRefund(tx, ctx, cur, await lockPayment(tx, cur.payment_id), outcome.providerRef);
+    const e = outcome.error;
+    const attempts = cur.attempts;
     const delaySec = Math.min(60 * 2 ** attempts, 6 * 3600);
     await RefundFSM.transition(tx, ctx, {
       table: 'refunds',
-      id: refund.id,
+      id: cur.id,
       from: 'PROVIDER_PENDING',
       to: 'FAILED',
       reason: e.code,
@@ -734,17 +799,153 @@ export async function executeRefund(tx: Tx, ctx: Ctx, refundId: string): Promise
     });
     await emit(tx, ctx, {
       aggregateType: 'refund',
-      aggregateId: refund.id,
+      aggregateId: cur.id,
       eventType: 'refund.failed',
-      payload: { refundId: refund.id, paymentId: payment.id, code: e.code, attempts, final: attempts >= MAX_REFUND_ATTEMPTS },
+      payload: { refundId: cur.id, paymentId: cur.payment_id, code: e.code, attempts, final: attempts >= MAX_REFUND_ATTEMPTS },
     });
     if (attempts >= MAX_REFUND_ATTEMPTS) {
-      await audit(tx, ctx, { action: 'refund.failed.final', resourceType: 'refund', resourceId: refund.id, category: 'MONEY', reason: e.code });
+      await audit(tx, ctx, { action: 'refund.failed.final', resourceType: 'refund', resourceId: cur.id, category: 'MONEY', reason: e.code });
     }
-    return 'FAILED';
+    return 'FAILED' as const;
+  });
+}
+
+// ------------------------------------------------------------------------------------------------
+// voids of captured money JETPOOL must not keep (duplicate / mismatched / late captures)
+// ------------------------------------------------------------------------------------------------
+
+export const MAX_VOID_ATTEMPTS = 10;
+const VOID_LEASE_SEC = 300;
+
+export interface VoidRow {
+  id: string;
+  payment_id: string;
+  payment_key: string;
+  amount_minor: number;
+  currency: string;
+  reason: string;
+  idempotency_key: string;
+  status: 'PENDING' | 'IN_PROGRESS' | 'DONE' | 'FAILED';
+  attempts: number;
+  next_attempt_at: Date | null;
+  last_error: string | null;
+  provider_status: string | null;
+  created_at: Date;
+  completed_at: Date | null;
+}
+
+/**
+ * Record (in the caller's tx) that `amountMinor` captured at the PG for `payment` must be cancelled. Idempotent per
+ * payment (one void each). Executed after commit by the outbox consumer / retry job (`processVoid`).
+ */
+export async function recordVoid(
+  tx: Tx,
+  ctx: Ctx,
+  v: { payment: Pick<PaymentRow, 'id' | 'currency'>; paymentKey: string | null | undefined; amountMinor: number; reason: string; idempotencyKey: string },
+): Promise<string | null> {
+  if (!v.paymentKey || !Number.isInteger(v.amountMinor) || v.amountMinor <= 0) return null;
+  const row = await maybeOne<{ id: string }>(
+    tx,
+    `INSERT INTO payment_voids(payment_id, payment_key, amount_minor, currency, reason, idempotency_key) VALUES ($1,$2,$3,$4,$5,$6)
+     ON CONFLICT DO NOTHING RETURNING id`,
+    [v.payment.id, v.paymentKey, v.amountMinor, v.payment.currency, v.reason.slice(0, 100), v.idempotencyKey.slice(0, 300)],
+  );
+  if (!row) return null;
+  await emit(tx, ctx, {
+    aggregateType: 'payment',
+    aggregateId: v.payment.id,
+    eventType: 'payment.void_requested',
+    payload: { voidId: row.id, paymentId: v.payment.id, amountMinor: v.amountMinor, currency: v.payment.currency, reason: v.reason },
+  });
+  await audit(tx, ctx, { action: 'payment.void.requested', resourceType: 'payment', resourceId: v.payment.id, category: 'MONEY', reason: v.reason, after: { voidId: row.id, amountMinor: v.amountMinor } });
+  return row.id;
+}
+
+/** Execute a recorded void at the PG (claim → PG call outside any transaction → complete), like `processRefund`. */
+export async function processVoid(app: AppContext, ctx: Ctx, voidId: string): Promise<VoidRow['status'] | 'BUSY'> {
+  const claim = await withTx(app.pool, async (tx) => {
+    const v = await maybeOne<VoidRow>(tx, `SELECT * FROM payment_voids WHERE id = $1 FOR UPDATE SKIP LOCKED`, [voidId]);
+    if (!v) return { skip: 'BUSY' as const };
+    if (v.status === 'DONE') return { skip: v.status };
+    if (v.attempts >= MAX_VOID_ATTEMPTS) return { skip: v.status };
+    if (v.status !== 'PENDING' && v.next_attempt_at && new Date(v.next_attempt_at).getTime() > Date.now()) return { skip: v.status };
+    const row = await one<VoidRow>(
+      tx,
+      `UPDATE payment_voids SET status = 'IN_PROGRESS', attempts = attempts + 1, next_attempt_at = now() + make_interval(secs => $2) WHERE id = $1 RETURNING *`,
+      [v.id, VOID_LEASE_SEC],
+    );
+    return { row, verifyFirst: v.attempts > 0 || v.status === 'IN_PROGRESS' };
+  });
+  if ('skip' in claim) return claim.skip as VoidRow['status'] | 'BUSY';
+  const v = claim.row;
+  const provider = providerOf(app);
+  let outcome: { ok: true; pp: ProviderPayment } | { ok: false; error: ProviderError };
+  try {
+    let done: ProviderPayment | null = null;
+    let amount = v.amount_minor;
+    if (claim.verifyFirst) {
+      let cur: ProviderPayment;
+      try {
+        cur = await provider.get(v.payment_key);
+      } catch (err) {
+        throw asRetryable(err, 'Could not verify the previous void attempt');
+      }
+      if (cur.balanceAmount <= 0) done = cur; // nothing captured any more
+      else amount = Math.min(amount, cur.balanceAmount);
+    }
+    done ??= await provider.cancel({ paymentKey: v.payment_key, cancelAmount: amount, cancelReason: `${v.reason} [jp-void:${v.id}]`, idempotencyKey: v.idempotency_key });
+    outcome = { ok: true, pp: done };
+  } catch (err: any) {
+    outcome = { ok: false, error: err instanceof ProviderError ? err : new ProviderError('UNKNOWN', String(err?.message ?? err), true) };
   }
-  const fresh = await maybeOne<RefundRow>(tx, `SELECT * FROM refunds WHERE id = $1`, [refund.id]);
-  return completeRefund(tx, ctx, fresh!, payment, providerRef);
+  return withTx(app.pool, async (tx) => {
+    const cur = await maybeOne<VoidRow>(tx, `SELECT * FROM payment_voids WHERE id = $1 FOR UPDATE`, [v.id]);
+    if (!cur || cur.status !== 'IN_PROGRESS' || cur.attempts !== v.attempts) return cur?.status ?? 'BUSY';
+    if (outcome.ok) {
+      const pp = outcome.pp;
+      await tx.query(
+        `UPDATE payment_voids SET status = 'DONE', completed_at = now(), next_attempt_at = NULL, last_error = NULL, provider_status = $2, provider_ref = $3 WHERE id = $1`,
+        [cur.id, pp.status, pp.cancels.at(-1)?.transactionKey ?? null],
+      );
+      // only now is it true that the PG no longer holds the money
+      await tx.query(`UPDATE payments SET provider_status = $2 WHERE id = $1`, [cur.payment_id, pp.status]);
+      await emit(tx, ctx, { aggregateType: 'payment', aggregateId: cur.payment_id, eventType: 'payment.voided', payload: { voidId: cur.id, paymentId: cur.payment_id, amountMinor: cur.amount_minor, providerStatus: pp.status } });
+      await audit(tx, ctx, { action: 'payment.void.completed', resourceType: 'payment', resourceId: cur.payment_id, category: 'MONEY', after: { voidId: cur.id, amountMinor: cur.amount_minor, providerStatus: pp.status } });
+      return 'DONE' as const;
+    }
+    const e = outcome.error;
+    const delaySec = Math.min(60 * 2 ** cur.attempts, 6 * 3600);
+    await tx.query(`UPDATE payment_voids SET status = 'FAILED', last_error = $2, next_attempt_at = now() + make_interval(secs => $3) WHERE id = $1`, [
+      cur.id,
+      `${e.code}: ${e.message}`.slice(0, 500),
+      delaySec,
+    ]);
+    const final = cur.attempts >= MAX_VOID_ATTEMPTS;
+    await emit(tx, ctx, { aggregateType: 'payment', aggregateId: cur.payment_id, eventType: 'payment.void_failed', payload: { voidId: cur.id, paymentId: cur.payment_id, code: e.code, attempts: cur.attempts, final } });
+    if (final) await audit(tx, ctx, { action: 'payment.void.failed.final', resourceType: 'payment', resourceId: cur.payment_id, category: 'MONEY', reason: e.code });
+    return 'FAILED' as const;
+  });
+}
+
+/** Retry voids that were missed (PENDING), crashed mid-call (IN_PROGRESS past its lease) or failed transiently. */
+export async function retryVoids(app: AppContext, ctx: Ctx, limit = 50): Promise<number> {
+  const rows = await q<{ id: string }>(
+    app.pool,
+    `SELECT id FROM payment_voids
+      WHERE attempts < $2 AND (
+            (status = 'PENDING' AND created_at < now() - interval '30 seconds')
+         OR (status IN ('IN_PROGRESS','FAILED') AND (next_attempt_at IS NULL OR next_attempt_at <= now())))
+      ORDER BY created_at LIMIT $1`,
+    [limit, MAX_VOID_ATTEMPTS],
+  );
+  let n = 0;
+  for (const { id } of rows) {
+    await processVoid(app, ctx, id).then(
+      (s) => void (s !== 'BUSY' && n++),
+      (err) => app.log.error({ err, voidId: id }, 'payment void retry failed'),
+    );
+  }
+  return n;
 }
 
 /** Provider confirmed the cancel: update payment, ledger (compensating), subject, receipt, events. */
@@ -889,15 +1090,16 @@ export async function retryRefunds(app: AppContext, ctx: Ctx, limit = 50): Promi
     app.pool,
     `SELECT id FROM refunds
       WHERE (status = 'REQUESTED' AND created_at < now() - interval '30 seconds')
-         OR (status = 'PROVIDER_PENDING' AND created_at < now() - interval '5 minutes')
+         OR (status = 'PROVIDER_PENDING' AND coalesce(next_attempt_at, created_at + interval '5 minutes') <= now())
          OR (status = 'FAILED' AND attempts < $2 AND (next_attempt_at IS NULL OR next_attempt_at <= now()))
       ORDER BY created_at LIMIT $1`,
     [limit, MAX_REFUND_ATTEMPTS],
   );
   let n = 0;
   for (const { id } of rows) {
-    await withTx(app.pool, (tx) => executeRefund(tx, ctx, id)).then(
-      () => n++,
+    // each refund in its own short transactions; the PG is called with no lock held (processRefund)
+    await processRefund(app, ctx, id).then(
+      (s) => void (s !== 'BUSY' && n++),
       (err) => app.log.error({ err, refundId: id }, 'refund retry failed'),
     );
   }
@@ -909,7 +1111,7 @@ export async function retryRefunds(app: AppContext, ctx: Ctx, limit = 50): Promi
 // ------------------------------------------------------------------------------------------------
 
 export async function reconciliationReport(app: AppContext, opts: { checkProvider: boolean; limit: number }) {
-  const rows = await q<PaymentRow & { ledger_approved_minor: number | null; ledger_refund_minor: number; refunds_done_minor: number }>(
+  const rows = await q<PaymentRow & { ledger_approved_minor: number | null; ledger_refund_minor: number; refunds_done_minor: number; void_status: string | null; void_attempts: number | null }>(
     app.pool,
     `SELECT p.*,
             (SELECT sum(e.debit_minor) FROM ledger_transactions t JOIN ledger_entries e ON e.transaction_id = t.id
@@ -917,9 +1119,12 @@ export async function reconciliationReport(app: AppContext, opts: { checkProvide
             coalesce((SELECT sum(e.credit_minor) FROM refunds r JOIN ledger_transactions t ON t.source_type = 'REFUND' AND t.source_id = r.id
                        JOIN ledger_entries e ON e.transaction_id = t.id JOIN ledger_accounts a ON a.id = e.account_id AND a.purpose = 'PG_CLEARING'
                       WHERE r.payment_id = p.id), 0)::bigint AS ledger_refund_minor,
-            coalesce((SELECT sum(amount_minor) FROM refunds r WHERE r.payment_id = p.id AND r.status IN ('PARTIAL','REFUNDED')), 0)::bigint AS refunds_done_minor
-       FROM payments p
+            coalesce((SELECT sum(amount_minor) FROM refunds r WHERE r.payment_id = p.id AND r.status IN ('PARTIAL','REFUNDED')), 0)::bigint AS refunds_done_minor,
+            v.status AS void_status, v.attempts AS void_attempts
+       FROM payments p LEFT JOIN payment_voids v ON v.payment_id = p.id
       WHERE p.status IN ('CONFIRMING','APPROVED','PARTIALLY_REFUNDED','REFUNDED')
+         -- failed / cancelled payments the PG may still hold money for (a void, or a key the PG has seen)
+         OR (p.status IN ('FAILED','CANCELLED') AND (v.id IS NOT NULL OR p.payment_key IS NOT NULL))
       ORDER BY p.created_at DESC LIMIT $1`,
     [opts.limit],
   );
@@ -932,6 +1137,8 @@ export async function reconciliationReport(app: AppContext, opts: { checkProvide
     if (r.ledger_refund_minor !== r.refunded_minor) issues.push('LEDGER_REFUND_MISMATCH');
     if (r.refunds_done_minor !== r.refunded_minor) issues.push('REFUND_RECORDS_MISMATCH');
     if (r.status === 'CONFIRMING' && Date.now() - new Date(r.updated_at).getTime() > 10 * 60_000) issues.push('STUCK_CONFIRMING');
+    const dead = r.status === 'FAILED' || r.status === 'CANCELLED';
+    if (r.void_status && r.void_status !== 'DONE') issues.push((r.void_attempts ?? 0) >= MAX_VOID_ATTEMPTS ? 'VOID_FAILED' : 'VOID_PENDING');
     let providerStatus: string | null = null;
     if (opts.checkProvider && r.payment_key) {
       try {
@@ -940,9 +1147,12 @@ export async function reconciliationReport(app: AppContext, opts: { checkProvide
         if (approved && pp.totalAmount - pp.balanceAmount !== r.refunded_minor) issues.push('PROVIDER_CANCEL_AMOUNT_MISMATCH');
         if (approved && pp.totalAmount !== r.amount_minor) issues.push('PROVIDER_AMOUNT_MISMATCH');
         if (approved && !['DONE', 'PARTIAL_CANCELED', 'CANCELED'].includes(pp.status)) issues.push('PROVIDER_STATUS_MISMATCH');
+        // money still captured at the PG for a payment we do not keep
+        if (dead && pp.balanceAmount > 0 && ['DONE', 'PARTIAL_CANCELED'].includes(pp.status)) issues.push('PROVIDER_CAPTURED_NOT_KEPT');
       } catch (err: any) {
         providerStatus = `ERROR:${err?.code ?? 'UNKNOWN'}`;
-        issues.push('PROVIDER_UNREACHABLE');
+        // a failed / cancelled payment the PG never captured is usually unknown to it (404): not a discrepancy
+        if (!dead) issues.push('PROVIDER_UNREACHABLE');
       }
     }
     items.push({

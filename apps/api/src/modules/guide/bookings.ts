@@ -13,12 +13,15 @@ import { assertEnabled } from '../../platform/flags.js';
 import { conflict, forbidden, notFound, unprocessable } from '../../platform/errors.js';
 import { decodeCursor, page } from '../../platform/http.js';
 import type { PayableSnapshot, PaymentSubjectHandler } from '../../platform/payment-subjects.js';
+import { AppError } from '../../platform/errors.js';
 import { ensureConversation } from '../messaging/service.js';
 import { quoteFees } from '../finance/rules.js';
 import { requestRefund } from '../payments/service.js';
+import { openDispute } from '../disputes/service.js';
 import {
-  CANCELLABLE_BOOKING_STATUSES, DISPUTABLE_BOOKING_STATUSES, GuideBookingFsm, type GuideBookingStatus,
+  CANCELLABLE_BOOKING_STATUSES, DISPUTABLE_BOOKING_STATUSES, GuideBookingFsm, isPaidType, type GuideBookingStatus, type GuideType,
 } from './fsm.js';
+import { evaluateGuideEligibility } from './eligibility.js';
 
 export interface GuideBookingRow {
   id: string;
@@ -156,6 +159,28 @@ export async function createBookingFromOffer(
 
 // ---------------------------------------------------------------- payment subject (GUIDE_BOOKING)
 
+/**
+ * Invariant 7 at the moment money is taken: the guide must STILL be an active account with a PUBLISHED paid-type
+ * profile, paid selling enabled and every configured compliance predicate passing (a qualification may have been
+ * rejected/expired, the profile hidden or the account suspended since the offer was accepted). Returns the failed
+ * predicate, or null when the guide may be paid.
+ */
+export async function guidePaidGateLapse(db: Db, guideId: string): Promise<string | null> {
+  const g = await maybeOne<{ status: string; paid_enabled: boolean; guide_type: string; user_status: string }>(
+    db,
+    `SELECT g.status, g.paid_enabled, g.guide_type, u.status AS user_status
+       FROM guide_profiles g JOIN users u ON u.id = g.user_id WHERE g.user_id = $1 FOR SHARE OF g`,
+    [guideId],
+  );
+  if (!g) return 'GUIDE_PROFILE_MISSING';
+  if (g.user_status !== 'ACTIVE') return 'GUIDE_ACCOUNT_NOT_ACTIVE';
+  if (g.status !== 'PUBLISHED') return 'GUIDE_NOT_PUBLISHED';
+  if (!isPaidType(g.guide_type) || !g.paid_enabled) return 'GUIDE_PAID_NOT_ENABLED';
+  const e = await evaluateGuideEligibility(db, guideId, g.guide_type as GuideType);
+  if (!e.publishable || !e.paidAllowed) return 'GUIDE_PAID_GATE_FAILED';
+  return null;
+}
+
 export const guideBookingPaymentSubject: PaymentSubjectHandler = {
   async payable(tx, ctx, subjectId): Promise<PayableSnapshot> {
     const b = await lockBooking(tx, subjectId);
@@ -164,6 +189,8 @@ export const guideBookingPaymentSubject: PaymentSubjectHandler = {
     if (!['ACCEPTED', 'PAYMENT_FAILED'].includes(b.status)) throw conflict('NOT_PAYABLE', `Guide booking is ${b.status}`);
     if (ctx.actor && ctx.actor.userId !== b.traveler_id) throw forbidden('NOT_PAYER', 'Only the traveler can pay for this booking');
     if (b.start_at.getTime() <= Date.now()) throw conflict('NOT_PAYABLE', 'The activity has already started');
+    const lapse = await guidePaidGateLapse(tx, b.guide_id);
+    if (lapse) throw conflict('NOT_PAYABLE', 'This guide can no longer accept paid bookings', { reason: lapse });
     const fees = await quoteFees(tx, { domain: 'GUIDE', amountMinor: b.price_minor, currency: b.currency });
     return {
       payerId: b.traveler_id,
@@ -198,6 +225,24 @@ export const guideBookingPaymentSubject: PaymentSubjectHandler = {
     if (b.status === 'ACCEPTED' || b.status === 'PAYMENT_FAILED') {
       ({ row: b } = await GuideBookingFsm.transition(tx, ctx, { table: T, id: b.id, to: 'PAYMENT_PENDING', reason: 'payment approved (implicit create)', actorType: 'PROVIDER', metadata: { paymentId: payment.id }, versioned: true }));
     }
+    // invariant 7 re-checked at capture (payable() ran at prepare; the gate may have lapsed while the payment was open):
+    // never confirm for a guide who may no longer sell — cancel and refund the captured amount in full instead
+    const lapse = await guidePaidGateLapse(tx, b.guide_id);
+    if (lapse) {
+      const { row } = await GuideBookingFsm.transition(tx, ctx, {
+        table: T, id: b.id, from: 'PAYMENT_PENDING', to: 'CANCELLED', reason: `paid guide gate lapsed: ${lapse}`, actorType: 'SYSTEM', metadata: { paymentId: payment.id, reason: lapse }, versioned: true,
+      });
+      const refund = await requestGuideRefund(tx, ctx, row, payment.amountMinor - b.refunded_minor, `guide no longer allowed to sell paid activities (${lapse})`, `gate-lapsed:${payment.id}`);
+      await audit(tx, ctx, { action: 'guide.booking.gate_lapsed_refund', resourceType: 'guide_booking', resourceId: b.id, after: { paymentId: payment.id, reason: lapse, refundId: refund.refundId, amountMinor: payment.amountMinor }, category: 'COMPLIANCE', actorId: null });
+      await ev(tx, ctx, row, 'guide.booking.cancelled', { cancelledBy: 'SYSTEM', reason: lapse, refundMinor: payment.amountMinor - b.refunded_minor, refundId: refund.refundId, refundStatus: refund.status });
+      for (const userId of [b.traveler_id, b.guide_id]) {
+        await notify(tx, ctx, {
+          userId, templateKey: 'guide.booking.cancelled', title: '가이드 예약이 취소되었습니다', body: 'The guide can no longer accept paid bookings; the payment is refunded in full.',
+          data: { bookingId: b.id, cancelledBy: 'SYSTEM' }, dedupeKey: `guide-booking:${b.id}:cancelled`,
+        });
+      }
+      return;
+    }
     const { row } = await GuideBookingFsm.transition(tx, ctx, { table: T, id: b.id, from: 'PAYMENT_PENDING', to: 'CONFIRMED', reason: 'payment approved', actorType: 'PROVIDER', metadata: { paymentId: payment.id }, versioned: true });
     await onConfirmed(tx, ctx, row);
   },
@@ -213,7 +258,8 @@ export const guideBookingPaymentSubject: PaymentSubjectHandler = {
     const b = await lockBooking(tx, subjectId);
     const total = Math.max(b.refunded_minor, refund.totalRefundedMinor);
     await tx.query(`UPDATE ${T} SET refunded_minor = $2 WHERE id = $1`, [b.id, total]);
-    if (refund.fullyRefunded && GuideBookingFsm.can(b.status, 'CANCELLED')) {
+    // a DISPUTED booking stays frozen until its dispute is resolved (applyGuideDisputeResolution)
+    if (refund.fullyRefunded && b.status !== 'DISPUTED' && GuideBookingFsm.can(b.status, 'CANCELLED')) {
       await GuideBookingFsm.transition(tx, ctx, { table: T, id: b.id, to: 'CANCELLED', reason: 'fully refunded', actorType: 'PROVIDER', metadata: { refundId: refund.refundId }, versioned: true });
       await ev(tx, ctx, b, 'guide.booking.cancelled', { cancelledBy: 'SYSTEM', reason: 'fully refunded', refundMinor: refund.amountMinor });
     }
@@ -274,10 +320,19 @@ async function completeInternal(tx: Tx, ctx: Ctx, b: GuideBookingRow, reason: st
   return row;
 }
 
+/**
+ * IN_PROGRESS → COMPLETED. The guide may complete only once the scheduled end has passed (COMPLETED makes the booking
+ * settlement-eligible); the traveler may confirm completion earlier (it only waives the traveler's own protection).
+ */
 export async function completeBooking(tx: Tx, ctx: Ctx, actor: Actor, id: string) {
   const b = await lockBooking(tx, id);
-  if (!partyOf(b, actor.userId)) throw forbidden('NOT_BOOKING_PARTY', 'Only booking parties can complete it');
-  return completeInternal(tx, ctx, b, `completed by ${partyOf(b, actor.userId)!.toLowerCase()}`);
+  const party = partyOf(b, actor.userId);
+  if (!party) throw forbidden('NOT_BOOKING_PARTY', 'Only booking parties can complete it');
+  if (b.status !== 'IN_PROGRESS') throw conflict('INVALID_STATE_TRANSITION', `Guide booking is ${b.status} and cannot be completed`, { from: b.status, to: 'COMPLETED' });
+  if (party === 'GUIDE' && Date.now() < b.end_at.getTime()) {
+    throw conflict('ACTIVITY_NOT_ENDED', 'The guide can complete the activity only after its scheduled end', { endAt: b.end_at });
+  }
+  return completeInternal(tx, ctx, b, `completed by ${party.toLowerCase()}`);
 }
 
 export async function cancelBooking(tx: Tx, ctx: Ctx, actor: Actor | null, id: string, reason?: string) {
@@ -287,6 +342,11 @@ export async function cancelBooking(tx: Tx, ctx: Ctx, actor: Actor | null, id: s
   const by: 'TRAVELER' | 'GUIDE' | 'SYSTEM' = party;
   if (!CANCELLABLE_BOOKING_STATUSES.includes(b.status)) {
     throw conflict('INVALID_STATE_TRANSITION', `Guide booking is ${b.status} and cannot be cancelled`, { from: b.status, to: 'CANCELLED' });
+  }
+  // the traveler's cancellation policy is a PRE-START policy: once the activity has started (or its start time has
+  // passed) a complaint about the delivered service goes through a dispute, never an automatic refund
+  if (by === 'TRAVELER' && (b.status === 'IN_PROGRESS' || Date.now() >= b.start_at.getTime())) {
+    throw conflict('ACTIVITY_STARTED', 'The activity has started; open a dispute instead of cancelling', { status: b.status, startAt: b.start_at });
   }
   // money captured only once CONFIRMED (or later); PAYMENT_PENDING approvals after cancel are refunded in onPaymentApproved
   const captured = b.paid && ['CONFIRMED', 'IN_PROGRESS'].includes(b.status);
@@ -312,18 +372,96 @@ export async function cancelBooking(tx: Tx, ctx: Ctx, actor: Actor | null, id: s
   return { booking: row, refund: refund ? { ...refund, refundId: refundRequest?.refundId ?? null, status: refundRequest?.status ?? null } : null };
 }
 
+/**
+ * Freeze the booking as DISPUTED and open the TRUST-03 case for it in the same tx (staff get a case to adjudicate;
+ * the open dispute also holds the guide's payout). An already open dispute of this party for the booking is reused.
+ */
 export async function disputeBooking(tx: Tx, ctx: Ctx, actor: Actor, id: string, reason: string) {
   const b = await lockBooking(tx, id);
   const party = partyOf(b, actor.userId);
   if (!party) throw forbidden('NOT_BOOKING_PARTY', 'Only booking parties can open a dispute');
   if (!DISPUTABLE_BOOKING_STATUSES.includes(b.status)) throw conflict('INVALID_STATE_TRANSITION', `Guide booking is ${b.status} and cannot be disputed`, { from: b.status, to: 'DISPUTED' });
-  const { row } = await GuideBookingFsm.transition(tx, ctx, { table: T, id, to: 'DISPUTED', reason, metadata: { openedBy: party }, versioned: true });
-  await ev(tx, ctx, row, 'guide.booking.disputed', { openedBy: party, openedById: actor.userId, reason, guideId: b.guide_id, travelerId: b.traveler_id, paid: b.paid });
+  const counterpartyId = party === 'TRAVELER' ? b.guide_id : b.traveler_id;
+  let disputeId: string;
+  try {
+    disputeId = (await openDispute(tx, ctx, { contextType: 'GUIDE_BOOKING', contextId: id, reason, counterpartyId })).id;
+  } catch (err) {
+    // the guard throws before any write, so the transaction is still usable
+    const existing = err instanceof AppError && err.code === 'DISPUTE_ALREADY_OPEN' ? (err.details as { disputeId?: string } | undefined)?.disputeId : undefined;
+    if (!existing) throw err;
+    disputeId = existing;
+  }
+  const { row } = await GuideBookingFsm.transition(tx, ctx, { table: T, id, to: 'DISPUTED', reason, metadata: { openedBy: party, disputeId }, versioned: true });
+  await ev(tx, ctx, row, 'guide.booking.disputed', { openedBy: party, openedById: actor.userId, reason, guideId: b.guide_id, travelerId: b.traveler_id, paid: b.paid, disputeId, fromStatus: b.status });
   await notify(tx, ctx, {
-    userId: party === 'TRAVELER' ? b.guide_id : b.traveler_id, templateKey: 'guide.booking.disputed', title: '분쟁이 접수되었습니다',
-    body: 'A dispute was opened for your guide booking.', data: { bookingId: id }, dedupeKey: `guide-booking:${id}:disputed`,
+    userId: counterpartyId, templateKey: 'guide.booking.disputed', title: '분쟁이 접수되었습니다',
+    body: 'A dispute was opened for your guide booking.', data: { bookingId: id, disputeId }, dedupeKey: `guide-booking:${id}:disputed`,
   });
-  return row;
+  return { booking: row, disputeId };
+}
+
+export interface GuideDisputeResolvedPayload {
+  disputeId: string;
+  outcome: string;
+  contextType: string;
+  contextId: string;
+  detail?: Record<string, unknown> | null;
+}
+
+/**
+ * TRUST-03 → GUIDE-05 (outbox `dispute.resolved`): a closed dispute lifts the DISPUTED freeze once no other dispute on
+ * the booking is still open. Target state:
+ *  - `detail.bookingOutcome` ('COMPLETED' | 'CANCELLED') when the resolving staff member set one;
+ *  - otherwise the booking returns to where it stood: COMPLETED/REVIEWED when it was disputed after completion or the
+ *    activity has ended by now (settlement-eligible again), else its pre-dispute CONFIRMED / IN_PROGRESS state (normal
+ *    lifecycle and cancellation policy apply again).
+ * A CANCELLED outcome requests no automatic refund: money remedies stay with PAY-02 staff refunds (ACCOUNTING/ADMIN).
+ */
+export async function applyGuideDisputeResolution(tx: Tx, ctx: Ctx, p: GuideDisputeResolvedPayload): Promise<{ changed: boolean; status?: string }> {
+  if (p.contextType !== 'GUIDE_BOOKING' || !p.contextId) return { changed: false };
+  const b = await maybeOne<GuideBookingRow>(tx, `SELECT * FROM ${T} WHERE id = $1 FOR UPDATE`, [p.contextId]);
+  if (!b || b.status !== 'DISPUTED') return { changed: false, status: b?.status };
+  const stillOpen = await maybeOne(
+    tx,
+    `SELECT 1 FROM disputes WHERE context_type = 'GUIDE_BOOKING' AND context_id = $1 AND id <> $2 AND status NOT IN ('RESOLVED','REJECTED') LIMIT 1`,
+    [b.id, p.disputeId],
+  );
+  if (stillOpen) return { changed: false, status: b.status };
+  const prev = await maybeOne<{ from_state: GuideBookingStatus | null }>(
+    tx,
+    `SELECT from_state FROM state_transitions WHERE aggregate_type = 'GUIDE_BOOKING' AND aggregate_id = $1 AND to_state = 'DISPUTED' ORDER BY id DESC LIMIT 1`,
+    [b.id],
+  );
+  const before = prev?.from_state ?? 'CONFIRMED';
+  const requested = p.detail?.bookingOutcome;
+  let to: GuideBookingStatus;
+  if (requested === 'COMPLETED' || requested === 'CANCELLED') to = requested;
+  else if (before === 'COMPLETED' || before === 'REVIEWED') to = before;
+  else if (Date.now() >= b.end_at.getTime()) to = 'COMPLETED';
+  else to = before === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'CONFIRMED';
+  const { row } = await GuideBookingFsm.transition(tx, ctx, {
+    table: T, id: b.id, from: 'DISPUTED', to, reason: `dispute ${String(p.outcome).toLowerCase()}`, actorType: 'SYSTEM', versioned: true,
+    metadata: { disputeId: p.disputeId, outcome: p.outcome, restoredFrom: before },
+  });
+  await ev(tx, ctx, row, 'guide.booking.dispute_resolved', { disputeId: p.disputeId, outcome: p.outcome, status: to, guideId: b.guide_id, travelerId: b.traveler_id });
+  if (to === 'COMPLETED' && before !== 'COMPLETED') {
+    await ev(tx, ctx, row, 'guide.booking.completed', { guideId: row.guide_id, travelerId: row.traveler_id, paid: row.paid, priceMinor: row.price_minor, currency: row.currency, viaDispute: p.disputeId });
+  }
+  if (to === 'CANCELLED') {
+    await ev(tx, ctx, row, 'guide.booking.cancelled', { cancelledBy: 'SYSTEM', reason: `dispute ${p.disputeId}`, refundMinor: 0, refundPolicy: 'DISPUTE_RESOLUTION' });
+  }
+  for (const userId of [b.traveler_id, b.guide_id]) {
+    await notify(tx, ctx, {
+      userId, templateKey: 'guide.booking.dispute_resolved', title: '가이드 예약 분쟁 처리 완료', body: `The dispute for your guide booking was closed; the booking is now ${to}.`,
+      data: { bookingId: b.id, disputeId: p.disputeId, status: to }, dedupeKey: `guide-booking:${b.id}:dispute_resolved:${p.disputeId}`,
+    });
+  }
+  return { changed: true, status: to };
+}
+
+export async function handleGuideDisputeResolved(tx: Tx, event: DomainEvent, ctx: Ctx) {
+  const p = (event.payload ?? {}) as GuideDisputeResolvedPayload;
+  if (p.contextType === 'GUIDE_BOOKING' && p.disputeId && p.contextId) await applyGuideDisputeResolution(tx, ctx, p);
 }
 
 // ---------------------------------------------------------------- events & jobs

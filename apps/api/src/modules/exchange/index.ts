@@ -26,6 +26,7 @@ import {
   expireStaleRequests,
   getAgreement,
   getExchange,
+  handleDisputeResolved,
   listMyExchanges,
   markExchangeReviewed,
   runVerification,
@@ -153,6 +154,9 @@ export default async function exchangeModule(app: FastifyInstance) {
     const body = await withTx(pool, (tx) => disputeExchange(tx, ctx, req.params.id, req.body));
     return reply.status(201).send(body);
   });
+
+  // TRUST-03 dispute resolution lifts the DISPUTED freeze (restore / cancel + release both calendars / complete)
+  onEvent('dispute.resolved', 'exchange.dispute-resolution', handleDisputeResolved);
 
   onEvent('exchange.reviews.completed', 'exchange.mark-reviewed', async (tx, ev, ctx) => {
     const exchangeId = (ev.payload as { exchangeId?: string })?.exchangeId;

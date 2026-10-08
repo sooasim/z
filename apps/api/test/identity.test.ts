@@ -20,6 +20,14 @@ async function signup(email: string, password = 'Sup3r-secret-pw') {
   return call(t, null, 'POST', '/v1/auth/signup', { email, password, consents: consents() });
 }
 
+/** Sign up and prove the inbox (adding sign-in methods requires a verified email). */
+async function verifiedSignup(email: string, password = 'Sup3r-secret-pw') {
+  const s = await signup(email, password);
+  const ok = await call(t, asUser(s.body), 'POST', '/v1/auth/email/verify/confirm', { code: lastCode(email, 'EMAIL_VERIFY') });
+  expect(ok.status).toBe(200);
+  return s;
+}
+
 beforeAll(async () => {
   t = await createTestApp();
   t.app.ctx.adapters.set('identity.codeSender', async (_tx: unknown, _ctx: unknown, m: CodeMessage) => {
@@ -142,8 +150,12 @@ describe('CORE-01 email OTP', () => {
     let last: any;
     for (let i = 0; i < 5; i++) last = await call(t, null, 'POST', '/v1/auth/otp/verify', { email: 'otp2@example.com', code: wrong });
     expect(last.body.code).toBe('TOO_MANY_ATTEMPTS');
+    // the code is burnt and the failures also locked the account (shared per-account lockout)
     const right = await call(t, null, 'POST', '/v1/auth/otp/verify', { email: 'otp2@example.com', code });
-    expect(right.status).toBe(400);
+    expect(right.status).toBe(429);
+    expect(right.body.code).toBe('ACCOUNT_LOCKED');
+    await t.pool.query(`UPDATE users SET locked_until = now() - interval '1 second' WHERE email = 'otp2@example.com'`);
+    expect((await call(t, null, 'POST', '/v1/auth/otp/verify', { email: 'otp2@example.com', code })).status).toBe(400);
   });
 });
 
@@ -230,7 +242,9 @@ describe('CORE-01 password reset & change', () => {
 
 describe('CORE-01 TOTP MFA & step-up', () => {
   it('enrolls, verifies (AAL2 + recovery codes), steps up a new session, rejects replays, uses recovery codes', async () => {
-    const s = await signup('mfa@example.com');
+    const unverified = await signup('mfa-unverified@example.com');
+    expect((await call(t, asUser(unverified.body), 'POST', '/v1/auth/mfa/totp/enroll')).body.code).toBe('EMAIL_NOT_VERIFIED');
+    const s = await verifiedSignup('mfa@example.com');
     const user = asUser(s.body);
     const enroll = await call(t, user, 'POST', '/v1/auth/mfa/totp/enroll');
     expect(enroll.status).toBe(201);
@@ -284,7 +298,7 @@ describe('CORE-01 TOTP MFA & step-up', () => {
   });
 
   it('step-up without enrollment is refused; repeated bad codes lock MFA', async () => {
-    const s = await signup('mfa2@example.com');
+    const s = await verifiedSignup('mfa2@example.com');
     const user = asUser(s.body);
     expect((await call(t, user, 'POST', '/v1/auth/mfa/challenge', { code: '123456' })).body.code).toBe('MFA_NOT_ENROLLED');
     const enroll = await call(t, user, 'POST', '/v1/auth/mfa/totp/enroll');
@@ -353,6 +367,9 @@ describe('CORE-01 OAuth', () => {
 
   it('never auto-links to an existing email account; explicit linking works for the signed-in owner only', async () => {
     const s = await signup('linker@example.com');
+    // an unproven email address cannot gain extra sign-in methods
+    expect((await call(t, asUser(s.body), 'POST', '/v1/auth/oauth/google/link/start')).body.code).toBe('EMAIL_NOT_VERIFIED');
+    expect((await call(t, asUser(s.body), 'POST', '/v1/auth/email/verify/confirm', { code: lastCode('linker@example.com', 'EMAIL_VERIFY') })).status).toBe(200);
     const auto = await oauthLogin('google', 'mock:g-link:linker@example.com', { consents: consents() });
     expect(auto.status).toBe(409);
     expect(auto.body.code).toBe('ACCOUNT_LINK_REQUIRED');

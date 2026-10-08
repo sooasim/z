@@ -6,6 +6,7 @@ import { audit } from '../../platform/audit.js';
 import { emit } from '../../platform/outbox.js';
 import { StateMachine } from '../../platform/fsm.js';
 import { badRequest, notFound } from '../../platform/errors.js';
+import { cursorColumns, decodeCursor, page } from '../../platform/http.js';
 
 /** OPS-03 content & SEO. Content publication is separated from transaction truth. */
 
@@ -230,15 +231,32 @@ export async function adminListEntries(db: Db, f: { type?: EntryType; status?: E
   );
 }
 
-/** Published entries in `locale`, falling back per slug to ko-KR. */
-export async function listPublished(db: Db, type: EntryType, locale: string, limit: number) {
-  return q(
+/**
+ * Published entries in `locale` (falling back per slug to ko-KR), newest first, keyset-paginated on
+ * (coalesce(published_at, created_at), id). The locale fallback (DISTINCT ON slug) runs first and the ORDER/LIMIT
+ * applies to its result: limiting inside the DISTINCT ON returned the alphabetically first N slugs, so newer
+ * entries with late slugs ('zoo-…', Hangul) never appeared.
+ */
+export async function pagePublished(db: Db, type: EntryType, locale: string, limit: number, cursor?: string) {
+  const c = decodeCursor(cursor);
+  const rows = await q(
     db,
-    `SELECT DISTINCT ON (slug) * FROM cms_entries
-      WHERE entry_type = $1 AND status = 'PUBLISHED' AND locale = ANY($2::text[])
-      ORDER BY slug, (locale = $3) DESC LIMIT $4`,
-    [type, [locale, DEFAULT_LOCALE], locale, limit],
-  ).then((rows) => rows.sort((a, b) => String(b.published_at).localeCompare(String(a.published_at))));
+    `SELECT x.*, ${cursorColumns('x', 'sort_at')} FROM (
+        SELECT DISTINCT ON (slug) *, coalesce(published_at, created_at) AS sort_at FROM cms_entries
+         WHERE entry_type = $1 AND status = 'PUBLISHED' AND locale = ANY($2::text[])
+         ORDER BY slug, (locale = $3) DESC
+      ) x
+      WHERE ($5::timestamptz IS NULL OR (x.sort_at, x.id) < ($5::timestamptz, $6::uuid))
+      ORDER BY x.sort_at DESC, x.id DESC LIMIT $4`,
+    [type, [locale, DEFAULT_LOCALE], locale, limit + 1, c?.createdAt ?? null, c?.id ?? null],
+  );
+  const res = page(rows, limit);
+  return { items: res.items.map(({ sort_at: _s, ...rest }: any) => rest), nextCursor: res.nextCursor };
+}
+
+/** First page of published entries (newest first). */
+export async function listPublished(db: Db, type: EntryType, locale: string, limit: number) {
+  return (await pagePublished(db, type, locale, limit)).items;
 }
 
 export async function getPublished(db: Db, type: EntryType, slug: string, locale: string) {

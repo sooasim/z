@@ -7,7 +7,7 @@ import { onEvent, emit } from '../../platform/outbox.js';
 import { registerJob } from '../../platform/jobs.js';
 import { audit } from '../../platform/audit.js';
 import { SEARCH_ADAPTER } from './adapter.js';
-import { createSearchAdapter, projectProperty, propertyIdsForEvent, rebuildIndex, reconcileIndex, searchAdapterOf, searchProperties, suggest } from './service.js';
+import { createSearchAdapter, flushPendingProjections, projectProperty, propertyIdsForEvent, rebuildIndex, reconcileIndex, searchAdapterOf, searchProperties, suggest } from './service.js';
 
 /** Events that change what a property's search document looks like. */
 const PROJECTION_EVENTS = ['property.*', 'listing.blocked', 'media.ready', 'availability.changed', 'review.*', 'reputation.*', 'compliance.*'];
@@ -22,11 +22,14 @@ export default async function searchModule(app: FastifyInstance) {
   }
 
   for (const pattern of new Set(PROJECTION_EVENTS)) {
+    // inside the outbox dispatch transaction: PostgreSQL projections are applied here; external engines (Meilisearch)
+    // are only marked PENDING and pushed by search.flush outside any transaction
     onEvent(pattern, `search.projection:${pattern}`, async (tx, ev, ctx) => {
       for (const id of await propertyIdsForEvent(tx, ev)) await projectProperty(tx, ctx.app, id, ev.created_at);
     });
   }
 
+  registerJob('search.flush', 5 * 1000, (appCtx) => flushPendingProjections(appCtx));
   registerJob('search.reconcile', 10 * 60 * 1000, (appCtx) => reconcileIndex(appCtx));
 
   const r = app.withTypeProvider<ZodTypeProvider>();

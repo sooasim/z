@@ -2,10 +2,11 @@ import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireAuth, getActor } from '../../platform/auth.js';
-import { ctxFromRequest } from '../../platform/context.js';
+import { ctxFromRequest, systemCtx } from '../../platform/context.js';
+import { registerJob } from '../../platform/jobs.js';
 import { notFound } from '../../platform/errors.js';
 import { LocalStorageAdapter, STORAGE_ADAPTER, createStorage, type StorageAdapter } from './storage.js';
-import { ALLOWED_MIMES, MAX_VIDEO_BYTES, MEDIA_PURPOSES, acceptDevUpload, completeUpload, createUploadUrl, getMedia, setPropertyMedia } from './service.js';
+import { ALLOWED_MIMES, MAX_VIDEO_BYTES, MEDIA_PURPOSES, acceptDevUpload, completeUpload, createUploadUrl, getMedia, releaseStaleProcessing, setPropertyMedia } from './service.js';
 
 const MIME_BY_EXT: Record<string, string> = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', avif: 'image/avif', mp4: 'video/mp4' };
 
@@ -14,6 +15,9 @@ export default async function mediaModule(app: FastifyInstance) {
   if (!app.ctx.adapters.has(STORAGE_ADAPTER)) app.ctx.adapters.set(STORAGE_ADAPTER, createStorage(app.ctx.config));
   const storage = app.ctx.adapters.get(STORAGE_ADAPTER) as StorageAdapter;
   const r = app.withTypeProvider<ZodTypeProvider>();
+
+  // abandoned PROCESSING claims (crashed worker) become retryable again
+  registerJob('media.processing-sweeper', 5 * 60 * 1000, (appCtx) => releaseStaleProcessing(systemCtx(appCtx, `job-media-sweeper-${Date.now()}`)));
 
   r.post('/v1/media/upload-url', {
     schema: {

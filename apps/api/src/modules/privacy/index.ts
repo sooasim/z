@@ -22,18 +22,28 @@ export async function processDeletionRequests(app: AppContext): Promise<number> 
   const due = await q<{ id: string; user_id: string }>(
     app.pool,
     `SELECT id, user_id FROM privacy_requests WHERE request_type = 'DELETE' AND status = 'REQUESTED'
-        AND requested_at <= now() - make_interval(days => $1) ORDER BY requested_at LIMIT 50`,
+        AND requested_at <= now() - make_interval(days => $1)
+      ORDER BY coalesce((result->>'checkedAt')::timestamptz, requested_at) LIMIT 50`,
     [grace],
   );
   let n = 0;
   for (const r of due) {
     const ctx = systemCtx(app, `privacy-delete-${r.id}`);
     await withTx(app.pool, async (tx) => {
-      const locked = await maybeOne(tx, `SELECT status FROM privacy_requests WHERE id = $1 FOR UPDATE SKIP LOCKED`, [r.id]);
+      const locked = await maybeOne(tx, `SELECT status, result FROM privacy_requests WHERE id = $1 FOR UPDATE SKIP LOCKED`, [r.id]);
       if (!locked || locked.status !== 'REQUESTED') return;
-      const u = await one(tx, `SELECT status FROM users WHERE id = $1`, [r.user_id]);
+      const u = await one(tx, `SELECT status FROM users WHERE id = $1 FOR UPDATE`, [r.user_id]);
       if (u.status !== 'PENDING_DELETION') {
         await tx.query(`UPDATE privacy_requests SET status = 'REJECTED', reason = coalesce(reason, '') || ' [account not pending deletion]', completed_at = now() WHERE id = $1`, [r.id]);
+        return;
+      }
+      // obligations may have appeared during the grace period (the user can still sign in): defer, re-check next run
+      const blockers = await svc.deletionBlockers(tx, r.user_id);
+      if (blockers.length) {
+        await tx.query(`UPDATE privacy_requests SET result = $2 WHERE id = $1`, [r.id, JSON.stringify({ deferred: true, blockers, checkedAt: new Date().toISOString() })]);
+        if (!locked.result?.deferred) {
+          await audit(tx, ctx, { action: 'privacy.delete_deferred', resourceType: 'user', resourceId: r.user_id, after: { requestId: r.id, blockers }, category: 'PRIVACY' });
+        }
         return;
       }
       await tx.query(`UPDATE privacy_requests SET status = 'PROCESSING' WHERE id = $1`, [r.id]);
@@ -122,6 +132,8 @@ export default async function privacyModule(app: FastifyInstance) {
       if (await maybeOne(tx, `SELECT 1 FROM privacy_requests WHERE user_id = $1 AND request_type = 'DELETE' AND status IN ('REQUESTED','PROCESSING')`, [actor.userId])) {
         throw conflict('DELETION_ALREADY_REQUESTED', 'A deletion request is already pending');
       }
+      const blockers = await svc.deletionBlockers(tx, actor.userId);
+      if (blockers.length) throw svc.deletionBlocked(blockers);
       const row = await one(tx, `INSERT INTO privacy_requests(user_id, request_type, status, reason) VALUES ($1,'DELETE','REQUESTED',$2) RETURNING *`, [actor.userId, req.body.reason ?? null]);
       await userStatusMachine.transition(tx, ctx, { table: 'users', id: actor.userId, to: 'PENDING_DELETION', reason: 'privacy deletion requested' });
       await revokeAllSessions(tx, actor.userId, 'DELETION_REQUESTED');

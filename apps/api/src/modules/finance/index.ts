@@ -10,7 +10,7 @@ import { emit } from '../../platform/outbox.js';
 import { audit } from '../../platform/audit.js';
 import { StateMachine, recordTransition } from '../../platform/fsm.js';
 import { currencySchema, minorSchema } from '../../platform/money.js';
-import { decodeCursor, idParams, isoDate, page, pagination } from '../../platform/http.js';
+import { cursorColumns, decodeCursor, idParams, isoDate, page, pagination } from '../../platform/http.js';
 import { postPgSettlement, trialBalance } from './ledger.js';
 import { MockPayoutProvider, payoutCsv } from './payouts.js';
 import { FEE_JURISDICTION, quoteFees } from './rules.js';
@@ -69,6 +69,10 @@ const ruleDto = (r: any) => ({
   createdBy: r.created_by,
   approvedBy: r.approved_by,
   approvedAt: r.approved_at,
+  retireRequestedBy: r.retire_requested_by ?? null,
+  retireRequestedAt: r.retire_requested_at ?? null,
+  retireReason: r.retire_reason ?? null,
+  retiredBy: r.retired_by ?? null,
   note: r.note,
   createdAt: r.created_at,
 });
@@ -155,16 +159,60 @@ export default async function financeModule(app: FastifyInstance) {
     return { item: ruleDto(row) };
   });
 
+  /**
+   * Retiring a DRAFT rule is one step. Retiring an APPROVED rule switches a fee / tax component off for new quotes, so it
+   * is maker-checker like the approval (invariant 8): the first call records a retire request (202, rule stays
+   * APPROVED); a DIFFERENT ACCOUNTING/ADMIN user confirms it with a second call. The requester cannot confirm.
+   */
   r.post(
     '/v1/finance/rules/:id/retire',
     { schema: { tags: [T_RULES], params: idParams, body: z.object({ reason: z.string().min(3).max(500) }) }, preHandler: accounting },
+    async (req, reply) => {
+      const ctx = ctxFromRequest(req);
+      const actor = getActor(req);
+      const out = await withTx(pool, async (tx) => {
+        const rule = await maybeOne(tx, `SELECT * FROM finance_rules WHERE id = $1 FOR UPDATE`, [req.params.id]);
+        if (!rule) throw notFound('Finance rule');
+        if (rule.status === 'APPROVED' && !rule.retire_requested_by) {
+          const requested = await one(
+            tx,
+            `UPDATE finance_rules SET retire_requested_by = $2, retire_requested_at = now(), retire_reason = $3 WHERE id = $1 RETURNING *`,
+            [rule.id, actor.userId, req.body.reason],
+          );
+          await audit(tx, ctx, { action: 'finance.rule.retire_requested', resourceType: 'finance_rule', resourceId: rule.id, category: 'MONEY', reason: req.body.reason, before: ruleDto(rule), after: ruleDto(requested) });
+          await emit(tx, ctx, { aggregateType: 'finance_rule', aggregateId: rule.id, eventType: 'finance.rule.retire_requested', payload: { ruleId: rule.id, requestedBy: actor.userId } });
+          return { status: 202, row: requested, pending: true };
+        }
+        if (rule.status === 'APPROVED' && rule.retire_requested_by === actor.userId) {
+          throw forbidden('MAKER_CHECKER_VIOLATION', 'The requester of a retirement cannot confirm it; another ACCOUNTING/ADMIN user must');
+        }
+        const { row } = await FinanceRuleFSM.transition(tx, ctx, {
+          table: 'finance_rules',
+          id: rule.id,
+          to: 'RETIRED',
+          reason: req.body.reason,
+          set: { retired_by: actor.userId },
+        });
+        await audit(tx, ctx, { action: 'finance.rule.retire', resourceType: 'finance_rule', resourceId: rule.id, category: 'MONEY', reason: req.body.reason, before: ruleDto(rule), after: ruleDto(row) });
+        await emit(tx, ctx, { aggregateType: 'finance_rule', aggregateId: rule.id, eventType: 'finance.rule.changed', payload: { ruleId: rule.id, status: 'RETIRED' } });
+        return { status: 200, row, pending: false };
+      });
+      return reply.status(out.status).send({ item: ruleDto(out.row), ...(out.pending ? { pending: true, code: 'RETIRE_CONFIRMATION_REQUIRED' } : {}) });
+    },
+  );
+
+  r.post(
+    '/v1/finance/rules/:id/retire/cancel',
+    { schema: { tags: [T_RULES], params: idParams, summary: 'Withdraw a pending retire request of an APPROVED rule' }, preHandler: accounting },
     async (req) => {
       const ctx = ctxFromRequest(req);
       const row = await withTx(pool, async (tx) => {
-        const { row } = await FinanceRuleFSM.transition(tx, ctx, { table: 'finance_rules', id: req.params.id, to: 'RETIRED', reason: req.body.reason });
-        await audit(tx, ctx, { action: 'finance.rule.retire', resourceType: 'finance_rule', resourceId: req.params.id, category: 'MONEY', reason: req.body.reason });
-        await emit(tx, ctx, { aggregateType: 'finance_rule', aggregateId: req.params.id, eventType: 'finance.rule.changed', payload: { ruleId: req.params.id, status: 'RETIRED' } });
-        return row;
+        const rule = await maybeOne(tx, `SELECT * FROM finance_rules WHERE id = $1 FOR UPDATE`, [req.params.id]);
+        if (!rule) throw notFound('Finance rule');
+        if (rule.status !== 'APPROVED' || !rule.retire_requested_by) throw conflict('NO_RETIRE_REQUEST', 'This rule has no pending retire request');
+        const after = await one(tx, `UPDATE finance_rules SET retire_requested_by = NULL, retire_requested_at = NULL, retire_reason = NULL WHERE id = $1 RETURNING *`, [rule.id]);
+        await audit(tx, ctx, { action: 'finance.rule.retire_request_cancelled', resourceType: 'finance_rule', resourceId: rule.id, category: 'MONEY', before: ruleDto(rule), after: ruleDto(after) });
+        return after;
       });
       return { item: ruleDto(row) };
     },
@@ -184,7 +232,7 @@ export default async function financeModule(app: FastifyInstance) {
     const c = decodeCursor(req.query.cursor);
     const rows = await q(
       pool,
-      `SELECT id, payment_id, receipt_type, amount_minor, currency, data, issued_at, issued_at AS created_at FROM receipts
+      `SELECT id, payment_id, receipt_type, amount_minor, currency, data, issued_at, issued_at AS created_at, ${cursorColumns(undefined, 'issued_at')} FROM receipts
         WHERE user_id = $1 AND ($2::timestamptz IS NULL OR (issued_at, id) < ($2::timestamptz, $3::uuid))
         ORDER BY issued_at DESC, id DESC LIMIT $4`,
       [actor.userId, c?.createdAt ?? null, c?.id ?? null, req.query.limit + 1],
@@ -216,7 +264,7 @@ export default async function financeModule(app: FastifyInstance) {
       const c = decodeCursor(req.query.cursor);
       const txs = await q(
         pool,
-        `SELECT * FROM ledger_transactions WHERE ($1::text IS NULL OR source_type = $1) AND ($2::uuid IS NULL OR source_id = $2) AND ($3::text IS NULL OR transaction_type = $3)
+        `SELECT *, ${cursorColumns()} FROM ledger_transactions WHERE ($1::text IS NULL OR source_type = $1) AND ($2::uuid IS NULL OR source_id = $2) AND ($3::text IS NULL OR transaction_type = $3)
            AND ($4::timestamptz IS NULL OR (created_at, id) < ($4::timestamptz, $5::uuid))
          ORDER BY created_at DESC, id DESC LIMIT $6`,
         [req.query.sourceType ?? null, req.query.sourceId ?? null, req.query.type ?? null, c?.createdAt ?? null, c?.id ?? null, req.query.limit + 1],
@@ -349,7 +397,7 @@ export default async function financeModule(app: FastifyInstance) {
       const c = decodeCursor(req.query.cursor);
       const rows = await q<SettlementRow>(
         pool,
-        `SELECT * FROM settlements WHERE ($1::text IS NULL OR status = $1) AND ($2::uuid IS NULL OR payee_id = $2)
+        `SELECT *, ${cursorColumns()} FROM settlements WHERE ($1::text IS NULL OR status = $1) AND ($2::uuid IS NULL OR payee_id = $2)
            AND ($3::timestamptz IS NULL OR (created_at, id) < ($3::timestamptz, $4::uuid))
          ORDER BY created_at DESC, id DESC LIMIT $5`,
         [req.query.status ?? null, req.query.payeeId ?? null, c?.createdAt ?? null, c?.id ?? null, req.query.limit + 1],
@@ -449,7 +497,7 @@ export default async function financeModule(app: FastifyInstance) {
     const c = decodeCursor(req.query.cursor);
     const rows = await q<SettlementRow>(
       pool,
-      `SELECT * FROM settlements WHERE payee_id = $1 AND ($2::timestamptz IS NULL OR (created_at, id) < ($2::timestamptz, $3::uuid))
+      `SELECT *, ${cursorColumns()} FROM settlements WHERE payee_id = $1 AND ($2::timestamptz IS NULL OR (created_at, id) < ($2::timestamptz, $3::uuid))
         ORDER BY created_at DESC, id DESC LIMIT $4`,
       [actor.userId, c?.createdAt ?? null, c?.id ?? null, req.query.limit + 1],
     );

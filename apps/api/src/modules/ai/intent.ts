@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isCalendarDate } from '../../platform/http.js';
 
 /**
  * AI-01 deterministic (offline) travel intent parser for Korean/English. Pure functions only: user text is
@@ -12,8 +13,9 @@ export type Interest = (typeof INTERESTS)[number];
 
 export const travelIntentSchema = z.object({
   destination: z.object({ city: z.string().min(1).max(50), aliases: z.array(z.string().min(1).max(50)).max(10) }).nullable(),
-  checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
-  checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  // real calendar days only: an LLM-produced '2026-02-30' would otherwise reach `::date` casts in the live search
+  checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(isCalendarDate).nullable(),
+  checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(isCalendarDate).nullable(),
   nights: z.number().int().min(1).max(90).nullable(),
   guests: z.number().int().min(1).max(50).nullable(),
   budget: z.object({ amountMinor: z.number().int().positive().max(1e12), currency: z.enum(['KRW', 'USD']), per: z.enum(['TOTAL', 'NIGHT', 'PERSON']) }).nullable(),

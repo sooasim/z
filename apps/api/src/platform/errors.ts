@@ -33,6 +33,11 @@ export function fromPgError(err: any): AppError | null {
       return unprocessable('CONSTRAINT_VIOLATION', 'The request violates a data integrity rule', { constraint: err.constraint });
     case '22P02':
       return badRequest('INVALID_INPUT', 'Malformed identifier or value');
+    case '22007': // invalid_datetime_format
+    case '22008': // datetime_field_overflow (e.g. '2026-02-30'::date)
+    case '22009': // invalid_time_zone_displacement_value (e.g. '...+99:99'::timestamptz)
+    case '22003': // numeric_value_out_of_range
+      return badRequest('INVALID_INPUT', 'A date or number in the request is out of range');
     case 'P0001':
       return conflict('IMMUTABLE_RECORD', 'This record is append-only and cannot be modified');
     case 'P0002':

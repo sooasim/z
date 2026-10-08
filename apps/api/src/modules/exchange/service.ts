@@ -17,11 +17,12 @@ import { audit } from '../../platform/audit.js';
 import { assertEnabled } from '../../platform/flags.js';
 import { acquireBlock, assertDateRange, isRangeFree, releaseBlock } from '../../platform/inventory.js';
 import { canonicalJson, sha256 } from '../../platform/crypto.js';
-import { AppError, conflict, forbidden, notFound, unauthorized, unprocessable } from '../../platform/errors.js';
-import { isStaff } from '../../platform/auth.js';
-import { decodeCursor, encodeCursor } from '../../platform/http.js';
+import { AppError, badRequest, conflict, forbidden, notFound, unauthorized, unprocessable } from '../../platform/errors.js';
+import { hasRole } from '../../platform/auth.js';
+import { decodeCursor, encodeCursor, isCalendarDate } from '../../platform/http.js';
+import type { DomainEvent } from '../../platform/outbox.js';
 import { ensureConversation } from '../messaging/service.js';
-import { openDispute } from '../disputes/service.js';
+import { assertElevatedAccess, openDispute } from '../disputes/service.js';
 
 export const EXCHANGE_FLAG = 'exchange.enabled';
 /** A recipient has this long to respond to the latest offer before the request EXPIRES. */
@@ -50,7 +51,8 @@ export const exchangeFsm = new StateMachine<ExchangeStatus>('EXCHANGE', {
   DECLINED: [],
   WITHDRAWN: [],
   EXPIRED: [],
-  DISPUTED: [],
+  // left only through TRUST-03 dispute resolution (applyDisputeResolution): restore, cancel (blocks released) or complete
+  DISPUTED: ['CONFIRMED', 'IN_PROGRESS', 'CANCELLED', 'COMPLETED'],
   CANCELLED: [],
 });
 
@@ -111,7 +113,24 @@ function partyOf(ex: Pick<ExchangeRow, 'requester_id' | 'responder_id'>, userId:
   return null;
 }
 const otherUser = (ex: ExchangeRow, p: Party) => (p === 'A' ? ex.responder_id : ex.requester_id);
-const canStaffRead = (ctx: Ctx) => isStaff(ctx.actor) && ctx.actor?.aal === 'aal2';
+/**
+ * Staff who may open an exchange case file (dispute / trust & safety / support desk), AAL2 only, every read audited.
+ * Private P2P content (offer messages) and the exact addresses additionally need a case-scoped elevated-access grant
+ * on the exchange conversation (invariant 10), see staffContentGrant.
+ */
+const EXCHANGE_STAFF_ROLES = ['ADMIN', 'SUPPORT', 'COMPLIANCE'] as const;
+const canStaffRead = (ctx: Ctx) => !!ctx.actor && ctx.actor.aal === 'aal2' && hasRole(ctx.actor, ...EXCHANGE_STAFF_ROLES);
+
+/** Active elevated-access grant of this staff member on the exchange conversation (audited by TRUST-03), or null. */
+async function staffContentGrant(db: Db, ctx: Ctx, conversationId: string | null): Promise<string | null> {
+  if (!conversationId) return null;
+  try {
+    return (await assertElevatedAccess(db, ctx, conversationId)).grantId;
+  } catch (err) {
+    if (err instanceof AppError && (err.code === 'ELEVATED_ACCESS_REQUIRED' || err.code === 'AAL2_REQUIRED')) return null;
+    throw err;
+  }
+}
 
 /** Load + row-lock an exchange; non-parties get 404 (existence is not leaked). */
 async function lockForParty(db: Db, ctx: Ctx, id: string, opts: { allowSystem?: boolean } = {}) {
@@ -132,8 +151,14 @@ function assertStatus(ex: ExchangeRow, allowed: ExchangeStatus[], to?: ExchangeS
   }
 }
 
-function assertFutureRange(r: DateRange, label: string) {
+/** Real calendar days only ('2027-02-30' / '2027-13-01' never reach a `::date` cast). */
+function assertCalendarRange(r: DateRange, label = 'dates') {
+  if (!isCalendarDate(r.start) || !isCalendarDate(r.end)) throw badRequest('INVALID_DATE', `${label} must be real calendar dates (YYYY-MM-DD)`);
   assertDateRange(r.start, r.end);
+}
+
+function assertFutureRange(r: DateRange, label: string) {
+  assertCalendarRange(r, label);
   if (r.start < todayUtc()) throw unprocessable('DATES_IN_PAST', `${label} must not start in the past`);
 }
 
@@ -250,7 +275,7 @@ export async function discoverHomes(
 ) {
   const actor = requireActor(ctx);
   if ((f.start && !f.end) || (!f.start && f.end)) throw unprocessable('INVALID_DATE_RANGE', 'Provide both start and end');
-  if (f.start && f.end) assertDateRange(f.start, f.end);
+  if (f.start && f.end) assertCalendarRange({ start: f.start, end: f.end });
   const me = await maybeOne<{ preferred_destinations: string[] }>(db, `SELECT preferred_destinations FROM exchange_profiles WHERE user_id = $1`, [actor.userId]);
   const myPrefs = new Set((me?.preferred_destinations ?? []).map((s) => s.toLowerCase()));
   const myCities = new Set(
@@ -599,16 +624,56 @@ export async function runVerification(db: Tx, ctx: Ctx, id: string) {
     await emitEx(db, ctx, ex, 'exchange.agreement.created', { agreementId: agreement.id, termsVersion: agreement.terms_version, termsHash: agreement.terms_hash, offerVersion: agreement.offer_version });
     await notifyBoth(db, ctx, ex, { templateKey: 'exchange.agreement.created', title: '익스체인지 약정서 준비 완료', body: '약정서를 확인하고 서명해 주세요.', dedupe: 'exchange.agreement.created' });
   }
-  return { ...(await getExchange(db, ctx, id)), checks: checks.map(mapCheck) };
+  return { ...(await getExchange(db, ctx, id)), checks: checks.map(checkMapper(ctx.actor?.userId ?? null, !ctx.actor)) };
 }
 
-const mapCheck = (c: any) => ({ partyUserId: c.party_user_id, checkType: c.check_type, status: c.status, detail: c.detail, checkedAt: c.checked_at });
+/**
+ * Failure codes a member may see on their OWN checks. Trust & safety internals are generalized: an open safety report
+ * against the member's home is shown as PROPERTY_UNDER_REVIEW (never "a report was filed").
+ */
+const SELF_VISIBLE_FAILURES: Record<string, string> = {
+  IDENTITY_NOT_VERIFIED: 'IDENTITY_NOT_VERIFIED',
+  ACCOUNT_NOT_ACTIVE: 'ACCOUNT_NOT_ACTIVE',
+  ACTIVE_SANCTION: 'ACTIVE_SANCTION', // the member was notified of the sanction and sees it in EXCH-01 eligibility
+  NOT_OWNER: 'NOT_OWNER',
+  NOT_PUBLISHED: 'NOT_PUBLISHED',
+  EXCHANGE_DISABLED: 'EXCHANGE_DISABLED',
+  OPEN_SAFETY_REPORT: 'PROPERTY_UNDER_REVIEW',
+};
+
+/**
+ * Viewer-aware verification rows. The counterparty's rows carry only their status (never the other member's failure
+ * reasons, sanctions, safety reports or acknowledgement evidence); the viewer's own rows carry the actionable failure
+ * codes; staff (audited) and the system see the full detail.
+ */
+function checkMapper(viewerId: string | null, full: boolean) {
+  return (c: any) => {
+    const base = { partyUserId: c.party_user_id, checkType: c.check_type, status: c.status, checkedAt: c.checked_at };
+    if (full) return { ...base, detail: c.detail };
+    if (c.party_user_id !== viewerId) return base;
+    const failures = Array.isArray(c.detail?.failures)
+      ? Array.from(new Set((c.detail.failures as string[]).map((f) => SELF_VISIBLE_FAILURES[f] ?? 'CHECK_FAILED')))
+      : undefined;
+    const detail: Record<string, unknown> = {};
+    if (failures) detail.failures = failures;
+    if (c.detail?.propertyId) detail.propertyId = c.detail.propertyId;
+    if (c.detail?.acknowledgedAt) detail.acknowledgedAt = c.detail.acknowledgedAt;
+    return { ...base, detail };
+  };
+}
 
 export async function acknowledgeSafety(db: Tx, ctx: Ctx, id: string) {
   const actor = requireActor(ctx);
-  const { ex } = await lockForParty(db, ctx, id);
+  const { ex, party } = await lockForParty(db, ctx, id);
   assertStatus(ex, ['VERIFICATION_PENDING']);
-  await setCheck(db, ex.id, actor.userId, 'SAFETY_ACK', 'PASSED', { acknowledgedAt: new Date().toISOString(), ip: ctx.ip ?? null, userAgent: ctx.userAgent ?? null });
+  const acknowledgedAt = new Date().toISOString();
+  // the check row holds no personal data (it is shown to the counterparty); the acknowledgement evidence (actor,
+  // session, correlation id, ip, user agent) lives in the append-only audit log
+  await setCheck(db, ex.id, actor.userId, 'SAFETY_ACK', 'PASSED', { acknowledgedAt });
+  await audit(db, ctx, {
+    action: 'exchange.safety_acknowledged', resourceType: 'exchange', resourceId: ex.id,
+    after: { party: party === 'A' ? 'REQUESTER' : 'RESPONDER', acknowledgedAt, sessionId: actor.sessionId }, category: 'COMPLIANCE',
+  });
   return runVerification(db, ctx, id);
 }
 
@@ -914,6 +979,87 @@ export async function disputeExchange(db: Tx, ctx: Ctx, id: string, input: { rea
   return { ...(await getExchange(db, ctx, id)), disputeId: d.id };
 }
 
+export interface DisputeResolvedPayload {
+  disputeId: string;
+  outcome: 'RESOLVED' | 'REJECTED' | string;
+  contextType: string;
+  contextId: string;
+  detail?: Record<string, unknown> | null;
+}
+
+/**
+ * TRUST-03 → EXCH-06 (outbox `dispute.resolved`): a closed dispute lifts the DISPUTED freeze once no other dispute on
+ * the exchange is still open. Target state:
+ *  - `detail.exchangeOutcome` ('CANCELLED' | 'COMPLETED') when the resolving staff member set one;
+ *  - otherwise, both stays over → COMPLETED;
+ *  - otherwise a REJECTED dispute restores the pre-dispute state (CONFIRMED / IN_PROGRESS: a party who wants out must
+ *    cancel under the normal policy) and an upheld (RESOLVED) one cancels the exchange.
+ * CANCELLED releases, in the same tx, every EXCHANGE block whose stay has not ended (both calendars sellable again);
+ * COMPLETED releases blocks whose stay never started. Idempotent (a non-DISPUTED exchange is left untouched).
+ */
+export async function applyDisputeResolution(db: Tx, ctx: Ctx, p: DisputeResolvedPayload): Promise<{ changed: boolean; status?: string; releasedBlockIds?: string[] }> {
+  if (p.contextType !== 'EXCHANGE' || !p.contextId) return { changed: false };
+  const ex = await maybeOne<ExchangeRow>(db, `SELECT * FROM exchange_requests WHERE id = $1 FOR UPDATE`, [p.contextId]);
+  if (!ex || ex.status !== 'DISPUTED') return { changed: false, status: ex?.status };
+  const stillOpen = await maybeOne(
+    db,
+    `SELECT 1 FROM disputes WHERE context_type = 'EXCHANGE' AND context_id = $1 AND id <> $2 AND status NOT IN ('RESOLVED','REJECTED') LIMIT 1`,
+    [ex.id, p.disputeId],
+  );
+  if (stillOpen) return { changed: false, status: ex.status };
+  const prev = await maybeOne<{ from_state: ExchangeStatus | null }>(
+    db,
+    `SELECT from_state FROM state_transitions WHERE aggregate_type = 'EXCHANGE' AND aggregate_id = $1 AND to_state = 'DISPUTED' ORDER BY id DESC LIMIT 1`,
+    [ex.id],
+  );
+  const a = parseRange(ex.dates_a), b = parseRange(ex.dates_b);
+  const today = todayUtc();
+  const ended = today >= maxDate(a.end, b.end);
+  const requested = p.detail?.exchangeOutcome;
+  let to: ExchangeStatus;
+  if (requested === 'CANCELLED' || requested === 'COMPLETED') to = requested;
+  else if (ended) to = 'COMPLETED';
+  else if (p.outcome === 'REJECTED') to = prev?.from_state === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'CONFIRMED';
+  else to = 'CANCELLED';
+
+  // CANCELLED: free every night that is not over yet; COMPLETED: free only stays that never began
+  const blocks = await q<{ id: string }>(
+    db,
+    `SELECT id FROM inventory_blocks WHERE source_type = 'EXCHANGE' AND source_id = $1 AND state = 'ACTIVE'
+        AND CASE WHEN $2 THEN upper(stay_range) > $3::date ELSE lower(stay_range) > $3::date END FOR UPDATE`,
+    [ex.id, to === 'CANCELLED', today],
+  );
+  const releasedBlockIds = to === 'CANCELLED' || to === 'COMPLETED' ? blocks.map((x) => x.id) : [];
+  for (const id of releasedBlockIds) await releaseBlock(db, id);
+  const set: Record<string, unknown> = {};
+  if (to === 'CANCELLED') set.cancelled_at = new Date();
+  if (to === 'COMPLETED') set.completed_at = new Date();
+  await exchangeFsm.transition(db, ctx, {
+    table: 'exchange_requests', id: ex.id, from: 'DISPUTED', to, reason: `dispute ${p.outcome.toLowerCase()}`, actorType: 'SYSTEM', versioned: true,
+    metadata: { disputeId: p.disputeId, outcome: p.outcome, releasedBlockIds }, set,
+  });
+  if (to === 'CANCELLED') await db.query(`UPDATE exchange_agreements SET status = 'VOID' WHERE exchange_id = $1 AND status <> 'VOID'`, [ex.id]);
+  await emitEx(db, ctx, ex, 'exchange.dispute_resolved', { disputeId: p.disputeId, outcome: p.outcome, status: to, releasedBlockIds });
+  if (to === 'CANCELLED') await emitEx(db, ctx, ex, 'exchange.cancelled', { by: null, fromStatus: 'DISPUTED', policy: 'DISPUTE_RESOLUTION', releasedBlockIds, reason: `dispute ${p.disputeId}` });
+  if (to === 'COMPLETED') {
+    await emitEx(db, ctx, ex, 'exchange.completed', { requesterId: ex.requester_id, responderId: ex.responder_id, propertyAId: ex.property_a_id, propertyBId: ex.property_b_id });
+  }
+  for (const propertyId of [ex.property_a_id, ex.property_b_id]) {
+    if (releasedBlockIds.length) {
+      await emit(db, ctx, { aggregateType: 'property', aggregateId: propertyId, eventType: 'availability.changed', payload: { propertyId, reason: 'EXCHANGE_DISPUTE_RESOLVED', exchangeId: ex.id } });
+    }
+  }
+  await notifyBoth(db, ctx, ex, {
+    templateKey: 'exchange.dispute_resolved', title: '익스체인지 분쟁 처리 완료', body: `분쟁 처리 결과에 따라 익스체인지가 ${to} 상태가 되었습니다.`, dedupe: `exchange.dispute_resolved:${p.disputeId}`,
+  });
+  return { changed: true, status: to, releasedBlockIds };
+}
+
+export async function handleDisputeResolved(tx: Tx, ev: DomainEvent<DisputeResolvedPayload>, ctx: Ctx) {
+  const p = ev.payload;
+  if (p?.contextType === 'EXCHANGE' && p.disputeId && p.contextId) await applyDisputeResolution(tx, ctx, p);
+}
+
 // ---------------------------------------------------------------------------------------------
 // jobs
 // ---------------------------------------------------------------------------------------------
@@ -1046,20 +1192,28 @@ export async function listMyExchanges(db: Db, ctx: Ctx, f: { limit: number; curs
   };
 }
 
-/** Parties and AAL2 staff only; non-parties get 404. Exact addresses only once CONFIRMED. */
+/**
+ * Parties and exchange case staff (ADMIN/SUPPORT/COMPLIANCE, AAL2) only; everyone else gets 404. Exact addresses only
+ * once CONFIRMED. A staff read is audited (ELEVATED_ACCESS); offer messages and addresses are included for staff only
+ * with an active case-scoped elevated-access grant on the exchange conversation.
+ */
 export async function getExchange(db: Db, ctx: Ctx, id: string) {
   const actor = requireActor(ctx);
   const r = await maybeOne<any>(db, `${SUMMARY_SQL} WHERE er.id = $2`, [actor.userId, id]);
   const party = r ? partyOf(r, actor.userId) : null;
   const staff = canStaffRead(ctx);
   if (!r || (!party && !staff)) throw notFound('Exchange');
+  const staffView = !party;
+  const grantId = staffView ? await staffContentGrant(db, ctx, r.conversation_id) : null;
+  const privateContent = !staffView || !!grantId;
   const offers = await q<any>(db, `SELECT * FROM exchange_offers WHERE exchange_id = $1 ORDER BY version`, [id]);
   const verifications = await q<any>(db, `SELECT party_user_id, check_type, status, detail, checked_at FROM exchange_verifications WHERE exchange_id = $1 ORDER BY party_user_id, check_type`, [id]);
   const agreement = await maybeOne<any>(db, `SELECT * FROM exchange_agreements WHERE exchange_id = $1`, [id]);
   const users = await q<{ id: string; display_name: string | null }>(db, `SELECT id, display_name FROM users WHERE id = ANY($1::uuid[])`, [[r.requester_id, r.responder_id]]);
   const name = (uid: string) => users.find((u) => u.id === uid)?.display_name ?? null;
+  const offerView = (o: any) => (privateContent ? mapOffer(o) : { ...mapOffer(o), message: null, messageWithheld: o.message != null });
   let addresses: Record<string, unknown> | null = null;
-  if (ADDRESS_VISIBLE.includes(r.status)) {
+  if (ADDRESS_VISIBLE.includes(r.status) && privateContent) {
     const addr = await q<any>(db, `SELECT property_id, line1, line2, postal_code, city, region, country FROM property_addresses WHERE property_id = ANY($1::uuid[])`, [[r.property_a_id, r.property_b_id]]);
     const pick = (pid: string) => {
       const x = addr.find((a) => a.property_id === pid);
@@ -1067,7 +1221,9 @@ export async function getExchange(db: Db, ctx: Ctx, id: string) {
     };
     addresses = { A: pick(r.property_a_id), B: pick(r.property_b_id) };
   }
-  if (staff && !party) await audit(db, ctx, { action: 'exchange.read', resourceType: 'exchange', resourceId: id, category: 'ELEVATED_ACCESS' });
+  if (staffView) {
+    await audit(db, ctx, { action: 'exchange.read', resourceType: 'exchange', resourceId: id, after: { grantId, privateContent }, category: 'ELEVATED_ACCESS' });
+  }
   const summary = mapSummary(r, actor.userId);
   return {
     item: {
@@ -1076,13 +1232,14 @@ export async function getExchange(db: Db, ctx: Ctx, id: string) {
       responder: { id: r.responder_id, displayName: name(r.responder_id) },
       acceptedAVersion: r.accepted_a_version,
       acceptedBVersion: r.accepted_b_version,
-      currentOffer: offers.length ? mapOffer(offers.find((o) => o.version === r.current_offer_version) ?? offers[offers.length - 1]) : null,
-      offers: offers.map(mapOffer),
-      verifications: verifications.map(mapCheck),
+      currentOffer: offers.length ? offerView(offers.find((o) => o.version === r.current_offer_version) ?? offers[offers.length - 1]) : null,
+      offers: offers.map(offerView),
+      verifications: verifications.map(checkMapper(actor.userId, staffView)),
       agreement: agreement
         ? { id: agreement.id, status: agreement.status, termsVersion: agreement.terms_version, termsHash: agreement.terms_hash, offerVersion: agreement.offer_version, signedByRequester: !!agreement.accepted_a_at, signedByResponder: !!agreement.accepted_b_at }
         : null,
       addresses,
+      ...(staffView ? { staffAccess: { elevatedGrantId: grantId, privateContent } } : {}),
       confirmedAt: r.confirmed_at,
       startedAt: r.started_at,
       completedAt: r.completed_at,

@@ -1,6 +1,7 @@
 import type { Db } from './db.js';
 import { maybeOne, q } from './db.js';
 import { conflict, badRequest } from './errors.js';
+import { isCalendarDate } from './http.js';
 
 export type BlockType = 'HOLD' | 'RESERVATION' | 'EXCHANGE' | 'HOST_BLOCK' | 'EXTERNAL';
 export type SourceType = 'RESERVATION_HOLD' | 'RESERVATION' | 'EXCHANGE' | 'HOST' | 'INTEGRATION';
@@ -19,6 +20,8 @@ export interface InventoryBlock {
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export function assertDateRange(start: string, end: string) {
   if (!DATE_RE.test(start) || !DATE_RE.test(end)) throw badRequest('INVALID_DATE', 'Dates must be YYYY-MM-DD');
+  // shape alone admits 2026-02-30 / 2026-13-01, which then fail the `::date` cast (22008) mid-transaction
+  if (!isCalendarDate(start) || !isCalendarDate(end)) throw badRequest('INVALID_DATE', 'Dates must be real calendar days');
   if (end <= start) throw badRequest('INVALID_DATE_RANGE', 'End date must be after start date');
 }
 

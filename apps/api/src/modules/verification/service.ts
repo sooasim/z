@@ -95,7 +95,8 @@ export async function getCase(db: Db, ctx: Ctx, id: string) {
 async function applyDecisionEffects(tx: Tx, c: any, approved: boolean) {
   switch (c.subject_type as SubjectType) {
     case 'IDENTITY':
-      if (approved) await tx.query(`UPDATE users SET identity_verified_at = now() WHERE id = $1`, [c.user_id]);
+      // stamped with the case's decided_at, so the approval backing identity_verified_at can be identified on expiry
+      if (approved) await tx.query(`UPDATE users SET identity_verified_at = $2 WHERE id = $1`, [c.user_id, c.decided_at]);
       break;
     case 'HOST':
       await tx.query(`UPDATE host_profiles SET verification_status = $2 WHERE user_id = $1 AND verification_status <> 'SUSPENDED'`, [c.user_id, approved ? 'VERIFIED' : 'REJECTED']);
@@ -149,12 +150,20 @@ export async function startReview(tx: Tx, ctx: Ctx, id: string) {
 
 /**
  * TRUST-01 predicate used by restricted actions: is there an APPROVED, unexpired case for this subject?
- * IDENTITY also honours users.identity_verified_at (set by approval or by trusted provider integrations).
+ * IDENTITY also honours users.identity_verified_at (set by approval or by trusted provider integrations), unless
+ * the approval that set it has passed its expires_at.
  */
 export async function isVerified(db: Db, userId: string, subjectType: SubjectType, subjectId?: string | null): Promise<boolean> {
   if (subjectType === 'IDENTITY') {
-    const u = await maybeOne(db, `SELECT identity_verified_at FROM users WHERE id = $1`, [userId]);
-    if (u?.identity_verified_at) return true;
+    const u = await maybeOne<{ ok: boolean }>(
+      db,
+      `SELECT (u.identity_verified_at IS NOT NULL AND NOT EXISTS (
+                 SELECT 1 FROM verification_cases c WHERE c.user_id = u.id AND c.subject_type = 'IDENTITY' AND c.status IN ('APPROVED','EXPIRED')
+                    AND c.expires_at IS NOT NULL AND c.expires_at <= now() AND c.decided_at >= u.identity_verified_at)) AS ok
+         FROM users u WHERE u.id = $1`,
+      [userId],
+    );
+    if (u?.ok) return true;
   }
   const row = await maybeOne(
     db,
@@ -163,6 +172,58 @@ export async function isVerified(db: Db, userId: string, subjectType: SubjectTyp
     [userId, subjectType, subjectId ?? null],
   );
   return !!row;
+}
+
+/**
+ * Records this module projects a decision onto are reverted when the approval expires (no other valid approval
+ * for the same subject). Other domains (guide profiles, ...) consume `verification.expired`.
+ */
+async function applyExpiryEffects(tx: Tx, c: any) {
+  // another APPROVED, unexpired case of the same user + subject type (+ subject for per-record subjects) still vouches
+  const stillVerified = !!(await maybeOne(
+    tx,
+    `SELECT 1 FROM verification_cases WHERE user_id = $1 AND subject_type = $2 AND id <> $3 AND status = 'APPROVED'
+        AND (expires_at IS NULL OR expires_at > now()) AND ($4::uuid IS NULL OR subject_id = $4) LIMIT 1`,
+    [c.user_id, c.subject_type, c.id, c.subject_type === 'BUSINESS' ? c.subject_id : null],
+  ));
+  if (stillVerified) return;
+  switch (c.subject_type as SubjectType) {
+    case 'IDENTITY':
+      // only when this approval is what set identity_verified_at (a later provider verification stays)
+      await tx.query(`UPDATE users SET identity_verified_at = NULL WHERE id = $1 AND identity_verified_at <= $2`, [c.user_id, c.decided_at]);
+      break;
+    case 'HOST':
+      await tx.query(`UPDATE host_profiles SET verification_status = 'PENDING' WHERE user_id = $1 AND verification_status = 'VERIFIED'`, [c.user_id]);
+      break;
+    case 'BUSINESS':
+      if (c.subject_id) await tx.query(`UPDATE business_profiles SET status = 'PENDING', updated_at = now() WHERE id = $1 AND status = 'VERIFIED'`, [c.subject_id]);
+      break;
+    default:
+      break;
+  }
+}
+
+/** Job: APPROVED cases past expires_at become EXPIRED (FSM), their projections are reverted and `verification.expired` is emitted. */
+export async function expireVerifications(tx: Tx, ctx: Ctx): Promise<number> {
+  const due = await q<{ id: string }>(
+    tx,
+    `SELECT id FROM verification_cases WHERE status = 'APPROVED' AND expires_at IS NOT NULL AND expires_at <= now() ORDER BY expires_at LIMIT 100 FOR UPDATE SKIP LOCKED`,
+  );
+  for (const d of due) {
+    const { row } = await verificationMachine.transition(tx, ctx, { table: 'verification_cases', id: d.id, to: 'EXPIRED', from: 'APPROVED', reason: 'verification validity ended', actorType: 'SYSTEM' });
+    await applyExpiryEffects(tx, row);
+    await emit(tx, ctx, { aggregateType: 'verification_case', aggregateId: d.id, eventType: 'verification.expired', payload: { caseId: d.id, userId: row.user_id, subjectType: row.subject_type, subjectId: row.subject_id } });
+    await audit(tx, ctx, { action: 'verification.expired', resourceType: 'verification_case', resourceId: d.id, before: { status: 'APPROVED' }, after: { status: 'EXPIRED' }, category: 'COMPLIANCE' });
+    await notify(tx, ctx, {
+      userId: row.user_id,
+      templateKey: 'verification.expired',
+      title: '인증 유효기간이 만료되었습니다',
+      body: `Your ${row.subject_type} verification has expired. Please submit it again.`,
+      data: { caseId: d.id, subjectType: row.subject_type },
+      dedupeKey: `verification.expired:${d.id}`,
+    });
+  }
+  return due.length;
 }
 
 /** Summary of all verification predicates for a user (UI checklists, host onboarding). */

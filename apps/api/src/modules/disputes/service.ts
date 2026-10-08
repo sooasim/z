@@ -7,10 +7,10 @@ import { audit } from '../../platform/audit.js';
 import { notify } from '../../platform/notify.js';
 import { sha256 } from '../../platform/crypto.js';
 import { hasRole, isStaff, STAFF_ROLES } from '../../platform/auth.js';
-import { conflict, forbidden, notFound, unprocessable } from '../../platform/errors.js';
-import { suspendUser, restoreUser } from '../roles/service.js';
+import { AppError, conflict, forbidden, notFound, unprocessable } from '../../platform/errors.js';
+import { currentSuspensionSource, suspendUser, restoreUser } from '../roles/service.js';
 import { counterpartyOf, resolveContextParties, type ContextType } from './parties.js';
-import { ACCOUNT_BLOCKING_SANCTIONS, hasActiveSanction, type SanctionType } from './sanctions.js';
+import { ACCOUNT_BLOCKING_SANCTIONS, hasActiveSanction, lockSanctionSubject, type SanctionType } from './sanctions.js';
 
 export * from './sanctions.js';
 export { resolveContextParties, reviewTargetOwners, counterpartyOf } from './parties.js';
@@ -51,6 +51,10 @@ async function notifyParties(tx: Tx, ctx: Ctx, d: any, templateKey: string, titl
 // ---------------------------------------------------------------------------------------------------------
 // Disputes
 // ---------------------------------------------------------------------------------------------------------
+/** Open OTHER-context disputes one user may have at a time (they name nobody and need staff triage). */
+export const MAX_OPEN_OTHER_DISPUTES = 3;
+const TRANSACTION_CONTEXTS: ContextType[] = ['RESERVATION', 'EXCHANGE', 'GUIDE_BOOKING', 'ORDER'];
+
 export async function openDispute(
   tx: Tx,
   ctx: Ctx,
@@ -58,15 +62,37 @@ export async function openDispute(
 ) {
   const userId = ctx.actor!.userId;
   let counterparty: string | null = null;
+  // A dispute's counterparty / context drive payout holds downstream, so neither may be chosen freely by the opener.
+  let namedCounterparty: string | null = null;
   if (input.contextType !== 'OTHER') {
     const parties = await resolveContextParties(tx, input.contextType, input.contextId);
     if (!parties) throw notFound(input.contextType.toLowerCase());
     if (!parties.parties.includes(userId)) throw forbidden('NOT_A_PARTY', 'Only a party of this transaction can open a dispute');
+    if (input.contextType === 'MESSAGE' && parties.roles[userId] === 'SENDER') {
+      throw unprocessable('INVALID_COUNTERPARTY', 'A message dispute must reference a message sent by the other party');
+    }
     counterparty = counterpartyOf(parties, userId, input.contextType);
-  } else if (input.counterpartyId) {
-    if (input.counterpartyId === userId) throw unprocessable('INVALID_COUNTERPARTY', 'You cannot open a dispute against yourself');
-    if (!(await maybeOne(tx, `SELECT 1 FROM users WHERE id = $1`, [input.counterpartyId]))) throw notFound('Counterparty');
-    counterparty = input.counterpartyId;
+  } else {
+    // OTHER names nobody automatically: the opener's suggestion is recorded for staff triage, never as counterparty_id,
+    // and the context id must not point at a transaction (use its own context type, which checks party membership).
+    for (const t of TRANSACTION_CONTEXTS) {
+      if (await resolveContextParties(tx, t, input.contextId)) {
+        throw unprocessable('USE_TRANSACTION_CONTEXT', `This id refers to a ${t.toLowerCase().replace('_', ' ')}; open the dispute with contextType ${t}`);
+      }
+    }
+    if (input.counterpartyId) {
+      if (input.counterpartyId === userId) throw unprocessable('INVALID_COUNTERPARTY', 'You cannot open a dispute against yourself');
+      if (!(await maybeOne(tx, `SELECT 1 FROM users WHERE id = $1`, [input.counterpartyId]))) throw notFound('Counterparty');
+      namedCounterparty = input.counterpartyId;
+    }
+    const open = await one<{ n: number }>(
+      tx,
+      `SELECT count(*)::int AS n FROM disputes WHERE opened_by = $1 AND context_type = 'OTHER' AND status NOT IN ('RESOLVED','REJECTED')`,
+      [userId],
+    );
+    if (open.n >= MAX_OPEN_OTHER_DISPUTES) {
+      throw new AppError(429, 'TOO_MANY_OPEN_DISPUTES', `You can have at most ${MAX_OPEN_OTHER_DISPUTES} open general disputes; wait for staff to handle them`);
+    }
   }
   const dup = await maybeOne(
     tx,
@@ -86,6 +112,7 @@ export async function openDispute(
     [d.id, userId, ctx.correlationId],
   );
   await addEvent(tx, ctx, d.id, 'OPENED', input.reason);
+  if (namedCounterparty) await addEvent(tx, ctx, d.id, 'COUNTERPARTY_NAMED', `opener named user ${namedCounterparty} (unverified; staff triage)`, true);
   if (input.description) {
     await tx.query(`INSERT INTO dispute_evidence(dispute_id, submitted_by, evidence_type, content, sha256) VALUES ($1,$2,'TEXT',$3,$4)`, [d.id, userId, input.description, sha256(input.description)]);
   }
@@ -243,7 +270,9 @@ export async function applySanction(
   const actor = ctx.actor!;
   if (input.userId === actor.userId) throw forbidden('SELF_SANCTION_FORBIDDEN', 'You cannot sanction yourself');
   if (!hasRole(actor, 'ADMIN', 'COMPLIANCE') && input.sanctionType !== 'WARNING') throw forbidden('ROLE_REQUIRED', 'Only ADMIN or COMPLIANCE can apply this sanction');
-  const target = await maybeOne(tx, `SELECT status, array(SELECT role FROM user_roles WHERE user_id = users.id) AS roles FROM users WHERE id = $1`, [input.userId]);
+  // lock the subject first: a concurrent lift / expiry restore must either finish before this sanction exists
+  // (and then this transaction suspends the restored account) or see it committed
+  const target = await maybeOne(tx, `SELECT status, array(SELECT role FROM user_roles WHERE user_id = users.id) AS roles FROM users WHERE id = $1 FOR UPDATE`, [input.userId]);
   if (!target) throw notFound('User');
   if ((target.roles as string[]).some((r) => STAFF_ROLES.includes(r as any)) && !hasRole(actor, 'ADMIN')) throw forbidden('ROLE_REQUIRED', 'Only ADMIN can sanction staff');
   if (input.endsAt && new Date(input.endsAt) <= new Date()) throw unprocessable('INVALID_END', 'endsAt must be in the future');
@@ -254,7 +283,7 @@ export async function applySanction(
     [input.userId, input.sanctionType, input.reason, input.disputeId ?? null, actor.userId, input.endsAt ?? null],
   );
   if (ACCOUNT_BLOCKING_SANCTIONS.includes(input.sanctionType)) {
-    await suspendUser(tx, ctx, { userId: input.userId, reason: `sanction ${s.id}: ${input.reason}`, source: 'SANCTION' });
+    await suspendUser(tx, ctx, { userId: input.userId, reason: `sanction ${s.id}: ${input.reason}`, source: 'SANCTION', sanctionId: s.id });
   }
   if (input.disputeId) await addEvent(tx, ctx, input.disputeId, 'SANCTION_APPLIED', `${input.sanctionType} ${s.id}`, true);
   await audit(tx, ctx, { action: 'sanction.applied', resourceType: 'user', resourceId: input.userId, after: { sanctionId: s.id, type: input.sanctionType, endsAt: s.ends_at }, reason: input.reason, category: 'PERMISSION' });
@@ -265,33 +294,63 @@ export async function applySanction(
   return s;
 }
 
+/**
+ * After an account sanction ended (lift or expiry): restore the account only when it is suspended BECAUSE of a
+ * sanction and no blocking sanction remains. A suspension imposed directly (admin / other source) stands.
+ * Caller holds the users row lock (lockSanctionSubject).
+ */
+async function restoreAfterSanctionEnded(tx: Tx, ctx: Ctx, userId: string, reason: string): Promise<boolean> {
+  const u = await one<{ status: string }>(tx, `SELECT status FROM users WHERE id = $1`, [userId]);
+  if (u.status !== 'SUSPENDED') return false;
+  if (await hasActiveSanction(tx, userId, ACCOUNT_BLOCKING_SANCTIONS)) return false;
+  if ((await currentSuspensionSource(tx, userId)) !== 'SANCTION') return false;
+  return (await restoreUser(tx, ctx, { userId, reason })).changed;
+}
+
 export async function liftSanction(tx: Tx, ctx: Ctx, sanctionId: string, reason: string) {
+  const actor = ctx.actor!;
   const s = await maybeOne(tx, `SELECT * FROM sanctions WHERE id = $1 FOR UPDATE`, [sanctionId]);
   if (!s) throw notFound('Sanction');
   if (s.lifted_at) throw conflict('ALREADY_LIFTED', 'Sanction was already lifted');
-  if (!hasRole(ctx.actor, 'ADMIN', 'COMPLIANCE')) throw forbidden('ROLE_REQUIRED', 'Only ADMIN or COMPLIANCE can lift sanctions');
-  const row = await one(tx, `UPDATE sanctions SET lifted_at = now(), lifted_by = $2, lift_reason = $3 WHERE id = $1 RETURNING *`, [sanctionId, ctx.actor!.userId, reason]);
-  let restored = false;
-  if (ACCOUNT_BLOCKING_SANCTIONS.includes(s.sanction_type) && !(await hasActiveSanction(tx, s.user_id, ACCOUNT_BLOCKING_SANCTIONS))) {
-    const u = await one(tx, `SELECT status FROM users WHERE id = $1`, [s.user_id]);
-    if (u.status === 'SUSPENDED') restored = (await restoreUser(tx, ctx, { userId: s.user_id, reason: `sanction ${sanctionId} lifted: ${reason}` })).changed;
-  }
+  if (!hasRole(actor, 'ADMIN', 'COMPLIANCE')) throw forbidden('ROLE_REQUIRED', 'Only ADMIN or COMPLIANCE can lift sanctions');
+  // same guards as applying: nobody lifts their own sanction, and only ADMIN decides about staff accounts
+  if (s.user_id === actor.userId) throw forbidden('SELF_LIFT_FORBIDDEN', 'You cannot lift a sanction on your own account');
+  const target = await one<{ roles: string[] }>(tx, `SELECT array(SELECT role FROM user_roles WHERE user_id = $1) AS roles`, [s.user_id]);
+  if (target.roles.some((r) => STAFF_ROLES.includes(r as any)) && !hasRole(actor, 'ADMIN')) throw forbidden('ROLE_REQUIRED', 'Only ADMIN can lift sanctions on staff');
+  await lockSanctionSubject(tx, s.user_id);
+  const row = await one(tx, `UPDATE sanctions SET lifted_at = now(), lifted_by = $2, lift_reason = $3 WHERE id = $1 RETURNING *`, [sanctionId, actor.userId, reason]);
+  const restored = ACCOUNT_BLOCKING_SANCTIONS.includes(s.sanction_type) ? await restoreAfterSanctionEnded(tx, ctx, s.user_id, `sanction ${sanctionId} lifted: ${reason}`) : false;
   await audit(tx, ctx, { action: 'sanction.lifted', resourceType: 'user', resourceId: s.user_id, before: { sanctionId, type: s.sanction_type }, after: { restored }, reason, category: 'PERMISSION' });
   await emit(tx, ctx, { aggregateType: 'user', aggregateId: s.user_id, eventType: 'sanction.lifted', payload: { sanctionId, userId: s.user_id, sanctionType: s.sanction_type } });
   return { ...row, accountRestored: restored };
 }
 
-/** Expire time-boxed account sanctions and restore accounts whose last blocking sanction ended (job). */
+export const SANCTION_EXPIRED_REASON = 'EXPIRED';
+
+/**
+ * Expiry job: each ended time-boxed ACCOUNT_SUSPENSION/BAN is processed exactly once (stamped lifted_at with
+ * lift_reason EXPIRED, no lifted_by), and its user is restored only if the current suspension came from a sanction.
+ */
 export async function sweepExpiredSanctions(tx: Tx, ctx: Ctx): Promise<number> {
-  const users = await q<{ id: string }>(
+  const expired = await q<{ id: string; user_id: string; sanction_type: string }>(
     tx,
-    `SELECT u.id FROM users u WHERE u.status = 'SUSPENDED'
-        AND EXISTS (SELECT 1 FROM sanctions s WHERE s.user_id = u.id AND s.sanction_type IN ('ACCOUNT_SUSPENSION','BAN') AND s.lifted_at IS NULL AND s.ends_at IS NOT NULL AND s.ends_at <= now())
-        AND NOT EXISTS (SELECT 1 FROM sanctions s WHERE s.user_id = u.id AND s.sanction_type IN ('ACCOUNT_SUSPENSION','BAN') AND s.lifted_at IS NULL AND (s.ends_at IS NULL OR s.ends_at > now()))
-      LIMIT 100`,
+    `UPDATE sanctions SET lifted_at = now(), lift_reason = $1
+      WHERE id IN (SELECT id FROM sanctions
+                    WHERE sanction_type IN ('ACCOUNT_SUSPENSION','BAN') AND lifted_at IS NULL AND ends_at IS NOT NULL AND ends_at <= now()
+                    ORDER BY ends_at LIMIT 100 FOR UPDATE SKIP LOCKED)
+      RETURNING id, user_id, sanction_type`,
+    [SANCTION_EXPIRED_REASON],
   );
-  for (const u of users) await restoreUser(tx, ctx, { userId: u.id, reason: 'sanction period ended' });
-  return users.length;
+  let restored = 0;
+  for (const userId of [...new Set(expired.map((e) => e.user_id))]) {
+    await lockSanctionSubject(tx, userId);
+    for (const e of expired.filter((x) => x.user_id === userId)) {
+      await audit(tx, ctx, { action: 'sanction.expired', resourceType: 'user', resourceId: userId, before: { sanctionId: e.id, type: e.sanction_type }, category: 'PERMISSION' });
+      await emit(tx, ctx, { aggregateType: 'user', aggregateId: userId, eventType: 'sanction.expired', payload: { sanctionId: e.id, userId, sanctionType: e.sanction_type } });
+    }
+    if (await restoreAfterSanctionEnded(tx, ctx, userId, 'sanction period ended')) restored++;
+  }
+  return restored;
 }
 
 // ---------------------------------------------------------------------------------------------------------

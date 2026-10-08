@@ -476,10 +476,15 @@ describe('G4 E2E — Guide Friend FREE chain (HTTP only)', () => {
     expect((await call(t, friendGuide, 'POST', `/v1/guide-bookings/${freeBookingId}/start`)).status).toBe(409);
     expect((await call(t, outsider, 'POST', `/v1/guide-bookings/${freeBookingId}/complete`)).status).toBe(403);
 
-    const done = await call(t, friendGuide, 'POST', `/v1/guide-bookings/${freeBookingId}/complete`);
+    // the guide cannot complete before the scheduled end (completion makes a booking settlement-eligible);
+    // the traveler may confirm that the activity is over
+    const guideEarly = await call(t, friendGuide, 'POST', `/v1/guide-bookings/${freeBookingId}/complete`);
+    expect(guideEarly.status).toBe(409);
+    expect(guideEarly.body.code).toBe('ACTIVITY_NOT_ENDED');
+    const done = await call(t, traveler, 'POST', `/v1/guide-bookings/${freeBookingId}/complete`);
     expect(done.status, show(done)).toBe(200);
     expect(done.body.item.status).toBe('COMPLETED');
-    expect((await call(t, traveler, 'POST', `/v1/guide-bookings/${freeBookingId}/complete`)).status).toBe(409);
+    expect((await call(t, friendGuide, 'POST', `/v1/guide-bookings/${freeBookingId}/complete`)).status).toBe(409);
     for (const u of [traveler, friendGuide]) {
       expect(await noteFor(u, 'guide.booking.review_invite', (d) => d.bookingId === freeBookingId)).toBeTruthy();
     }

@@ -1,10 +1,17 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { GEOCODER_ADAPTER, createGeocoder, geocode, reverseGeocode } from './service.js';
+import { GEOCODER_ADAPTER, configureGeoPrivacy, createGeocoder, geocode, reverseGeocode } from './service.js';
+
+/**
+ * Queue budget for the anonymous endpoints: a public lookup is refused (STATIC fallback) rather than queued behind
+ * more than ~2.5 s of provider work, so public traffic can never build an unbounded backlog for internal callers.
+ */
+const PUBLIC_MAX_WAIT_MS = 2500;
 
 /** PLAT-02 Map / Geo Adapter — geocoding behind a replaceable provider interface (STATIC | KAKAO | NOMINATIM). */
 export default async function geoModule(app: FastifyInstance) {
+  configureGeoPrivacy(app.ctx.config);
   if (!app.ctx.adapters.has(GEOCODER_ADAPTER)) app.ctx.adapters.set(GEOCODER_ADAPTER, createGeocoder(app.ctx));
   const r = app.withTypeProvider<ZodTypeProvider>();
 
@@ -16,7 +23,7 @@ export default async function geoModule(app: FastifyInstance) {
     },
     config: { rateLimit: { max: 120, timeWindow: '1 minute' } },
   }, async (req) => {
-    const items = await geocode(app.ctx, req.query.q, { limit: req.query.limit });
+    const items = await geocode(app.ctx, req.query.q, { limit: req.query.limit, maxWaitMs: PUBLIC_MAX_WAIT_MS });
     return { items };
   });
 
@@ -28,7 +35,7 @@ export default async function geoModule(app: FastifyInstance) {
     },
     config: { rateLimit: { max: 120, timeWindow: '1 minute' } },
   }, async (req) => {
-    const item = await reverseGeocode(app.ctx, req.query.lat, req.query.lng);
+    const item = await reverseGeocode(app.ctx, req.query.lat, req.query.lng, { maxWaitMs: PUBLIC_MAX_WAIT_MS });
     return { item };
   });
 }

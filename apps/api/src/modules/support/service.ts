@@ -1,6 +1,8 @@
+import type pg from 'pg';
 import type { Db, Tx } from '../../platform/db.js';
-import { maybeOne, one, q } from '../../platform/db.js';
-import type { Ctx } from '../../platform/context.js';
+import { maybeOne, one, q, withTx } from '../../platform/db.js';
+import type { AppContext, Ctx } from '../../platform/context.js';
+import { systemCtx } from '../../platform/context.js';
 import { StateMachine } from '../../platform/fsm.js';
 import { emit } from '../../platform/outbox.js';
 import { audit } from '../../platform/audit.js';
@@ -234,13 +236,32 @@ export async function unlinkCase(tx: Tx, ctx: Ctx, caseId: string, link: { linkT
 }
 
 // ---------------------------------------------------------------- external desk (Chatwoot) sync
+//
+// The desk is called OUTSIDE any database transaction: the outbox consumer of `support.case.opened` only marks the
+// case as due (no network I/O inside the dispatch transaction, which holds the whole event batch), and the
+// `support.desk-sync` job claims due cases with a short lease (SKIP LOCKED), calls the desk without holding locks,
+// and stores external_ref with a compare-and-set. Desk adapters look up an existing conversation for the case
+// before creating one, so a retry after a lost response does not duplicate it.
+
+export const DESK_SYNC_LEASE_SEC = 120;
+export const DESK_SYNC_MAX_ATTEMPTS = 8;
+
+/** Outbox consumer: mark the case for mirroring (no-op desk → nothing to do). */
+export async function markCaseForDeskSync(tx: Tx, ctx: Ctx, caseId: string, desk: SupportDesk = supportDeskOf(ctx.app)) {
+  if (desk.name === 'noop') return false;
+  const r = await tx.query(`UPDATE support_cases SET desk_sync_due_at = now() WHERE id = $1 AND external_ref IS NULL AND desk_sync_due_at IS NULL`, [caseId]);
+  return (r.rowCount ?? 0) > 0;
+}
+
+const isPool = (db: Db): db is pg.Pool => typeof (db as pg.PoolClient).release !== 'function';
 
 /**
- * Outbox consumer of `support.case.opened`: mirror the case into the support desk and store `external_ref`.
- * Idempotent: a case that already has an external_ref is skipped; desk failures throw so the outbox retries.
+ * Mirror one case into the desk and store `external_ref`. Must not be called while holding a lock on the case:
+ * the desk call happens without a row lock; the store is a compare-and-set (`external_ref IS NULL`).
+ * Idempotent: a case that already has an external_ref is skipped. Desk failures throw (the job retries).
  */
-export async function syncCaseToDesk(tx: Tx, ctx: Ctx, caseId: string, desk: SupportDesk = supportDeskOf(ctx.app)) {
-  const c = await maybeOne(tx, `SELECT * FROM support_cases WHERE id = $1 FOR UPDATE`, [caseId]);
+export async function syncCaseToDesk(db: Db, ctx: Ctx, caseId: string, desk: SupportDesk = supportDeskOf(ctx.app)) {
+  const c = await maybeOne(db, `SELECT * FROM support_cases WHERE id = $1`, [caseId]);
   if (!c || c.external_ref) return { externalRef: c?.external_ref ?? null, skipped: true };
   const res = await desk.createConversation({
     id: c.id,
@@ -253,9 +274,55 @@ export async function syncCaseToDesk(tx: Tx, ctx: Ctx, caseId: string, desk: Sup
     contextId: c.context_id,
   });
   if (!res) return { externalRef: null, skipped: true };
-  await tx.query(`UPDATE support_cases SET external_ref = $2 WHERE id = $1 AND external_ref IS NULL`, [caseId, res.externalRef]);
-  await audit(tx, ctx, { action: 'support.case.desk_linked', resourceType: 'support_case', resourceId: caseId, after: { desk: desk.name, externalRef: res.externalRef } });
+  const store = async (tx: Db) => {
+    const upd = await maybeOne<{ external_ref: string }>(
+      tx,
+      `UPDATE support_cases SET external_ref = $2, desk_sync_due_at = NULL, desk_sync_error = NULL WHERE id = $1 AND external_ref IS NULL RETURNING external_ref`,
+      [caseId, res.externalRef],
+    );
+    if (upd) await audit(tx, ctx, { action: 'support.case.desk_linked', resourceType: 'support_case', resourceId: caseId, after: { desk: desk.name, externalRef: res.externalRef } });
+    return !!upd;
+  };
+  const stored = isPool(db) ? await withTx(db, (tx) => store(tx)) : await store(db);
+  if (!stored) {
+    const cur = await maybeOne<{ external_ref: string | null }>(db, `SELECT external_ref FROM support_cases WHERE id = $1`, [caseId]);
+    return { externalRef: cur?.external_ref ?? null, skipped: true };
+  }
   return { externalRef: res.externalRef, skipped: false };
+}
+
+/** Job: claim due cases (lease), mirror each outside any transaction, back off on failure. Returns cases linked. */
+export async function runDeskSync(app: AppContext, limit = 20): Promise<number> {
+  const desk = supportDeskOf(app);
+  if (desk.name === 'noop') return 0;
+  const claimed = await withTx(app.pool, (tx) =>
+    q<{ id: string; desk_sync_attempts: number }>(
+      tx,
+      `UPDATE support_cases SET desk_sync_due_at = now() + make_interval(secs => $2), desk_sync_attempts = desk_sync_attempts + 1
+        WHERE id IN (SELECT id FROM support_cases WHERE desk_sync_due_at <= now() AND external_ref IS NULL ORDER BY desk_sync_due_at LIMIT $1 FOR UPDATE SKIP LOCKED)
+        RETURNING id, desk_sync_attempts`,
+      [limit, DESK_SYNC_LEASE_SEC],
+    ),
+  );
+  let linked = 0;
+  for (const c of claimed) {
+    try {
+      const r = await syncCaseToDesk(app.pool, systemCtx(app, `desk-sync-${c.id}`), c.id, desk);
+      if (!r.skipped) linked++;
+      else await app.pool.query(`UPDATE support_cases SET desk_sync_due_at = NULL WHERE id = $1`, [c.id]);
+    } catch (err: any) {
+      // never store or log the desk token / request body: adapter errors carry method, path and status only
+      const reason = String(err?.message ?? err).slice(0, 500);
+      await app.pool.query(
+        `UPDATE support_cases SET desk_sync_error = $2,
+                desk_sync_due_at = CASE WHEN desk_sync_attempts >= $3 THEN NULL ELSE now() + make_interval(secs => least(power(2, desk_sync_attempts), 3600)) END
+          WHERE id = $1 AND external_ref IS NULL`,
+        [c.id, reason, DESK_SYNC_MAX_ATTEMPTS],
+      );
+      app.log.warn({ caseId: c.id, attempts: c.desk_sync_attempts, reason }, 'support desk sync failed');
+    }
+  }
+  return linked;
 }
 
 export async function comment(tx: Tx, ctx: Ctx, id: string, body: string) {

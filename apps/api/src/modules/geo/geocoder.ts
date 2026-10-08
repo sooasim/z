@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 
 /** PLAT-02: provider-neutral geocoding result. `precision` tells consumers how exact the point is. */
 export interface GeoResult {
@@ -15,10 +15,27 @@ export interface GeoResult {
   provider: 'STATIC' | 'KAKAO' | 'NOMINATIM';
 }
 
+export interface GeocodeOptions {
+  limit?: number;
+  /**
+   * Upper bound on how long the call may wait in a provider's rate-limit queue before it is refused (callers fall
+   * back to STATIC). Public endpoints use a small budget so they can never starve internal callers.
+   */
+  maxWaitMs?: number;
+}
+
 export interface Geocoder {
   readonly name: 'STATIC' | 'KAKAO' | 'NOMINATIM';
-  geocode(query: string, opts?: { limit?: number }): Promise<GeoResult[]>;
-  reverse(lat: number, lng: number): Promise<GeoResult | null>;
+  geocode(query: string, opts?: GeocodeOptions): Promise<GeoResult[]>;
+  reverse(lat: number, lng: number, opts?: Pick<GeocodeOptions, 'maxWaitMs'>): Promise<GeoResult | null>;
+}
+
+/** Thrown when a provider's request queue is too long; CachedGeocoder answers from the STATIC table instead. */
+export class GeocoderBusyError extends Error {
+  constructor(msg = 'geocoder queue is full') {
+    super(msg);
+    this.name = 'GeocoderBusyError';
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -116,7 +133,7 @@ export function haversineKm(aLat: number, aLng: number, bLat: number, bLng: numb
 export class StaticGeocoder implements Geocoder {
   readonly name = 'STATIC' as const;
 
-  async geocode(query: string, opts: { limit?: number } = {}): Promise<GeoResult[]> {
+  async geocode(query: string, opts: GeocodeOptions = {}): Promise<GeoResult[]> {
     const qn = norm(query);
     if (qn.length < 1) return [];
     const scored: { p: Place; score: number }[] = [];
@@ -179,7 +196,7 @@ export class KakaoGeocoder implements Geocoder {
     return (await res.json()) as any;
   }
 
-  async geocode(query: string, opts: { limit?: number } = {}): Promise<GeoResult[]> {
+  async geocode(query: string, opts: GeocodeOptions = {}): Promise<GeoResult[]> {
     const size = String(Math.min(opts.limit ?? 5, 15));
     const addr = await this.get('/v2/local/search/address.json', { query, size });
     let docs: any[] = addr.documents ?? [];
@@ -229,32 +246,55 @@ export class NominatimGeocoder implements Geocoder {
   readonly name = 'NOMINATIM' as const;
   private last = 0;
   private chain: Promise<unknown> = Promise.resolve();
+  /** requests admitted to the queue that have not finished yet (waiting + in flight) */
+  private pending = 0;
   constructor(
     private userAgent = 'JETPOOL/2.0 (+https://jetpool.kr; ops@jetpool.kr)',
     private fetchImpl: FetchLike = fetch,
     private base = 'https://nominatim.openstreetmap.org',
     private minIntervalMs = 1100,
+    /** default queue-wait budget when the caller does not pass maxWaitMs */
+    private defaultMaxWaitMs = 5000,
   ) {}
 
-  /** Serialize requests and keep ≥ minIntervalMs between them (provider cost/abuse control). */
-  private throttle<T>(fn: () => Promise<T>): Promise<T> {
+  get queueDepth() {
+    return this.pending;
+  }
+
+  /**
+   * Serialize requests and keep ≥ minIntervalMs between them (provider usage policy). The queue is BOUNDED:
+   * a request whose projected wait exceeds its budget is refused up front (GeocoderBusyError), and a request that
+   * reaches the head of the queue after its deadline is dropped without calling the provider. A flood of public
+   * lookups therefore degrades to the STATIC fallback instead of queueing work for minutes.
+   */
+  private throttle<T>(fn: () => Promise<T>, maxWaitMs = this.defaultMaxWaitMs): Promise<T> {
+    const now = Date.now();
+    const projected = this.pending * this.minIntervalMs + Math.max(0, this.last + this.minIntervalMs - now);
+    if (projected > maxWaitMs) return Promise.reject(new GeocoderBusyError(`nominatim queue full (projected wait ${projected}ms)`));
+    const deadline = now + maxWaitMs;
+    this.pending++;
     const run = this.chain.then(async () => {
-      const wait = this.last + this.minIntervalMs - Date.now();
-      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-      this.last = Date.now();
-      return fn();
+      try {
+        const wait = this.last + this.minIntervalMs - Date.now();
+        if (Date.now() + Math.max(wait, 0) > deadline) throw new GeocoderBusyError('nominatim queue wait exceeded the deadline');
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+        this.last = Date.now();
+        return await fn();
+      } finally {
+        this.pending--;
+      }
     });
     this.chain = run.catch(() => {});
     return run;
   }
 
-  private async get(path: string, params: Record<string, string>) {
+  private async get(path: string, params: Record<string, string>, maxWaitMs?: number) {
     return this.throttle(async () => {
       const url = `${this.base}${path}?${new URLSearchParams({ format: 'jsonv2', 'accept-language': 'ko,en', ...params })}`;
       const res = await this.fetchImpl(url, { headers: { 'user-agent': this.userAgent }, signal: AbortSignal.timeout(8000) });
       if (!res.ok) throw new Error(`nominatim ${path} failed: ${res.status}`);
       return (await res.json()) as any;
-    });
+    }, maxWaitMs);
   }
 
   private map(d: any, precision: GeoResult['precision']): GeoResult {
@@ -273,13 +313,13 @@ export class NominatimGeocoder implements Geocoder {
     };
   }
 
-  async geocode(query: string, opts: { limit?: number } = {}): Promise<GeoResult[]> {
-    const rows = await this.get('/search', { q: query, limit: String(Math.min(opts.limit ?? 5, 10)), addressdetails: '1', countrycodes: 'kr' });
+  async geocode(query: string, opts: GeocodeOptions = {}): Promise<GeoResult[]> {
+    const rows = await this.get('/search', { q: query, limit: String(Math.min(opts.limit ?? 5, 10)), addressdetails: '1', countrycodes: 'kr' }, opts.maxWaitMs);
     return (rows as any[]).map((d) => this.map(d, d.addresstype === 'city' ? 'CITY' : d.addresstype === 'borough' ? 'DISTRICT' : 'ADDRESS'));
   }
 
-  async reverse(lat: number, lng: number): Promise<GeoResult | null> {
-    const d = await this.get('/reverse', { lat: String(lat), lon: String(lng), zoom: '14', addressdetails: '1' });
+  async reverse(lat: number, lng: number, opts: Pick<GeocodeOptions, 'maxWaitMs'> = {}): Promise<GeoResult | null> {
+    const d = await this.get('/reverse', { lat: String(lat), lon: String(lng), zoom: '14', addressdetails: '1' }, opts.maxWaitMs);
     if (!d || d.error) return null;
     return this.map(d, 'DISTRICT');
   }
@@ -324,7 +364,7 @@ export class CachedGeocoder implements Geocoder {
     return this.inner.name;
   }
 
-  async geocode(query: string, opts: { limit?: number } = {}): Promise<GeoResult[]> {
+  async geocode(query: string, opts: GeocodeOptions = {}): Promise<GeoResult[]> {
     const key = `g:${opts.limit ?? 5}:${norm(query)}`;
     const hit = this.cache.get(key);
     if (hit !== undefined) return hit as GeoResult[];
@@ -333,19 +373,19 @@ export class CachedGeocoder implements Geocoder {
       res = await this.inner.geocode(query, opts);
     } catch (err) {
       this.onError?.(err);
-      return this.fallback.geocode(query, opts); // not cached: retry provider next time
+      return this.fallback.geocode(query, { limit: opts.limit }); // not cached: retry provider next time
     }
     this.cache.set(key, res);
     return res;
   }
 
-  async reverse(lat: number, lng: number): Promise<GeoResult | null> {
+  async reverse(lat: number, lng: number, opts: Pick<GeocodeOptions, 'maxWaitMs'> = {}): Promise<GeoResult | null> {
     const key = `r:${lat.toFixed(4)}:${lng.toFixed(4)}`;
     const hit = this.cache.get(key);
     if (hit !== undefined) return hit as GeoResult | null;
     let res: GeoResult | null;
     try {
-      res = await this.inner.reverse(lat, lng);
+      res = await this.inner.reverse(lat, lng, opts);
     } catch (err) {
       this.onError?.(err);
       return this.fallback.reverse(lat, lng);
@@ -358,9 +398,14 @@ export class CachedGeocoder implements Geocoder {
 /**
  * Deterministic privacy fuzz for public listing coordinates (~200–300 m, stable per property id so
  * repeated requests cannot be averaged out). Exact coordinates are revealed only after booking.
+ *
+ * The offset is keyed with a SERVER SECRET (HMAC-SHA256(key, id)): the property id is public, so an unkeyed
+ * hash (or a constant salt in source) would let anyone recompute and subtract the offset. Without the key the
+ * offset is unpredictable; the key never leaves the server.
  */
-export function fuzzCoordinates(id: string, lat: number, lng: number): { lat: number; lng: number } {
-  const h = createHash('sha256').update(`jetpool-geo-fuzz:${id}`).digest();
+export function fuzzCoordinates(id: string, lat: number, lng: number, key: string | Buffer): { lat: number; lng: number } {
+  if (!key || key.length < 16) throw new Error('fuzzCoordinates requires a server-side secret key');
+  const h = createHmac('sha256', key).update(`geo-fuzz:v2:${id}`).digest();
   const angle = (h.readUInt32BE(0) / 0xffffffff) * 2 * Math.PI;
   const dist = 200 + (h.readUInt32BE(4) / 0xffffffff) * 100; // metres
   const dLat = (dist * Math.cos(angle)) / 111_320;

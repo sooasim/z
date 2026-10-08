@@ -3,7 +3,7 @@ import { maybeOne, one, q } from '../../platform/db.js';
 import type { Ctx } from '../../platform/context.js';
 import { emit } from '../../platform/outbox.js';
 import { audit } from '../../platform/audit.js';
-import { AppError, notFound, unprocessable } from '../../platform/errors.js';
+import { AppError, conflict, notFound, unprocessable } from '../../platform/errors.js';
 import { revokeAllSessions, userStatusMachine } from '../identity/users.js';
 
 export const CONSENT_TYPES = ['TERMS', 'PRIVACY', 'MARKETING', 'LOCATION', 'THIRD_PARTY', 'EXCHANGE_TERMS', 'GUIDE_TERMS', 'REFUND_POLICY'] as const;
@@ -203,6 +203,40 @@ export async function deletionGraceDays(db: Db): Promise<number> {
   const n = Number(row?.value);
   return Number.isFinite(n) && n >= 0 ? n : DELETION_GRACE_DAYS_DEFAULT;
 }
+
+/**
+ * Open obligations that must be settled before an account may be deleted (read-only checks on the owning domains'
+ * tables). A deleted account cannot sign in, so it must not leave behind bookings or orders in flight, open
+ * disputes, unpaid payouts, or inventory that guests can still book and pay for.
+ */
+const DELETION_BLOCKERS: Array<[string, string]> = [
+  ['ACTIVE_RESERVATIONS', `SELECT 1 FROM reservations WHERE (guest_id = $1 OR host_id = $1) AND status IN ('HELD','PAYMENT_PENDING','CONFIRMED','CHECKED_IN','REFUND_PENDING','DISPUTED') LIMIT 1`],
+  [
+    'ACTIVE_EXCHANGES',
+    `SELECT 1 FROM exchange_requests WHERE (requester_id = $1 OR responder_id = $1)
+        AND status IN ('REQUESTED','COUNTERED','MUTUAL_ACCEPTED','VERIFICATION_PENDING','AGREEMENT_PENDING','CONFIRMED','IN_PROGRESS','DISPUTED') LIMIT 1`,
+  ],
+  ['ACTIVE_GUIDE_BOOKINGS', `SELECT 1 FROM guide_bookings WHERE (traveler_id = $1 OR guide_id = $1) AND status IN ('ACCEPTED','PAYMENT_PENDING','CONFIRMED','IN_PROGRESS','DISPUTED') LIMIT 1`],
+  [
+    'ACTIVE_ORDERS',
+    `SELECT 1 FROM orders o WHERE o.status IN ('PAYMENT_PENDING','PAID') AND (o.buyer_id = $1 OR EXISTS (
+        SELECT 1 FROM order_items i JOIN suppliers s ON s.id = i.supplier_id WHERE i.order_id = o.id AND i.status = 'ACTIVE' AND s.owner_user_id = $1)) LIMIT 1`,
+  ],
+  ['OPEN_DISPUTES', `SELECT 1 FROM disputes WHERE (opened_by = $1 OR counterparty_id = $1) AND status NOT IN ('RESOLVED','REJECTED') LIMIT 1`],
+  ['UNSETTLED_PAYOUTS', `SELECT 1 FROM settlements WHERE payee_id = $1 AND status NOT IN ('PAID','RECONCILED') LIMIT 1`],
+  ['PUBLISHED_LISTINGS', `SELECT 1 FROM properties WHERE host_id = $1 AND status = 'PUBLISHED' LIMIT 1`],
+  ['PUBLISHED_GUIDE_PROFILE', `SELECT 1 FROM guide_profiles WHERE user_id = $1 AND status = 'PUBLISHED' LIMIT 1`],
+  ['PUBLISHED_TRAVEL_PRODUCTS', `SELECT 1 FROM travel_products tp JOIN suppliers s ON s.id = tp.supplier_id WHERE s.owner_user_id = $1 AND tp.status = 'PUBLISHED' LIMIT 1`],
+];
+
+export async function deletionBlockers(db: Db, userId: string): Promise<string[]> {
+  const out: string[] = [];
+  for (const [code, sql] of DELETION_BLOCKERS) if (await maybeOne(db, sql, [userId])) out.push(code);
+  return out;
+}
+
+export const deletionBlocked = (blockers: string[]) =>
+  conflict('DELETION_BLOCKED', 'Finish or cancel open bookings and orders, resolve disputes, wait for payouts and unpublish your listings before deleting your account', { blockers });
 
 /** PII scrub for one user. Keeps reservations/payments/ledger/consents/audit (legal retention), anonymizes identity. */
 export async function scrubUser(tx: Tx, ctx: Ctx, userId: string) {

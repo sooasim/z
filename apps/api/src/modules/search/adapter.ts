@@ -86,6 +86,12 @@ export interface Suggestions {
 /** Replaceable search backend: Meilisearch when MEILI_HOST is set, PostgreSQL otherwise. */
 export interface SearchAdapter {
   readonly name: 'meilisearch' | 'postgres';
+  /**
+   * true when upsert/remove write through the given PostgreSQL connection (the projection can then be applied inside
+   * the outbox transaction). External engines (Meilisearch) are false: they are fed by flushPendingProjections,
+   * outside any transaction, so a slow/hung engine can never hold outbox row locks or pooled connections.
+   */
+  readonly transactional?: boolean;
   ensureIndex(): Promise<void>;
   upsert(db: Db, docs: PropertyDoc[]): Promise<void>;
   remove(db: Db, ids: string[]): Promise<void>;

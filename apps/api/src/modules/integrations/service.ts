@@ -7,7 +7,7 @@ import { audit } from '../../platform/audit.js';
 import { notify } from '../../platform/notify.js';
 import { acquireBlock, releaseBlock } from '../../platform/inventory.js';
 import { decrypt, encrypt, hmacSha256, randomToken, safeEqual, sha256 } from '../../platform/crypto.js';
-import { badRequest, conflict, forbidden, notFound, unauthorized } from '../../platform/errors.js';
+import { AppError, badRequest, conflict, forbidden, notFound, unauthorized } from '../../platform/errors.js';
 import { assertIcalUrl, buildIcs, defaultIcalFetcher, parseIcs, type IcalFetcher, type IcsEvent } from './ical.js';
 
 /**
@@ -44,8 +44,11 @@ export const toAccountDto = (a: Account) => ({
 const seal = (app: AppContext, plain: string) => `enc:${encrypt(plain, app.config.DATA_ENCRYPTION_KEY)}`;
 const unseal = (app: AppContext, ref: string | null) => (ref?.startsWith('enc:') ? decrypt(ref.slice(4), app.config.DATA_ENCRYPTION_KEY) : null);
 
+/** Plain-http feed URLs only on a developer machine / in tests — never on staging or production (SSRF surface). */
+export const allowHttpFeeds = (app: AppContext) => app.config.NODE_ENV === 'development' || app.config.NODE_ENV === 'test';
+
 export function getFetcher(app: AppContext): IcalFetcher {
-  return (app.adapters.get('integrations.icalFetcher') as IcalFetcher | undefined) ?? defaultIcalFetcher({ allowHttp: app.config.NODE_ENV !== 'production' });
+  return (app.adapters.get('integrations.icalFetcher') as IcalFetcher | undefined) ?? defaultIcalFetcher({ allowHttp: allowHttpFeeds(app) });
 }
 
 async function assertPropertyOwner(db: Db, propertyId: string, userId: string) {
@@ -73,7 +76,7 @@ export async function createAccount(db: Db, ctx: Ctx, userId: string, input: { p
     if (!input.icalUrl) throw badRequest('ICAL_URL_REQUIRED', 'icalUrl is required for ICAL accounts');
     let u: URL;
     try {
-      u = assertIcalUrl(input.icalUrl, ctx.app.config.NODE_ENV !== 'production');
+      u = assertIcalUrl(input.icalUrl, allowHttpFeeds(ctx.app));
     } catch (e: any) {
       throw badRequest('INVALID_ICAL_URL', e.message);
     }
@@ -101,7 +104,7 @@ export async function updateAccount(db: Db, ctx: Ctx, userId: string, id: string
   if (patch.icalUrl) {
     if (a.provider !== 'ICAL') throw badRequest('NOT_ICAL', 'icalUrl applies to ICAL accounts only');
     try {
-      config.icalHost = assertIcalUrl(patch.icalUrl, ctx.app.config.NODE_ENV !== 'production').hostname;
+      config.icalHost = assertIcalUrl(patch.icalUrl, allowHttpFeeds(ctx.app)).hostname;
     } catch (e: any) {
       throw badRequest('INVALID_ICAL_URL', e.message);
     }
@@ -214,6 +217,15 @@ export async function removeExternalRange(tx: Tx, account: Account, externalId: 
   counts.removed++;
 }
 
+const RETRYABLE_PG = new Set(['40001', '40P01']);
+
+async function recordSyncError(app: AppContext, account: Account, eventType: string, detail: string) {
+  await withTx(app.pool, async (tx) => {
+    await logEvent(tx, account.id, { eventType, payload: { host: account.config.icalHost ?? null }, outcome: 'ERROR', detail: detail.slice(0, 300) });
+    await tx.query(`UPDATE integration_accounts SET status = 'ERROR' WHERE id = $1 AND status = 'ACTIVE'`, [account.id]);
+  });
+}
+
 /** Fetch + reconcile one iCal account. Network I/O happens outside the DB transaction. */
 export async function syncIcalAccount(app: AppContext, accountId: string, ctx: Ctx = systemCtx(app, `ical-sync-${accountId}`)) {
   const account = await maybeOne<Account>(app.pool, `SELECT * FROM integration_accounts WHERE id = $1`, [accountId]);
@@ -222,37 +234,63 @@ export async function syncIcalAccount(app: AppContext, accountId: string, ctx: C
   if (account.status === 'PAUSED') throw conflict('INTEGRATION_PAUSED', 'The integration is paused');
   const url = unseal(app, account.secret_ref);
   if (!url) throw conflict('INTEGRATION_MISCONFIGURED', 'No feed URL configured');
+  // UTC / TZID instants are mapped to calendar nights in the PROPERTY's zone (not a fixed +9h)
+  const prop = await maybeOne<{ timezone: string | null }>(app.pool, `SELECT timezone FROM properties WHERE id = $1`, [account.config.propertyId]);
   let events: IcsEvent[];
   try {
-    events = parseIcs(await getFetcher(app)(url));
+    events = parseIcs(await getFetcher(app)(url), { timeZone: prop?.timezone ?? null });
   } catch (err: any) {
-    await withTx(app.pool, async (tx) => {
-      await logEvent(tx, account.id, { eventType: 'ICAL_FETCH', payload: { host: account.config.icalHost ?? null }, outcome: 'ERROR', detail: String(err?.message ?? err).slice(0, 300) });
-      await tx.query(`UPDATE integration_accounts SET status = 'ERROR' WHERE id = $1 AND status = 'ACTIVE'`, [account.id]);
-    });
+    await recordSyncError(app, account, 'ICAL_FETCH', String(err?.message ?? err));
     return { accountId, status: 'ERROR' as const, error: String(err?.message ?? err), counts: emptyCounts() };
   }
   const today = new Date().toISOString().slice(0, 10);
   const horizon = new Date(Date.now() + 2 * 365 * 86400_000).toISOString().slice(0, 10);
   const relevant = events.filter((e) => e.status !== 'CANCELLED' && e.end > today && e.start < horizon).map((e) => ({ ...e, start: e.start < today ? today : e.start }));
-  const counts = await withTx(app.pool, async (tx) => {
-    const locked = await one<{ ok: boolean }>(tx, `SELECT pg_try_advisory_xact_lock(hashtext($1)) AS ok`, [`ical-sync:${account.id}`]);
-    if (!locked.ok) throw conflict('SYNC_IN_PROGRESS', 'A sync is already running for this account');
-    const c = emptyCounts();
-    for (const ev of relevant) await applyExternalRange(tx, ctx, account, ev, c);
-    const present = new Set(relevant.map((e) => e.uid));
-    const mapped = await q<{ external_id: string }>(tx, `SELECT external_id FROM integration_mappings WHERE account_id = $1 AND external_type = 'VEVENT'`, [account.id]);
-    for (const m of mapped) if (!present.has(m.external_id)) await removeExternalRange(tx, account, m.external_id, c);
-    await tx.query(`UPDATE integration_accounts SET last_synced_at = now(), status = 'ACTIVE' WHERE id = $1`, [account.id]);
-    await emit(tx, ctx, {
-      aggregateType: 'integration_account',
-      aggregateId: account.id,
-      eventType: 'integration.sync.completed',
-      payload: { accountId: account.id, propertyId: account.config.propertyId, provider: account.provider, ...c, feedEvents: events.length },
+  try {
+    const counts = await withTx(app.pool, async (tx) => {
+      const locked = await one<{ ok: boolean }>(tx, `SELECT pg_try_advisory_xact_lock(hashtext($1)) AS ok`, [`ical-sync:${account.id}`]);
+      if (!locked.ok) throw conflict('SYNC_IN_PROGRESS', 'A sync is already running for this account');
+      // re-read under a row lock: the host may have paused the account or replaced its feed URL while we fetched
+      // (a concurrent PATCH now waits for this transaction instead of being overwritten by it)
+      const current = await maybeOne<Account>(tx, `SELECT * FROM integration_accounts WHERE id = $1 FOR UPDATE`, [account.id]);
+      if (!current || current.status === 'PAUSED') throw conflict('INTEGRATION_PAUSED', 'The integration was paused during the sync; nothing was applied');
+      if (current.secret_ref !== account.secret_ref) throw conflict('INTEGRATION_CHANGED', 'The feed URL changed during the sync; nothing was applied, sync again');
+      const c = emptyCounts();
+      for (const ev of relevant) {
+        // one bad event is logged and skipped; it must not roll back (and so silently drop) every other import
+        await tx.query('SAVEPOINT ical_event');
+        try {
+          await applyExternalRange(tx, ctx, current, ev, c);
+          await tx.query('RELEASE SAVEPOINT ical_event');
+        } catch (err: any) {
+          await tx.query('ROLLBACK TO SAVEPOINT ical_event');
+          if (RETRYABLE_PG.has(err?.code)) throw err;
+          app.log.warn({ err: err?.message, accountId: account.id, uid: ev.uid }, 'ical event could not be applied');
+          await logEvent(tx, account.id, { eventType: 'VEVENT', payload: { uid: ev.uid, start: ev.start, end: ev.end }, outcome: 'ERROR', detail: 'Event could not be applied (invalid or unsupported range)' });
+          c.ignored++;
+        }
+      }
+      const present = new Set(relevant.map((e) => e.uid));
+      const mapped = await q<{ external_id: string }>(tx, `SELECT external_id FROM integration_mappings WHERE account_id = $1 AND external_type = 'VEVENT'`, [account.id]);
+      for (const m of mapped) if (!present.has(m.external_id)) await removeExternalRange(tx, current, m.external_id, c);
+      await tx.query(`UPDATE integration_accounts SET last_synced_at = now(), status = 'ACTIVE' WHERE id = $1 AND status <> 'PAUSED'`, [account.id]);
+      await emit(tx, ctx, {
+        aggregateType: 'integration_account',
+        aggregateId: account.id,
+        eventType: 'integration.sync.completed',
+        payload: { accountId: account.id, propertyId: account.config.propertyId, provider: account.provider, ...c, feedEvents: events.length },
+      });
+      return c;
     });
-    return c;
-  });
-  return { accountId, status: 'ACTIVE' as const, counts };
+    return { accountId, status: 'ACTIVE' as const, counts };
+  } catch (err: any) {
+    if (err instanceof AppError) throw err; // SYNC_IN_PROGRESS / INTEGRATION_PAUSED / INTEGRATION_CHANGED
+    // the reconcile failed as a whole: surface it (status ERROR + event) instead of a silent 500 forever
+    app.log.error({ err, accountId: account.id }, 'ical reconcile failed');
+    const error = 'iCal events could not be applied';
+    await recordSyncError(app, account, 'ICAL_APPLY', error);
+    return { accountId, status: 'ERROR' as const, error, counts: emptyCounts() };
+  }
 }
 
 /** Periodic sync for ACTIVE/ERROR iCal accounts not synced in the last `minutes`. */
@@ -335,6 +373,9 @@ export async function handleInboundWebhook(app: AppContext, ctx: Ctx, accountId:
   if (!account || !secret || !verifyWebhookSignature(secret, rawBody, signature)) throw unauthorized('Invalid webhook signature');
   if (account.status === 'PAUSED') throw conflict('INTEGRATION_PAUSED', 'The integration is paused');
   return withTx(app.pool, async (tx) => {
+    // serialise deliveries for the same external booking: two concurrent upserts would otherwise both see "no
+    // mapping", both acquire a block, and the losing block would be orphaned (ACTIVE forever, never released)
+    await tx.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`int-ext:${account.id}:${payload.externalId}`]);
     const ins = await tx.query(
       `INSERT INTO webhook_events(provider, external_event_id, event_type, payload_hash, payload, signature_valid, processed_at)
        VALUES ('INTEGRATION', $1, $2, $3, $4, true, now()) ON CONFLICT (provider, external_event_id) DO NOTHING`,

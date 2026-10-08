@@ -1,7 +1,7 @@
-import { mkdir, readFile, stat, writeFile, copyFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile, copyFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { S3Client, PutObjectCommand, HeadObjectCommand, GetObjectCommand, CopyObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, HeadObjectCommand, GetObjectCommand, CopyObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { Config } from '../../platform/config.js';
 import { hmacSha256, safeEqual } from '../../platform/crypto.js';
@@ -19,8 +19,14 @@ export interface StorageAdapter {
   head(key: string): Promise<{ size: number } | null>;
   /** read a private object fully (bounded by the media size limits) */
   read(key: string): Promise<Buffer>;
-  /** copy a private object to the public bucket under publicKey */
-  promote(key: string, publicKey: string, mimeType: string): Promise<void>;
+  /**
+   * Publish to the public bucket under publicKey. When `bytes` is given (always, from the media pipeline) exactly
+   * those bytes are written — the ones that were verified, moderated and metadata-stripped — never a fresh copy of
+   * the private object, which the uploader can still overwrite through the presigned URL.
+   */
+  promote(key: string, publicKey: string, mimeType: string, bytes?: Buffer): Promise<void>;
+  /** delete a public object (rollback of a failed publication); missing objects are ignored */
+  removePublic?(publicKey: string): Promise<void>;
   publicUrl(publicKey: string): string;
 }
 
@@ -57,7 +63,20 @@ export class S3StorageAdapter implements StorageAdapter {
     return Buffer.from(await (r.Body as any).transformToByteArray());
   }
 
-  async promote(key: string, publicKey: string, mimeType: string) {
+  async promote(key: string, publicKey: string, mimeType: string, bytes?: Buffer) {
+    if (bytes) {
+      await this.s3.send(
+        new PutObjectCommand({
+          Bucket: this.cfg.S3_BUCKET_PUBLIC,
+          Key: publicKey,
+          Body: bytes,
+          ContentType: mimeType,
+          ContentLength: bytes.length,
+          CacheControl: 'public, max-age=31536000, immutable',
+        }),
+      );
+      return;
+    }
     await this.s3.send(
       new CopyObjectCommand({
         Bucket: this.cfg.S3_BUCKET_PUBLIC,
@@ -68,6 +87,10 @@ export class S3StorageAdapter implements StorageAdapter {
         CacheControl: 'public, max-age=31536000, immutable',
       }),
     );
+  }
+
+  async removePublic(publicKey: string) {
+    await this.s3.send(new DeleteObjectCommand({ Bucket: this.cfg.S3_BUCKET_PUBLIC, Key: publicKey }));
   }
 
   publicUrl(publicKey: string) {
@@ -130,10 +153,15 @@ export class LocalStorageAdapter implements StorageAdapter {
     return readFile(this.safe('private', key));
   }
 
-  async promote(key: string, publicKey: string) {
+  async promote(key: string, publicKey: string, _mimeType?: string, bytes?: Buffer) {
     const dst = this.safe('public', publicKey);
     await mkdir(path.dirname(dst), { recursive: true });
-    await copyFile(this.safe('private', key), dst);
+    if (bytes) await writeFile(dst, bytes);
+    else await copyFile(this.safe('private', key), dst);
+  }
+
+  async removePublic(publicKey: string) {
+    await rm(this.safe('public', publicKey), { force: true });
   }
 
   async readPublic(publicKey: string) {

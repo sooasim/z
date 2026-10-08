@@ -2,9 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { getActor, requireAuth, requireRole } from '../../platform/auth.js';
-import { ctxFromRequest } from '../../platform/context.js';
+import { ctxFromRequest, systemCtx } from '../../platform/context.js';
 import { maybeOne, one, q, withTx } from '../../platform/db.js';
 import { onEvent } from '../../platform/outbox.js';
+import { registerJob } from '../../platform/jobs.js';
 import { audit } from '../../platform/audit.js';
 import { notFound, unprocessable } from '../../platform/errors.js';
 import { decodeCursor, idParams, page, pagination } from '../../platform/http.js';
@@ -26,17 +27,21 @@ export default async function verificationModule(app: FastifyInstance) {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const pool = app.ctx.pool;
 
-  // Projections onto records owned by other domains (idempotent; owning modules may also consume these events).
+  // Projections onto guide profiles (idempotent; the guide module may also consume these events).
+  // Payout accounts are deliberately NOT projected: finance owns payout_accounts and only ACCOUNTING/ADMIN may
+  // verify a payout destination (POST /v1/admin/payout-accounts/:id/verify). A PAYOUT_ACCOUNT case approved by
+  // COMPLIANCE is evidence for that decision (`verification.approved`), never the decision itself.
   onEvent('verification.approved', 'verification.subject-sync', async (tx, ev) => {
     const p = ev.payload as { subjectType: string; subjectId: string | null; userId: string };
     if (p.subjectType === 'GUIDE') await tx.query(`UPDATE guide_profiles SET verification_status = 'VERIFIED' WHERE user_id = $1 AND verification_status <> 'SUSPENDED'`, [p.userId]);
-    if (p.subjectType === 'PAYOUT_ACCOUNT' && p.subjectId) await tx.query(`UPDATE payout_accounts SET status = 'VERIFIED' WHERE id = $1 AND status = 'PENDING'`, [p.subjectId]);
   });
   onEvent('verification.rejected', 'verification.subject-sync', async (tx, ev) => {
     const p = ev.payload as { subjectType: string; subjectId: string | null; userId: string };
     if (p.subjectType === 'GUIDE') await tx.query(`UPDATE guide_profiles SET verification_status = 'REJECTED' WHERE user_id = $1 AND verification_status = 'PENDING'`, [p.userId]);
-    if (p.subjectType === 'PAYOUT_ACCOUNT' && p.subjectId) await tx.query(`UPDATE payout_accounts SET status = 'REJECTED' WHERE id = $1 AND status = 'PENDING'`, [p.subjectId]);
   });
+
+  // TRUST-01: approvals with an expires_at lapse (APPROVED -> EXPIRED) and their projections are reverted.
+  registerJob('verification.expiry', 15 * 60 * 1000, (ac) => withTx(ac.pool, (tx) => svc.expireVerifications(tx, systemCtx(ac, `verification-expiry-${Date.now()}`))));
 
   // ---- user ------------------------------------------------------------------------------------------------
   r.post('/v1/verifications', {

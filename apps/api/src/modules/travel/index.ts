@@ -12,7 +12,7 @@ import { audit } from '../../platform/audit.js';
 import { recordTransition } from '../../platform/fsm.js';
 import { registerJob } from '../../platform/jobs.js';
 import { currencySchema, minorSchema } from '../../platform/money.js';
-import { decodeCursor, idParams, isoDate, page, pagination } from '../../platform/http.js';
+import { cursorColumns, decodeCursor, idParams, isoDate, page, pagination } from '../../platform/http.js';
 import { grantRole } from '../roles/service.js';
 import {
   DepartureFSM,
@@ -28,6 +28,7 @@ import {
   registerOrderPaymentSubject,
   runDepartureLifecycle,
   supplierOf,
+  supplierOrderView,
 } from './service.js';
 
 const T1 = 'TRAVEL-01';
@@ -35,6 +36,7 @@ const T2 = 'TRAVEL-02';
 const T3 = 'TRAVEL-03';
 const T4 = 'TRAVEL-04';
 const datetime = z.iso.datetime({ offset: true });
+const TIME_OF_DAY = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 const productType = z.enum(['TOUR', 'TICKET', 'ACTIVITY', 'PACKAGE']);
 const tiers = z.array(z.object({ min_hours_before: z.number().int().min(0), refund_pct: z.number().int().min(0).max(100) })).max(10);
 const cancellationTerms = z.object({ tiers: tiers.optional(), fee_refundable: z.boolean().optional(), note: z.string().max(2000).optional() });
@@ -150,6 +152,19 @@ export default async function travelModule(app: FastifyInstance) {
     }
     // options are never deleted (orders reference them): missing ones are deactivated
     await tx.query(`UPDATE travel_product_options SET active = false WHERE product_id = $1 AND NOT (id = ANY($2::uuid[]))`, [productId, keep]);
+  }
+
+  /** Canonical text of everything a buyer sees of a product (columns + options); jsonb text output is key-ordered. */
+  async function productContent(db: any, id: string): Promise<string> {
+    const row = await one<{ c: string }>(
+      db,
+      `SELECT ((to_jsonb(p) - 'status' - 'slug' - 'created_at' - 'updated_at')
+               || jsonb_build_object('options', (SELECT coalesce(jsonb_agg(jsonb_build_object('id', o.id, 'name', o.name, 'price', o.price_minor, 'active', o.active) ORDER BY o.id), '[]'::jsonb)
+                                                   FROM travel_product_options o WHERE o.product_id = p.id)))::text AS c
+         FROM travel_products p WHERE p.id = $1`,
+      [id],
+    );
+    return row.c;
   }
 
   async function productWithOptions(db: any, id: string) {
@@ -299,11 +314,13 @@ export default async function travelModule(app: FastifyInstance) {
     { schema: { tags: [T1], params: idParams, body: z.object(productBase).partial().omit({ type: true }) }, preHandler: supplierOnly },
     async (req) => {
       const b = req.body;
+      const ctx = ctxFromRequest(req);
       await withTx(pool, async (tx) => {
         const s = await supplierOf(tx, getActor(req).userId, { allowPending: true });
         const p = await maybeOne(tx, `SELECT * FROM travel_products WHERE id = $1 FOR UPDATE`, [req.params.id]);
         if (!p || p.supplier_id !== s.id) throw notFound('Product');
         if (p.status === 'ARCHIVED') throw conflict('PRODUCT_ARCHIVED', 'Archived products cannot be edited');
+        const before = await productContent(tx, p.id);
         const map: Record<string, [string, unknown]> = {
           title: ['title', b.title],
           summary: ['summary', b.summary],
@@ -325,6 +342,19 @@ export default async function travelModule(app: FastifyInstance) {
         }
         if (sets.length) await tx.query(`UPDATE travel_products SET ${sets.join(', ')} WHERE id = $1`, params);
         if (b.options) await upsertOptions(tx, p.id, b.options);
+        // TRAVEL-01 review workflow: every field here is buyer-facing. Content that changed after a review (PUBLISHED /
+        // PAUSED) goes back to IN_REVIEW in the same tx — it leaves the public catalog until an editor re-approves it.
+        // Content changed while IN_REVIEW is withdrawn to DRAFT, so an editor can never publish a version they did not
+        // see in the queue; the supplier resubmits it.
+        if ((await productContent(tx, p.id)) !== before) {
+          const to = p.status === 'PUBLISHED' || p.status === 'PAUSED' ? 'IN_REVIEW' : p.status === 'IN_REVIEW' ? 'DRAFT' : null;
+          if (to) {
+            const reason = to === 'IN_REVIEW' ? 'EDITED_AFTER_REVIEW' : 'EDITED_DURING_REVIEW';
+            await ProductFSM.transition(tx, ctx, { table: 'travel_products', id: p.id, from: p.status, to, reason });
+            await audit(tx, ctx, { action: 'travel_product.edited', resourceType: 'travel_product', resourceId: p.id, category: 'CONTENT', reason, before: { status: p.status }, after: { status: to } });
+            await emit(tx, ctx, { aggregateType: 'travel_product', aggregateId: p.id, eventType: 'travel.product.review_required', payload: { productId: p.id, supplierId: p.supplier_id, from: p.status, to } });
+          }
+        }
       });
       const out = await productWithOptions(pool, req.params.id);
       return { item: productDto(out!.row, { options: out!.options }) };
@@ -417,7 +447,7 @@ export default async function travelModule(app: FastifyInstance) {
       const c = decodeCursor(f.cursor);
       const rows = await q(
         pool,
-        `SELECT p.*, s.name AS supplier_name, s.merchant_of_record,
+        `SELECT p.*, s.name AS supplier_name, s.merchant_of_record, ${cursorColumns('p')},
                 (SELECT min(coalesce(d.price_minor, p.base_price_minor)) FROM travel_departures d
                   WHERE d.product_id = p.id AND d.status IN ('OPEN','GUARANTEED') AND d.starts_at > now()) AS from_price_minor
            FROM travel_products p JOIN suppliers s ON s.id = p.supplier_id
@@ -652,8 +682,9 @@ export default async function travelModule(app: FastifyInstance) {
           itemType: z.enum(['STAY', 'EXCHANGE', 'GUIDE', 'TRAVEL_PRODUCT', 'NOTE', 'TRANSPORT']),
           refId: z.uuid().optional().nullable(),
           title: z.string().trim().min(1).max(200),
-          startTime: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional().nullable(),
-          endTime: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional().nullable(),
+          // HH:MM[:SS] within a day ('25:00' / '99:99' would reach the time column and fail with 22008)
+          startTime: z.string().regex(TIME_OF_DAY, 'HH:MM or HH:MM:SS (00:00–23:59)').optional().nullable(),
+          endTime: z.string().regex(TIME_OF_DAY, 'HH:MM or HH:MM:SS (00:00–23:59)').optional().nullable(),
           note: z.string().max(4000).optional().nullable(),
         }),
       },
@@ -740,7 +771,7 @@ export default async function travelModule(app: FastifyInstance) {
     const c = decodeCursor(req.query.cursor);
     const rows = await q(
       pool,
-      `SELECT * FROM orders WHERE buyer_id = $1 AND ($2::text IS NULL OR status = $2) AND ($3::timestamptz IS NULL OR (created_at, id) < ($3::timestamptz, $4::uuid))
+      `SELECT *, ${cursorColumns()} FROM orders WHERE buyer_id = $1 AND ($2::text IS NULL OR status = $2) AND ($3::timestamptz IS NULL OR (created_at, id) < ($3::timestamptz, $4::uuid))
         ORDER BY created_at DESC, id DESC LIMIT $5`,
       [getActor(req).userId, req.query.status ?? null, c?.createdAt ?? null, c?.id ?? null, req.query.limit + 1],
     );
@@ -753,11 +784,16 @@ export default async function travelModule(app: FastifyInstance) {
     const out = await loadOrder(pool, req.params.id);
     if (!out) throw notFound('Order');
     const staff = hasRole(actor, 'ADMIN', 'SUPPORT', 'ACCOUNTING') && actor.aal === 'aal2';
-    if (out.order.buyer_id !== actor.userId && !staff) {
-      const isSupplier = await maybeOne(pool, `SELECT 1 FROM order_items i JOIN suppliers s ON s.id = i.supplier_id WHERE i.order_id = $1 AND s.owner_user_id = $2 LIMIT 1`, [req.params.id, actor.userId]);
-      if (!isSupplier) throw notFound('Order');
-    }
-    return { item: out.dto };
+    if (out.order.buyer_id === actor.userId || staff) return { item: out.dto };
+    // a supplier of (one of) the order's lines sees only its own lines, vouchers and pricing entry — never another
+    // supplier's products, prices, terms or the buyer's bearer voucher codes for them (same scope as /v1/supplier/orders)
+    const own = await q<{ supplier_id: string }>(
+      pool,
+      `SELECT DISTINCT i.supplier_id FROM order_items i JOIN suppliers s ON s.id = i.supplier_id WHERE i.order_id = $1 AND s.owner_user_id = $2`,
+      [req.params.id, actor.userId],
+    );
+    if (!own.length) throw notFound('Order');
+    return { item: await supplierOrderView(pool, out.order, out.items, out.vouchers, own.map((r) => r.supplier_id)) };
   });
 
   r.post(
@@ -784,7 +820,7 @@ export default async function travelModule(app: FastifyInstance) {
     const c = decodeCursor(req.query.cursor);
     const rows = await q(
       pool,
-      `SELECT o.* FROM orders o
+      `SELECT o.*, ${cursorColumns('o')} FROM orders o
         WHERE EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.supplier_id = $1)
           AND o.status NOT IN ('CART') AND ($2::text IS NULL OR o.status = $2)
           AND ($3::timestamptz IS NULL OR (o.created_at, o.id) < ($3::timestamptz, $4::uuid))
@@ -794,9 +830,14 @@ export default async function travelModule(app: FastifyInstance) {
     const pg = page(rows, req.query.limit);
     const ids = pg.items.map((o: any) => o.id);
     const items = ids.length ? await q(pool, `SELECT * FROM order_items WHERE order_id = ANY($1::uuid[]) AND supplier_id = $2`, [ids, s.id]) : [];
+    const termKeys = [...new Set(pg.items.flatMap((o: any) => Object.keys(o.pricing_snapshot?.cancellationTerms ?? {})))].filter((k) => /^[0-9a-f-]{36}$/i.test(k));
+    const ownProducts = termKeys.length
+      ? (await q<{ id: string }>(pool, `SELECT id FROM travel_products WHERE id = ANY($1::uuid[]) AND supplier_id = $2`, [termKeys, s.id])).map((p) => p.id)
+      : [];
     return {
-      // buyer identity limited to id; supplier sees only its own lines (and only its own pricing.suppliers[] entry)
-      items: pg.items.map((o: any) => orderDto(o, items.filter((i: any) => i.order_id === o.id), [], { supplierId: s.id })),
+      // buyer identity limited to id; supplier sees only its own lines, its own pricing.suppliers[] entry and its own
+      // products' cancellation terms
+      items: pg.items.map((o: any) => orderDto(o, items.filter((i: any) => i.order_id === o.id), [], { supplierId: s.id, productIds: ownProducts })),
       nextCursor: pg.nextCursor,
     };
   });

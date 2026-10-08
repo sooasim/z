@@ -10,6 +10,7 @@ const distanceSql = (latP: string, lngP: string) =>
 /** PostgreSQL fallback: projection rows in search_documents, to_tsvector('simple') + ILIKE, SQL geo filters. */
 export class PgSearchAdapter implements SearchAdapter {
   readonly name = 'postgres' as const;
+  readonly transactional = true;
 
   async ensureIndex() {}
 

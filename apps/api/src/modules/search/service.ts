@@ -1,9 +1,10 @@
 import type { AppContext, Ctx } from '../../platform/context.js';
 import type { Db } from '../../platform/db.js';
-import { maybeOne, q } from '../../platform/db.js';
+import { maybeOne, q, withTx } from '../../platform/db.js';
 import { badRequest } from '../../platform/errors.js';
+import { isCalendarDate } from '../../platform/http.js';
 import { emit, type DomainEvent } from '../../platform/outbox.js';
-import { fuzzCoordinates } from '../geo/service.js';
+import { fuzzPublic } from '../geo/service.js';
 import { StaticGeocoder } from '../geo/geocoder.js';
 import { PROPERTY_INDEX, SEARCH_ADAPTER, type PropertyDoc, type SearchAdapter, type SearchQuery } from './adapter.js';
 import { PgSearchAdapter } from './pg-adapter.js';
@@ -35,7 +36,7 @@ export async function buildPropertyDocument(db: Db, propertyId: string): Promise
     [propertyId],
   );
   const rep = await maybeOne(db, `SELECT review_count, rating_avg FROM reputation_scores WHERE target_type = 'PROPERTY' AND target_id = $1`, [propertyId]);
-  const coords = p.lat !== null && p.lng !== null ? fuzzCoordinates(p.id, Number(p.lat), Number(p.lng)) : null;
+  const coords = p.lat !== null && p.lng !== null ? fuzzPublic(p.id, Number(p.lat), Number(p.lng)) : null;
   const amenityLabels = amenities.flatMap((a) => [a.label_ko, a.label_en]);
   const areaLabel = addr?.public_area_label ?? null;
   return {
@@ -77,20 +78,33 @@ export async function buildPropertyDocument(db: Db, propertyId: string): Promise
 }
 
 /**
- * Project one property. Out-of-order safety: search_sync_state.source_version only moves forward; an older
- * event than the last applied one is skipped. Returns 'SYNCED' | 'DELETED' | 'STALE'.
+ * Mark a document for projection. search_sync_state.source_version only moves forward and is computed IN SQL at
+ * full (microsecond) precision as greatest(stored, event version, properties.updated_at): JS Dates truncate to
+ * milliseconds, which made `source_version < updated_at` true forever (reconcile never converged). The row lock
+ * taken here also serialises concurrent projections of the same document.
  */
-export async function projectProperty(db: Db, app: AppContext, propertyId: string, sourceVersion: Date | string) {
-  const claimed = await q(
-    db,
-    `INSERT INTO search_sync_state(index_name, document_id, source_version, status) VALUES ($1,$2,$3,'PENDING')
-     ON CONFLICT (index_name, document_id) DO UPDATE SET source_version = EXCLUDED.source_version, status = 'PENDING', error = NULL
-       WHERE search_sync_state.source_version <= EXCLUDED.source_version
-     RETURNING document_id`,
-    [PROPERTY_INDEX, propertyId, sourceVersion],
+async function claimProjection(db: Db, propertyId: string, sourceVersion?: Date | string | null) {
+  await db.query(
+    `INSERT INTO search_sync_state(index_name, document_id, source_version, status)
+     VALUES ($1, $2, greatest(coalesce($3::timestamptz, now()), coalesce((SELECT updated_at FROM properties WHERE id = $4::uuid), now())), 'PENDING')
+     ON CONFLICT (index_name, document_id) DO UPDATE SET source_version = greatest(search_sync_state.source_version, EXCLUDED.source_version),
+       status = 'PENDING', error = NULL`,
+    [PROPERTY_INDEX, propertyId, sourceVersion ?? null, propertyId],
   );
-  if (!claimed.length) return 'STALE' as const;
+}
+
+/**
+ * Project one property from the CURRENT source rows (never from event payloads), so applying events late or out of
+ * order is harmless: a late event re-projects the latest state instead of being skipped (an event emitted by a long
+ * transaction carries an OLDER timestamp than ones committed meanwhile — skipping it left stale documents).
+ * Transactional adapters (PostgreSQL) are written in `db`'s transaction; external engines only get the document
+ * marked PENDING here and are fed by flushPendingProjections outside any transaction.
+ * Returns 'SYNCED' | 'DELETED' (applied) or 'PENDING' (deferred to the flush).
+ */
+export async function projectProperty(db: Db, app: AppContext, propertyId: string, sourceVersion?: Date | string | null) {
+  await claimProjection(db, propertyId, sourceVersion);
   const adapter = searchAdapterOf(app);
+  if (!adapter.transactional) return 'PENDING' as const;
   const doc = await buildPropertyDocument(db, propertyId);
   if (doc) await adapter.upsert(db, [doc]);
   else await adapter.remove(db, [propertyId]);
@@ -98,6 +112,69 @@ export async function projectProperty(db: Db, app: AppContext, propertyId: strin
   await db.query(`UPDATE search_sync_state SET status = $3, synced_at = now() WHERE index_name = $1 AND document_id = $2`, [PROPERTY_INDEX, propertyId, status]);
   return status as 'SYNCED' | 'DELETED';
 }
+
+const FLUSH_LOCK = 'jetpool:search.flush';
+
+/**
+ * Push PENDING documents to the search engine OUTSIDE any transaction (one flusher at a time across replicas, so
+ * pushes stay ordered). Each document is built from the current rows and the row is marked SYNCED/DELETED only if
+ * its version did not move meanwhile (otherwise it stays PENDING for the next run). Engine errors mark it FAILED
+ * (picked up again by flush / reconcile) — they never block the outbox.
+ */
+export async function flushPendingProjections(app: AppContext, limit = 200): Promise<{ synced: number; deleted: number; failed: number; skipped?: boolean }> {
+  const adapter = searchAdapterOf(app);
+  const out = { synced: 0, deleted: 0, failed: 0 };
+  const conn = await app.pool.connect();
+  let locked = false;
+  try {
+    locked = (await conn.query(`SELECT pg_try_advisory_lock(hashtext($1)) AS ok`, [FLUSH_LOCK])).rows[0].ok === true;
+    if (!locked) return { ...out, skipped: true };
+    const rows = await q<{ id: string; v: string }>(
+      app.pool,
+      `SELECT document_id AS id, source_version::text AS v FROM search_sync_state
+        WHERE index_name = $1 AND status IN ('PENDING','FAILED') ORDER BY source_version, document_id LIMIT $2`,
+      [PROPERTY_INDEX, limit],
+    );
+    let consecutiveFailures = 0;
+    for (const r of rows) {
+      if (consecutiveFailures >= 3) break; // engine looks down: leave the rest for the next run (no hammering)
+      try {
+        if (adapter.transactional) {
+          const st = await withTx(app.pool, (tx) => projectProperty(tx, app, r.id, r.v));
+          if (st === 'SYNCED') out.synced++;
+          else if (st === 'DELETED') out.deleted++;
+          continue;
+        }
+        const doc = await buildPropertyDocument(app.pool, r.id);
+        if (doc) await adapter.upsert(app.pool, [doc]);
+        else await adapter.remove(app.pool, [r.id]);
+        const st = doc ? 'SYNCED' : 'DELETED';
+        await app.pool.query(
+          `UPDATE search_sync_state SET status = $3, synced_at = now(), error = NULL
+            WHERE index_name = $1 AND document_id = $2 AND status IN ('PENDING','FAILED') AND source_version = $4::timestamptz`,
+          [PROPERTY_INDEX, r.id, st, r.v],
+        );
+        if (doc) out.synced++;
+        else out.deleted++;
+        consecutiveFailures = 0;
+      } catch (err) {
+        out.failed++;
+        consecutiveFailures++;
+        await app.pool
+          .query(`UPDATE search_sync_state SET status = 'FAILED', error = $3 WHERE index_name = $1 AND document_id = $2 AND source_version = $4::timestamptz`, [
+            PROPERTY_INDEX, r.id, String(err).slice(0, 500), r.v,
+          ])
+          .catch(() => {});
+      }
+    }
+    return out;
+  } finally {
+    if (locked) await conn.query(`SELECT pg_advisory_unlock(hashtext($1))`, [FLUSH_LOCK]).catch(() => {});
+    conn.release();
+  }
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Which properties does an event affect? */
 export async function propertyIdsForEvent(db: Db, ev: DomainEvent): Promise<string[]> {
@@ -108,13 +185,13 @@ export async function propertyIdsForEvent(db: Db, ev: DomainEvent): Promise<stri
   if (ev.event_type.startsWith('review.') || ev.event_type.startsWith('reputation.')) {
     const tt = pl.targetType ?? pl.target_type;
     const tid = pl.targetId ?? pl.target_id;
-    if (tt === 'PROPERTY' && tid) return [tid];
-    if (pl.propertyId) return [pl.propertyId];
-    if (tt === 'HOST' && tid) return (await q(db, `SELECT id FROM properties WHERE host_id = $1 AND status = 'PUBLISHED'`, [tid])).map((r) => r.id);
+    if (tt === 'PROPERTY' && tid) return UUID_RE.test(tid) ? [tid] : [];
+    if (pl.propertyId) return UUID_RE.test(pl.propertyId) ? [pl.propertyId] : [];
+    if (tt === 'HOST' && tid && UUID_RE.test(tid)) return (await q(db, `SELECT id FROM properties WHERE host_id = $1 AND status = 'PUBLISHED'`, [tid])).map((r) => r.id);
     return [];
   }
   const id = pl.propertyId ?? pl.property_id ?? (ev.aggregate_type === 'property' ? ev.aggregate_id : null);
-  return id && /^[0-9a-f-]{36}$/i.test(id) ? [id] : [];
+  return typeof id === 'string' && UUID_RE.test(id) ? [id] : [];
 }
 
 /** Rebuild the index from PostgreSQL (admin reindex / disaster recovery). */
@@ -125,10 +202,18 @@ export async function rebuildIndex(ctx: Ctx, opts: { reset?: boolean } = {}) {
     await adapter.reset(app.pool);
     await app.pool.query(`DELETE FROM search_sync_state WHERE index_name = $1`, [PROPERTY_INDEX]);
   }
-  const ids = (await q(app.pool, `SELECT id, updated_at FROM properties WHERE status = 'PUBLISHED' ORDER BY id`)).map((r) => r);
+  const ids = await q<{ id: string }>(app.pool, `SELECT id FROM properties WHERE status = 'PUBLISHED' ORDER BY id`);
   let indexed = 0;
   for (const r of ids) {
-    if ((await projectProperty(app.pool, app, r.id, r.updated_at)) === 'SYNCED') indexed++;
+    if ((await withTx(app.pool, (tx) => projectProperty(tx, app, r.id, null))) === 'SYNCED') indexed++;
+  }
+  if (!adapter.transactional) {
+    for (let round = 0; round < 1000; round++) {
+      const f = await flushPendingProjections(app, 500);
+      indexed += f.synced;
+      if (f.skipped || f.synced + f.deleted + f.failed === 0) break;
+      if (f.synced + f.deleted === 0) break; // only failures left: reconcile / flush retry later
+    }
   }
   await emit(app.pool, ctx, { aggregateType: 'search_index', aggregateId: PROPERTY_INDEX, eventType: 'search.projection.updated', payload: { index: PROPERTY_INDEX, indexed, rebuilt: true, adapter: adapter.name } });
   return { index: PROPERTY_INDEX, adapter: adapter.name, indexed };
@@ -136,31 +221,35 @@ export async function rebuildIndex(ctx: Ctx, opts: { reset?: boolean } = {}) {
 
 /**
  * Reconcile job: re-project published properties whose source changed after their last sync (missed events)
- * and drop documents of properties that are no longer published.
+ * and drop documents of properties that are no longer published. Oldest drift first, so every run makes progress
+ * on catalogs larger than `limit`.
  */
 export async function reconcileIndex(app: AppContext, limit = 500) {
   const stale = await q(
     app.pool,
-    `SELECT p.id, p.updated_at FROM properties p
+    `SELECT p.id FROM properties p
        LEFT JOIN search_sync_state s ON s.index_name = $1 AND s.document_id = p.id::text
       WHERE p.status = 'PUBLISHED' AND (s.document_id IS NULL OR s.status IN ('PENDING','FAILED') OR s.source_version < p.updated_at)
+      ORDER BY p.updated_at, p.id
       LIMIT $2`,
     [PROPERTY_INDEX, limit],
   );
   const gone = await q(
     app.pool,
-    `SELECT s.document_id AS id, greatest(s.source_version, coalesce(p.updated_at, s.source_version)) AS updated_at FROM search_sync_state s
+    `SELECT s.document_id AS id FROM search_sync_state s
        LEFT JOIN properties p ON p.id::text = s.document_id
-      WHERE s.index_name = $1 AND s.status = 'SYNCED' AND (p.id IS NULL OR p.status <> 'PUBLISHED') LIMIT $2`,
+      WHERE s.index_name = $1 AND s.status = 'SYNCED' AND (p.id IS NULL OR p.status <> 'PUBLISHED')
+      ORDER BY s.source_version, s.document_id LIMIT $2`,
     [PROPERTY_INDEX, limit],
   );
   for (const r of [...stale, ...gone]) {
     try {
-      await projectProperty(app.pool, app, r.id, r.updated_at);
+      await withTx(app.pool, (tx) => projectProperty(tx, app, r.id, null));
     } catch (err) {
       await app.pool.query(`UPDATE search_sync_state SET status = 'FAILED', error = $3 WHERE index_name = $1 AND document_id = $2`, [PROPERTY_INDEX, r.id, String(err).slice(0, 500)]);
     }
   }
+  if (!searchAdapterOf(app).transactional) await flushPendingProjections(app, limit);
   return { reprojected: stale.length, removed: gone.length };
 }
 
@@ -210,6 +299,8 @@ export function parseSearch(r: SearchRequest): SearchQuery & { checkIn?: string;
   }
   if (r.checkIn || r.checkOut) {
     if (!r.checkIn || !r.checkOut || !DATE_RE.test(r.checkIn) || !DATE_RE.test(r.checkOut)) throw badRequest('INVALID_DATE', 'checkIn and checkOut must both be YYYY-MM-DD');
+    // real calendar days only (2026-02-30 / 2026-13-01 would otherwise reach `$1::date` and fail with a 500)
+    if (!isCalendarDate(r.checkIn) || !isCalendarDate(r.checkOut)) throw badRequest('INVALID_DATE', 'checkIn and checkOut must be valid calendar dates');
     const n = nightsBetween(r.checkIn, r.checkOut);
     if (n <= 0) throw badRequest('INVALID_DATE_RANGE', 'checkOut must be after checkIn');
     if (n > 365) throw badRequest('INVALID_DATE_RANGE', 'Stay is too long');

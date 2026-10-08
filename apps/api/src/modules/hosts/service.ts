@@ -47,7 +47,7 @@ export async function hostChecklist(db: Db, userId: string) {
   return {
     emailVerified: !!u.email_verified_at,
     phoneProvided: !!u.phone,
-    identityVerified: !!u.identity_verified_at || (await isVerified(db, userId, 'IDENTITY')),
+    identityVerified: await isVerified(db, userId, 'IDENTITY'),
     hostVerified,
     payoutAccount: payout?.status ?? 'MISSING',
   };
@@ -125,6 +125,17 @@ export async function decide(tx: Tx, ctx: Ctx, applicationId: string, d: { appro
   return row;
 }
 
+/**
+ * Is the host's verification current? host_profiles.verification_status is a projection written at decision time;
+ * once the host has been verified through a HOST case, an approval must still be valid (unexpired) as well, so a
+ * lapsed verification blocks immediately instead of waiting for the expiry job to revert the projection.
+ */
+export async function hostVerificationCurrent(db: Db, userId: string, storedStatus: string | null | undefined): Promise<boolean> {
+  if (storedStatus !== 'VERIFIED') return false;
+  const decided = await maybeOne(db, `SELECT 1 FROM verification_cases WHERE user_id = $1 AND subject_type = 'HOST' AND status IN ('APPROVED','EXPIRED') LIMIT 1`, [userId]);
+  return !decided || (await isVerified(db, userId, 'HOST'));
+}
+
 /** Why a user may not publish paid inventory (empty = eligible). Invariant 7 + HOST-01. */
 export async function hostPublishBlockers(db: Db, userId: string): Promise<string[]> {
   const reasons: string[] = [];
@@ -135,7 +146,7 @@ export async function hostPublishBlockers(db: Db, userId: string): Promise<strin
   if (!hp) reasons.push('HOST_NOT_APPLIED');
   else {
     if (hp.status !== 'APPROVED') reasons.push('HOST_NOT_APPROVED');
-    if (hp.verification_status !== 'VERIFIED') reasons.push('HOST_NOT_VERIFIED');
+    if (!(await hostVerificationCurrent(db, userId, hp.verification_status))) reasons.push('HOST_NOT_VERIFIED');
   }
   if (!(await maybeOne(db, `SELECT 1 FROM user_roles WHERE user_id = $1 AND role = 'HOST'`, [userId]))) reasons.push('HOST_ROLE_MISSING');
   if (await hasActiveSanction(db, userId, ['LISTING_SUSPENSION', 'ACCOUNT_SUSPENSION', 'BAN'])) reasons.push('SANCTIONED');
@@ -166,7 +177,7 @@ export async function publicHost(db: Db, userId: string) {
     userId: h.user_id,
     displayName: h.display_name,
     about: h.about,
-    verified: h.verification_status === 'VERIFIED',
+    verified: await hostVerificationCurrent(db, userId, h.verification_status),
     identityVerified: !!h.identity_verified_at,
     responseRate: h.response_rate,
     avatarMediaId: h.avatar_media_id,

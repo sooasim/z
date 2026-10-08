@@ -48,10 +48,19 @@ export async function refreshRecommendationFeatures(db: Db, userId: string): Pro
   );
   const max = Math.max(1, ...rows.map((r) => r.w));
   const features = new Map(rows.map((r) => [r.key, r.w / max]));
-  await db.query(`DELETE FROM recommendation_features WHERE user_id = $1`, [userId]);
-  for (const [k, v] of features) {
-    await db.query(`INSERT INTO recommendation_features(user_id, feature_key, value) VALUES ($1,$2,$3)`, [userId, k, v]);
+  // Upsert (sorted keys → one lock order) and then drop stale keys. A blind DELETE + INSERT failed concurrent
+  // refreshes for the same user (parallel rails): the second DELETE cannot see the first's uncommitted rows, so its
+  // INSERTs hit the primary key → 409 DUPLICATE. ON CONFLICT waits for the other transaction and updates instead.
+  const keys = [...features.keys()].sort();
+  if (keys.length) {
+    await db.query(
+      `INSERT INTO recommendation_features(user_id, feature_key, value)
+       SELECT $1, t.k, t.v FROM unnest($2::text[], $3::float8[]) AS t(k, v) ORDER BY t.k
+       ON CONFLICT (user_id, feature_key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      [userId, keys, keys.map((k) => features.get(k)!)],
+    );
   }
+  await db.query(`DELETE FROM recommendation_features WHERE user_id = $1 AND NOT (feature_key = ANY($2::text[]))`, [userId, keys]);
   return features;
 }
 

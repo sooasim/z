@@ -335,7 +335,13 @@ describe('STAY-09 reservation FSM', () => {
     expect(ci.status, JSON.stringify(ci.body)).toBe(200);
     expect(ci.body.item.status).toBe('CHECKED_IN');
     expect((await call(t, guest, 'POST', `/v1/reservations/${reservation.id}/complete`)).status).toBe(403);
+    // the host cannot complete before the stay has been delivered (check-out date in the property timezone)
+    const tooEarly = await call(t, host, 'POST', `/v1/reservations/${reservation.id}/complete`);
+    expect(tooEarly.status).toBe(409);
+    expect(tooEarly.body.code).toBe('STAY_NOT_ENDED');
+    await t.pool.query(`UPDATE reservations SET check_in = $2, check_out = $3 WHERE id = $1`, [reservation.id, day(-2), day(0)]);
     const done = await call(t, host, 'POST', `/v1/reservations/${reservation.id}/complete`);
+    expect(done.status, JSON.stringify(done.body)).toBe(200);
     expect(done.body.item.status).toBe('COMPLETED');
     expect(await outbox('reservation.completed', reservation.id)).toHaveLength(1);
     expect((await call(t, host, 'POST', `/v1/reservations/${reservation.id}/complete`)).status).toBe(409);
@@ -390,18 +396,20 @@ describe('STAY-10 cancellation', () => {
     // check-in instant: check_in 15:00 Asia/Seoul = 06:00Z
     const checkInAt = Date.parse(`${r.check_in}T06:00:00Z`);
     const H = 3_600_000;
-    const fee = r.quote_snapshot.platformFeeMinor;
-    const base = r.total_minor - fee; // MODERATE: service fee not refundable
+    // MODERATE: service fee not refundable → neither is the VAT charged on it
+    const fee = r.quote_snapshot.platformFeeMinor + r.quote_snapshot.taxMinor;
+    const base = r.total_minor - fee;
+    expect(base).toBe(r.quote_snapshot.subtotalMinor + r.quote_snapshot.cleaningFeeMinor);
     const at = (ms: number) => evaluateCancellation(t.pool, r, 'GUEST', new Date(ms));
     const e120 = await at(checkInAt - 120 * H);
     expect(e120.checkInAt).toBe(new Date(checkInAt).toISOString());
-    expect(e120).toMatchObject({ refundPct: 100, refundMinor: base, nonRefundableMinor: fee });
+    expect(e120).toMatchObject({ refundPct: 100, refundMinor: base, feeRefundMinor: 0, nonRefundableMinor: fee });
     expect(await at(checkInAt - 120 * H + 1000)).toMatchObject({ refundPct: 50, refundMinor: applyBps(base, 5000) });
     expect(await at(checkInAt - 24 * H)).toMatchObject({ refundPct: 50 });
     expect(await at(checkInAt - 24 * H + 1000)).toMatchObject({ refundPct: 0, refundMinor: 0 });
     expect(await at(checkInAt + H)).toMatchObject({ refundPct: 0, refundMinor: 0 });
-    // host / staff always 100% including fees
-    expect(await evaluateCancellation(t.pool, r, 'HOST', new Date(checkInAt - H))).toMatchObject({ refundPct: 100, refundMinor: r.total_minor });
+    // host / staff always 100% including fees (the fee component is the service fee + its tax)
+    expect(await evaluateCancellation(t.pool, r, 'HOST', new Date(checkInAt - H))).toMatchObject({ refundPct: 100, refundMinor: r.total_minor, feeRefundMinor: fee });
   });
 
   it('guest cancellation releases dates, records adjustment, requests refund, then refund callback → PARTIALLY_REFUNDED', async () => {
@@ -418,7 +426,7 @@ describe('STAY-10 cancellation', () => {
     const key = idem();
     const c = await call(t, guest, 'POST', `/v1/reservations/${reservation.id}/cancel`, { reason: 'plans changed' }, key);
     expect(c.status, JSON.stringify(c.body)).toBe(200);
-    const expectedRefund = reservation.totalMinor - reservation.quote.platformFeeMinor;
+    const expectedRefund = reservation.totalMinor - reservation.quote.platformFeeMinor - reservation.quote.taxMinor;
     expect(c.body.item.status).toBe('REFUND_PENDING');
     expect(c.body.item.cancellation.refundMinor).toBe(expectedRefund);
     const replay = await call(t, guest, 'POST', `/v1/reservations/${reservation.id}/cancel`, { reason: 'plans changed' }, key);

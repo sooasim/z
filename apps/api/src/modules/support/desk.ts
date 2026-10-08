@@ -93,9 +93,10 @@ export class ChatwootSupportDesk implements SupportDesk {
   }
 
   /** Find-or-create the contact by opaque identifier and make sure it has a contact_inbox in our inbox. */
-  private async ensureContact(identifier: string, name: string): Promise<{ contactId: string; sourceId: string }> {
+  private async ensureContact(identifier: string, name: string): Promise<{ contactId: string; sourceId: string; existed: boolean }> {
     const found = await this.req('GET', `/api/v1/accounts/${this.account}/contacts/search?q=${encodeURIComponent(identifier)}`);
     let contact: any = (found?.payload ?? []).find((c: any) => c?.identifier === identifier) ?? null;
+    const existed = !!contact;
     let sourceId: string | null = null;
     if (!contact) {
       const created = await this.req('POST', `/api/v1/accounts/${this.account}/contacts`, { inbox_id: Number(this.cfg.inboxId) || this.cfg.inboxId, name, identifier });
@@ -111,12 +112,23 @@ export class ChatwootSupportDesk implements SupportDesk {
       sourceId = ci?.source_id ?? null;
     }
     if (!sourceId) throw new SupportDeskError('chatwoot contact_inbox without source_id', null);
-    return { contactId: String(contact.id), sourceId };
+    return { contactId: String(contact.id), sourceId, existed };
+  }
+
+  /** A conversation already mirrored for this case (a previous attempt whose response or store was lost). */
+  private async existingConversation(contactId: string, caseId: string): Promise<string | null> {
+    const res = await this.req('GET', `/api/v1/accounts/${this.account}/contacts/${encodeURIComponent(contactId)}/conversations`);
+    const list: any[] = Array.isArray(res?.payload) ? res.payload : Array.isArray(res) ? res : [];
+    const hit = list.find((cv) => cv?.custom_attributes?.jetpool_case_id === caseId || cv?.additional_attributes?.jetpool_case_id === caseId);
+    return hit?.id !== undefined && hit?.id !== null ? String(hit.id) : null;
   }
 
   async createConversation(c: SupportDeskCase): Promise<{ externalRef: string }> {
     const identifier = c.requesterId ? `jetpool:user:${c.requesterId}` : `jetpool:case:${c.id}`;
-    const { contactId, sourceId } = await this.ensureContact(identifier, c.requesterId ? `JETPOOL user ${c.requesterId.slice(0, 8)}` : 'JETPOOL guest');
+    const { contactId, sourceId, existed } = await this.ensureContact(identifier, c.requesterId ? `JETPOOL user ${c.requesterId.slice(0, 8)}` : 'JETPOOL guest');
+    // idempotent create: a brand-new contact has no conversations; an existing one may already have this case
+    const prior = existed ? await this.existingConversation(contactId, c.id) : null;
+    if (prior) return { externalRef: `chatwoot:${this.cfg.accountId}:${prior}` };
     const conv = await this.req('POST', `/api/v1/accounts/${this.account}/conversations`, {
       source_id: sourceId,
       inbox_id: Number(this.cfg.inboxId) || this.cfg.inboxId,

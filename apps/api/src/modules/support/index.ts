@@ -6,6 +6,7 @@ import { ctxFromRequest, type Ctx } from '../../platform/context.js';
 import { q, withTx, type Tx } from '../../platform/db.js';
 import { badRequest, conflict } from '../../platform/errors.js';
 import { onEvent } from '../../platform/outbox.js';
+import { registerJob } from '../../platform/jobs.js';
 import { decodeCursor, idParams, page, pagination } from '../../platform/http.js';
 import { grantElevatedAccess } from '../disputes/service.js';
 import { recordAdminAction } from '../admin/actions.js';
@@ -33,9 +34,11 @@ export default async function supportModule(app: FastifyInstance) {
   };
 
   // ---- external desk mirror (Chatwoot when configured; no-op otherwise) -------------------------------------------
+  // The consumer only marks the case; the desk is called by the job outside the outbox dispatch transaction.
   onEvent('support.case.opened', 'support.desk-sync', async (tx, ev, ctx) => {
-    if (ev.payload?.caseId) await svc.syncCaseToDesk(tx, ctx, ev.payload.caseId);
+    if (ev.payload?.caseId) await svc.markCaseForDeskSync(tx, ctx, ev.payload.caseId);
   });
+  registerJob('support.desk-sync', 15_000, (ac) => svc.runDeskSync(ac));
 
   // ---- requester -----------------------------------------------------------------------------------------------
   r.post('/v1/support/cases', {

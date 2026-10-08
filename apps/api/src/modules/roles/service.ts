@@ -6,6 +6,7 @@ import { ROLES, STAFF_ROLES } from '../../platform/auth.js';
 import { emit } from '../../platform/outbox.js';
 import { audit } from '../../platform/audit.js';
 import { notify } from '../../platform/notify.js';
+import { recordTransition } from '../../platform/fsm.js';
 import { conflict, forbidden, notFound, unprocessable } from '../../platform/errors.js';
 import { decodeCursor, page } from '../../platform/http.js';
 import { revokeAllSessions, userStatusMachine } from '../identity/users.js';
@@ -107,15 +108,48 @@ export async function effectivePermissions(db: Db, actor: Pick<Actor, 'userId' |
 }
 
 // ---- account suspension (sanction-aware) ---------------------------------------------------------------
-export async function suspendUser(tx: Tx, ctx: Ctx, args: { userId: string; reason: string; source?: string }) {
+/**
+ * Who imposed the account's current suspension: 'SANCTION' when it was a time-boxed/liftable account sanction,
+ * otherwise the manual/other source. Read from the latest users→SUSPENDED state transition (append-only).
+ * Only sanction-sourced suspensions may be undone automatically when the sanction ends or is lifted.
+ */
+export async function currentSuspensionSource(db: Db, userId: string): Promise<string | null> {
+  const t = await maybeOne<{ reason: string | null; metadata: any }>(
+    db,
+    `SELECT reason, metadata FROM state_transitions WHERE aggregate_type = 'user' AND aggregate_id = $1 AND to_state = 'SUSPENDED' ORDER BY id DESC LIMIT 1`,
+    [userId],
+  );
+  if (!t) return null;
+  if (t.metadata?.source) return String(t.metadata.source);
+  // transitions recorded before the source was stored: sanction suspensions carry "sanction <uuid>: <reason>"
+  return /^sanction [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}: /i.test(t.reason ?? '') ? 'SANCTION' : 'ADMIN';
+}
+
+export async function suspendUser(tx: Tx, ctx: Ctx, args: { userId: string; reason: string; source?: string; sanctionId?: string }) {
   if (ctx.actor?.userId === args.userId) throw conflict('SELF_SUSPEND_FORBIDDEN', 'You cannot suspend your own account');
   const u = await maybeOne(tx, `SELECT status FROM users WHERE id = $1 FOR UPDATE`, [args.userId]);
   if (!u) throw notFound('User');
-  if (u.status === 'SUSPENDED') return { changed: false };
-  await userStatusMachine.transition(tx, ctx, { table: 'users', id: args.userId, to: 'SUSPENDED', reason: args.reason, actorType: ctx.actor ? 'ADMIN' : 'SYSTEM' });
+  const source = args.source ?? 'ADMIN';
+  if (u.status === 'SUSPENDED') {
+    // A direct (non-sanction) suspension of an account that is currently suspended only by a sanction takes over
+    // the suspension, so the sanction ending or being lifted no longer restores the account.
+    if (source !== 'SANCTION' && (await currentSuspensionSource(tx, args.userId)) === 'SANCTION') {
+      await recordTransition(tx, ctx, { aggregateType: 'user', aggregateId: args.userId, from: 'SUSPENDED', to: 'SUSPENDED', reason: args.reason, actorType: ctx.actor ? 'ADMIN' : 'SYSTEM', metadata: { source } });
+      await audit(tx, ctx, { action: 'user.suspended', resourceType: 'user', resourceId: args.userId, before: { status: u.status }, after: { status: 'SUSPENDED', source, supersedes: 'SANCTION' }, reason: args.reason, category: 'PERMISSION' });
+    }
+    return { changed: false };
+  }
+  await userStatusMachine.transition(tx, ctx, {
+    table: 'users',
+    id: args.userId,
+    to: 'SUSPENDED',
+    reason: args.reason,
+    actorType: ctx.actor ? 'ADMIN' : 'SYSTEM',
+    metadata: { source, ...(args.sanctionId ? { sanctionId: args.sanctionId } : {}) },
+  });
   const revoked = await revokeAllSessions(tx, args.userId, 'ACCOUNT_SUSPENDED');
-  await audit(tx, ctx, { action: 'user.suspended', resourceType: 'user', resourceId: args.userId, before: { status: u.status }, after: { status: 'SUSPENDED', sessionsRevoked: revoked, source: args.source ?? 'ADMIN' }, reason: args.reason, category: 'PERMISSION' });
-  await emit(tx, ctx, { aggregateType: 'user', aggregateId: args.userId, eventType: 'user.suspended', payload: { userId: args.userId, source: args.source ?? 'ADMIN' } });
+  await audit(tx, ctx, { action: 'user.suspended', resourceType: 'user', resourceId: args.userId, before: { status: u.status }, after: { status: 'SUSPENDED', sessionsRevoked: revoked, source }, reason: args.reason, category: 'PERMISSION' });
+  await emit(tx, ctx, { aggregateType: 'user', aggregateId: args.userId, eventType: 'user.suspended', payload: { userId: args.userId, source } });
   await notify(tx, ctx, { userId: args.userId, templateKey: 'account.suspended', category: 'SECURITY', title: '계정이 정지되었습니다', body: 'Your JETPOOL account has been suspended. Contact support for details.' });
   return { changed: true };
 }

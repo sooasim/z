@@ -79,7 +79,7 @@ export default async function bookingModule(app: FastifyInstance) {
   r.get('/v1/host/calendar', {
     schema: { tags: ['STAY-06'], querystring: rangeQuery.extend({ propertyId: z.uuid() }) },
     preHandler: requireAuth,
-  }, async (req) => ({ item: await hostCalendar(pool(), getActor(req), req.query.propertyId, req.query.from, req.query.to) }));
+  }, async (req) => ({ item: await hostCalendar(pool(), getActor(req), req.query.propertyId, req.query.from, req.query.to, ctxFromRequest(req)) }));
 
   // ------------------------------------------------------------ STAY-07 quote
   r.post('/v1/booking/quotes', {
@@ -157,7 +157,7 @@ export default async function bookingModule(app: FastifyInstance) {
   r.get('/v1/reservations/:id', {
     schema: { tags: ['STAY-09'], params: idParams },
     preHandler: requireAuth,
-  }, async (req) => ({ item: await getReservation(pool(), getActor(req), req.params.id) }));
+  }, async (req) => ({ item: await getReservation(pool(), getActor(req), req.params.id, ctxFromRequest(req)) }));
 
   const lifecycle = (path: string, tag: string, fn: (tx: Tx, ctx: Ctx, id: string, reason?: string) => Promise<any>) =>
     r.post(path, {
@@ -168,15 +168,18 @@ export default async function bookingModule(app: FastifyInstance) {
       const row = await withTx(pool(), (tx) => fn(tx, ctx, req.params.id, req.body?.reason));
       return { item: reservationDto(row) };
     });
-  lifecycle('/v1/reservations/:id/check-in', 'STAY-10', (tx, ctx, id) => checkIn(tx, ctx, id));
-  lifecycle('/v1/reservations/:id/complete', 'STAY-09', (tx, ctx, id, reason) => completeStay(tx, ctx, id, reason ?? 'stay completed'));
+  lifecycle('/v1/reservations/:id/check-in', 'STAY-10', (tx, ctx, id, reason) => checkIn(tx, ctx, id, reason));
+  lifecycle('/v1/reservations/:id/complete', 'STAY-09', (tx, ctx, id, reason) => completeStay(tx, ctx, id, reason));
   lifecycle('/v1/reservations/:id/no-show', 'STAY-10', (tx, ctx, id, reason) => markNoShow(tx, ctx, id, reason));
 
   // ------------------------------------------------------------ STAY-10 cancellation
   r.get('/v1/reservations/:id/cancellation-preview', {
     schema: { tags: ['STAY-10'], params: idParams },
     preHandler: requireAuth,
-  }, async (req) => ({ item: await cancellationPreview(pool(), getActor(req), req.params.id) }));
+  }, async (req) => {
+    getActor(req);
+    return { item: await cancellationPreview(pool(), ctxFromRequest(req), req.params.id) };
+  });
 
   r.post('/v1/reservations/:id/cancel', {
     schema: { tags: ['STAY-10'], params: idParams, body: z.object({ reason: z.string().min(1).max(500) }) },

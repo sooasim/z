@@ -122,8 +122,9 @@ describe('STAY-04 / PLAT-01 search', () => {
     await t.drain();
     expect(found(await search('limit=50'))).not.toContain(ids.gangnam);
     expect((await t.pool.query(`SELECT status FROM search_sync_state WHERE document_id = $1`, [ids.gangnam])).rows[0].status).toBe('DELETED');
-    // an older event arriving late must not resurrect / overwrite
-    expect(await projectProperty(t.pool, t.app.ctx, ids.gangnam, new Date(Date.now() - 3600_000))).toBe('STALE');
+    // an older event arriving late must not resurrect / overwrite: documents are always built from the current rows
+    expect(await projectProperty(t.pool, t.app.ctx, ids.gangnam, new Date(Date.now() - 3600_000))).toBe('DELETED');
+    expect(found(await search('limit=50'))).not.toContain(ids.gangnam);
     // drift: projection row lost → reconcile job rebuilds from PostgreSQL
     await t.pool.query(`DELETE FROM search_documents WHERE document_id = $1`, [ids.busan]);
     await t.pool.query(`DELETE FROM search_sync_state WHERE document_id = $1`, [ids.busan]);

@@ -19,17 +19,23 @@ import { badRequest, conflict, forbidden, notFound } from '../../platform/errors
 import { approvalKey, payeeAccount, postPayout, type MerchantOfRecord } from './ledger.js';
 import { ManualPayoutProvider, type PayoutProvider } from './payouts.js';
 
-export type SettlementStatus = 'DRAFT' | 'READY' | 'APPROVAL_PENDING' | 'APPROVED' | 'PAYOUT_PENDING' | 'PAID' | 'RECONCILED' | 'HELD';
+export type SettlementStatus = 'DRAFT' | 'READY' | 'APPROVAL_PENDING' | 'APPROVED' | 'PAYOUT_PENDING' | 'PAID' | 'RECONCILED' | 'HELD' | 'CARRIED_FORWARD';
 
+/**
+ * CARRIED_FORWARD (terminal): a statement with a negative net (the payee owes refunds made after an earlier payout).
+ * Nothing is paid; its net is pulled into the payee's next statement as a CARRY_FORWARD item. A legacy negative
+ * statement still pending approval / approved / held is closed the same way when its balance is carried.
+ */
 export const SettlementFSM = new StateMachine<SettlementStatus>('settlement', {
-  DRAFT: ['READY', 'HELD'],
-  READY: ['APPROVAL_PENDING', 'HELD'],
-  APPROVAL_PENDING: ['APPROVED', 'HELD', 'READY'],
-  APPROVED: ['PAYOUT_PENDING', 'HELD'],
+  DRAFT: ['READY', 'HELD', 'CARRIED_FORWARD'],
+  READY: ['APPROVAL_PENDING', 'HELD', 'CARRIED_FORWARD'],
+  APPROVAL_PENDING: ['APPROVED', 'HELD', 'READY', 'CARRIED_FORWARD'],
+  APPROVED: ['PAYOUT_PENDING', 'HELD', 'CARRIED_FORWARD'],
   PAYOUT_PENDING: ['PAID', 'APPROVED'],
   PAID: ['RECONCILED'],
-  HELD: ['READY'],
+  HELD: ['READY', 'CARRIED_FORWARD'],
   RECONCILED: [],
+  CARRIED_FORWARD: [],
 });
 
 type PayeeType = 'HOST' | 'GUIDE' | 'SUPPLIER';
@@ -103,6 +109,14 @@ export async function holdReason(db: Db, payeeId: string, sourceIds: string[]): 
   return null;
 }
 
+/** A kept payment of the subject that was not refunded in full (fully refunded subjects net to 0: nothing to settle). */
+const KEPT_PAYMENT = (type: string, idCol: string) =>
+  `EXISTS (SELECT 1 FROM payments p WHERE p.subject_type = '${type}' AND p.subject_id = ${idCol} AND p.status IN ('APPROVED','PARTIALLY_REFUNDED'))`;
+/** No refund of the subject is still open (requested / executing / failed): settle only what the buyer will not get back. */
+const NO_OPEN_REFUND = (type: string, idCol: string) =>
+  `NOT EXISTS (SELECT 1 FROM payments p JOIN refunds rf ON rf.payment_id = p.id
+                WHERE p.subject_type = '${type}' AND p.subject_id = ${idCol} AND rf.status IN ('REQUESTED','PROVIDER_PENDING','FAILED'))`;
+
 async function candidateItems(db: Db, periodStart: string, periodEnd: string): Promise<Item[]> {
   const cands = await q<{ source_type: string; source_id: string; payee_id: string; payee_type: PayeeType }>(
     db,
@@ -119,10 +133,27 @@ async function candidateItems(db: Db, periodStart: string, periodEnd: string): P
         SELECT 'GUIDE_BOOKING', g.id, g.guide_id, 'GUIDE'
           FROM guide_bookings g WHERE g.status IN ('COMPLETED','REVIEWED') AND g.end_at >= $1::date AND g.end_at < ($2::date + 1)
         UNION ALL
+        -- guide bookings that end CANCELLED (late traveller cancellation: the guide keeps part of the price) or DISPUTED
+        -- with no dispute open any more: payable once the booked activity would have ended; no lower bound (settled once)
+        SELECT 'GUIDE_BOOKING', g.id, g.guide_id, 'GUIDE'
+          FROM guide_bookings g
+         WHERE g.status IN ('CANCELLED','DISPUTED') AND g.end_at < least(($2::date + 1)::timestamptz, now())
+           AND NOT EXISTS (SELECT 1 FROM disputes d WHERE d.context_id = g.id AND d.status IN ('OPEN','IN_REVIEW','AWAITING_PARTY','ESCALATED'))
+           AND ${KEPT_PAYMENT('GUIDE_BOOKING', 'g.id')} AND ${NO_OPEN_REFUND('GUIDE_BOOKING', 'g.id')}
+        UNION ALL
         SELECT DISTINCT 'ORDER', o.id, s.owner_user_id, 'SUPPLIER'
           FROM orders o JOIN order_items oi ON oi.order_id = o.id JOIN suppliers s ON s.id = oi.supplier_id
          WHERE o.status IN ('FULFILLED','PARTIALLY_REFUNDED','REFUNDED') AND o.fulfilled_at IS NOT NULL
            AND o.fulfilled_at >= $1::date AND o.fulfilled_at < ($2::date + 1) AND s.owner_user_id IS NOT NULL
+        UNION ALL
+        -- paid orders cancelled inside a 0 % / partial tier: the supplier keeps (part of) the proceeds. Payable once the
+        -- last departure of the order would have started; no lower bound (settled once)
+        SELECT DISTINCT 'ORDER', o.id, s.owner_user_id, 'SUPPLIER'
+          FROM orders o JOIN order_items oi ON oi.order_id = o.id JOIN suppliers s ON s.id = oi.supplier_id
+         WHERE o.status = 'CANCELLED' AND s.owner_user_id IS NOT NULL
+           AND (SELECT max(d.starts_at) FROM order_items i2 JOIN travel_departures d ON d.id = i2.sellable_id
+                 WHERE i2.order_id = o.id AND i2.sellable_type = 'TRAVEL_DEPARTURE') < least(($2::date + 1)::timestamptz, now())
+           AND ${KEPT_PAYMENT('ORDER', 'o.id')} AND ${NO_OPEN_REFUND('ORDER', 'o.id')}
       ) c
       WHERE NOT EXISTS (SELECT 1 FROM settlement_items si WHERE si.source_type = c.source_type AND si.source_id = c.source_id AND si.payee_id = c.payee_id)`,
     [periodStart, periodEnd],
@@ -181,6 +212,34 @@ async function candidateItems(db: Db, periodStart: string, periodEnd: string): P
   return items;
 }
 
+/**
+ * Unpaid statements of the payee with a negative net whose balance has not been carried into a later statement yet:
+ * CARRIED_FORWARD ones, and legacy negative statements stuck before payout (payout refuses net <= 0).
+ */
+async function openNegativeStatements(tx: Tx, payeeId: string, payeeType: PayeeType, currency: string) {
+  const rows = await q<{ id: string; net_minor: number; status: SettlementStatus }>(
+    tx,
+    `SELECT s.id, s.net_minor, s.status FROM settlements s
+      WHERE s.payee_id = $1 AND s.payee_type = $2 AND s.currency = $3 AND s.net_minor < 0
+        AND s.status IN ('DRAFT','READY','APPROVAL_PENDING','APPROVED','HELD','CARRIED_FORWARD')
+        AND NOT EXISTS (SELECT 1 FROM settlement_items si WHERE si.source_type = 'CARRY_FORWARD' AND si.source_id = s.id)
+      ORDER BY s.created_at, s.id FOR UPDATE`,
+    [payeeId, payeeType, currency],
+  );
+  const out: Array<{ id: string; net: number; status: SettlementStatus; accountCode: string | null }> = [];
+  for (const r of rows) {
+    // the payee account that carries the debt (the most negative one of that statement)
+    const acc = await maybeOne<{ code: string }>(
+      tx,
+      `SELECT payee_account_code AS code FROM settlement_items WHERE settlement_id = $1 AND payee_account_code IS NOT NULL
+        GROUP BY payee_account_code ORDER BY sum(gross_minor - fee_minor - refund_minor), payee_account_code LIMIT 1`,
+      [r.id],
+    );
+    out.push({ id: r.id, net: r.net_minor, status: r.status, accountCode: acc?.code ?? null });
+  }
+  return out;
+}
+
 export async function generateSettlements(tx: Tx, ctx: Ctx, args: { periodStart: string; periodEnd: string }) {
   if (args.periodEnd < args.periodStart) throw badRequest('INVALID_PERIOD', 'periodEnd must be on or after periodStart');
   await tx.query(`SELECT pg_advisory_xact_lock(hashtext('finance.settlement.generate'))`);
@@ -192,8 +251,24 @@ export async function generateSettlements(tx: Tx, ctx: Ctx, args: { periodStart:
   }
   const created: SettlementRow[] = [];
   const skipped: Array<{ payeeId: string; reason: string }> = [];
-  for (const [k, list] of [...groups.entries()].sort()) {
+  for (const [k, fresh] of [...groups.entries()].sort()) {
     const [payeeId, payeeType, currency] = k.split('|') as [string, PayeeType, string];
+    // negative balances of earlier statements (never paid) are recovered from these new earnings
+    const carried = await openNegativeStatements(tx, payeeId, payeeType, currency);
+    const list: Item[] = [
+      ...fresh,
+      ...carried.map((c) => ({
+        sourceType: 'CARRY_FORWARD',
+        sourceId: c.id,
+        payeeId,
+        payeeType,
+        currency,
+        accountCode: c.accountCode ?? fresh[0].accountCode,
+        gross: 0,
+        fee: 0,
+        refund: -c.net,
+      })),
+    ];
     const gross = list.reduce((a, i) => a + i.gross, 0);
     const fee = list.reduce((a, i) => a + i.fee, 0);
     const refund = list.reduce((a, i) => a + i.refund, 0);
@@ -217,8 +292,22 @@ export async function generateSettlements(tx: Tx, ctx: Ctx, args: { periodStart:
         [s.id, i.sourceType, i.sourceId, i.gross, i.fee, i.refund, i.payeeId, i.accountCode, i.currency],
       );
     }
-    const hold = await holdReason(tx, payeeId, list.map((i) => i.sourceId));
+    for (const c of carried) {
+      // a legacy negative statement left pending / approved / held is closed now that its balance moved on
+      if (c.status !== 'CARRIED_FORWARD') {
+        await SettlementFSM.transition(tx, ctx, { table: 'settlements', id: c.id, to: 'CARRIED_FORWARD', reason: `CARRIED_INTO ${s.id}` });
+      }
+    }
     let row: SettlementRow;
+    if (s.net_minor < 0) {
+      // nothing is payable: keep the items (they are consumed) and carry the negative net into the next statement
+      row = (await SettlementFSM.transition(tx, ctx, { table: 'settlements', id: s.id, to: 'CARRIED_FORWARD', reason: 'NEGATIVE_NET_CARRIED_FORWARD' })).row;
+      await emit(tx, ctx, { aggregateType: 'settlement', aggregateId: s.id, eventType: 'settlement.carried_forward', payload: { settlementId: s.id, payeeId, payeeType, netMinor: s.net_minor, currency } });
+      await audit(tx, ctx, { action: 'settlement.carried_forward', resourceType: 'settlement', resourceId: s.id, category: 'MONEY', after: { netMinor: s.net_minor, carried: carried.map((c) => c.id) } });
+      created.push(row);
+      continue;
+    }
+    const hold = await holdReason(tx, payeeId, list.map((i) => i.sourceId));
     if (hold) {
       row = (await SettlementFSM.transition(tx, ctx, { table: 'settlements', id: s.id, to: 'HELD', reason: hold, set: { hold_reason: hold } })).row;
       await emit(tx, ctx, { aggregateType: 'settlement', aggregateId: s.id, eventType: 'settlement.held', payload: { settlementId: s.id, payeeId, reason: hold } });

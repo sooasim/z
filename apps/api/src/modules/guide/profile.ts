@@ -268,6 +268,8 @@ export async function submitQualification(db: Db, ctx: Ctx, actor: Actor, b: Qua
 export async function decideQualification(db: Db, ctx: Ctx, actor: Actor, id: string, decision: 'VERIFIED' | 'REJECTED', reason?: string) {
   const cur = await maybeOne<any>(db, `SELECT * FROM guide_qualifications WHERE id = $1 FOR UPDATE`, [id]);
   if (!cur) throw notFound('Guide qualification');
+  // four-eyes (invariant 7): the paid-guide gate rests on an independent review, never on the guide's own decision
+  if (cur.guide_id === actor.userId) throw forbidden('FOUR_EYES_REQUIRED', 'A qualification must be decided by someone other than the guide');
   if (cur.status !== 'PENDING') throw conflict('INVALID_STATE_TRANSITION', `Qualification is ${cur.status}`);
   if (decision === 'VERIFIED' && cur.valid_until && String(cur.valid_until) < new Date().toISOString().slice(0, 10)) {
     throw unprocessable('QUALIFICATION_EXPIRED', 'Qualification validity has passed; it cannot be verified');

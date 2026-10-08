@@ -27,6 +27,7 @@ export type GuideBookingStatus =
  * GUIDE-05 booking FSM (separate from Reservation/Exchange, invariant 2).
  * ACCEPTED → [PAID: PAYMENT_PENDING → CONFIRMED | PAYMENT_FAILED] | [FREE: CONFIRMED] → IN_PROGRESS → COMPLETED → REVIEWED;
  * CANCELLED / DISPUTED from any active state. ACCEPTED→CONFIRMED is only taken for free bookings (enforced in service).
+ * A traveler may cancel only before the activity starts (after that: dispute); DISPUTED is left by dispute resolution.
  */
 export const GuideBookingFsm = new StateMachine<GuideBookingStatus>('GUIDE_BOOKING', {
   ACCEPTED: ['CONFIRMED', 'PAYMENT_PENDING', 'CANCELLED'],
@@ -37,7 +38,8 @@ export const GuideBookingFsm = new StateMachine<GuideBookingStatus>('GUIDE_BOOKI
   COMPLETED: ['REVIEWED', 'DISPUTED'],
   REVIEWED: ['DISPUTED'],
   CANCELLED: [],
-  DISPUTED: [],
+  // left only through TRUST-03 dispute resolution (bookings.ts applyGuideDisputeResolution)
+  DISPUTED: ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'REVIEWED', 'CANCELLED'],
 });
 
 /** Statuses that occupy the guide's time (mirrors the DB exclusion constraint predicate). */

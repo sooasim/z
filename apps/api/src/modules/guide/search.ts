@@ -16,6 +16,17 @@ export function haversineKm(aLat: number, aLng: number, bLat: number, bLng: numb
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
+/** Same coarsening as the public profile (2 decimals ≈ 1.1 km). */
+export const coarseCoord = (v: number) => Math.round(v * 100) / 100;
+
+/**
+ * Distance from a caller-chosen origin to a guide's PUBLIC coarse point, bucketed to whole km (minimum 1). It reveals
+ * nothing beyond approxLat/approxLng; ranking uses the same value, so components/score cannot leak more either.
+ */
+export function coarseDistanceKm(fromLat: number, fromLng: number, guideLat: number, guideLng: number): number {
+  return Math.max(1, Math.round(haversineKm(fromLat, fromLng, coarseCoord(guideLat), coarseCoord(guideLng))));
+}
+
 export interface GuideMatch {
   guide: ReturnType<typeof publicProfile>;
   score: number;
@@ -117,9 +128,11 @@ export async function searchGuides(db: Db, s: SearchArgs): Promise<GuideMatch[]>
     let distanceKm: number | null = null;
     if (s.lat != null && s.lng != null) {
       if (r.lat != null && r.lng != null) {
-        distanceKm = Math.round(haversineKm(s.lat, s.lng, Number(r.lat), Number(r.lng)) * 10) / 10;
+        // computed from the public ≈1 km coarse point only (the same rounding as approxLat/approxLng) and returned in
+        // whole km, so no number of queries from chosen origins can trilaterate the guide's exact location
+        distanceKm = coarseDistanceKm(s.lat, s.lng, Number(r.lat), Number(r.lng));
         comp.distance = 1 / (1 + distanceKm / 5);
-        why.push(`About ${distanceKm} km away`);
+        why.push(distanceKm <= 1 ? 'Within about 1 km' : `About ${distanceKm} km away`);
       } else comp.distance = 0;
     }
     if (s.city && r.city) why.push(`Based in ${r.city}`);

@@ -2,7 +2,16 @@ import { z } from 'zod';
 
 export const uuid = z.uuid();
 export const idParams = z.object({ id: z.uuid() });
-export const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD');
+/** True for a real calendar day 'YYYY-MM-DD' (2026-02-30 / 2026-13-01 are rejected instead of reaching `::date`). */
+export function isCalendarDate(s: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return false;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const dt = new Date(Date.UTC(2000, mo - 1, d));
+  dt.setUTCFullYear(y);
+  return y >= 1 && mo >= 1 && mo <= 12 && dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d;
+}
+export const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD').refine(isCalendarDate, 'Not a valid calendar date');
 export const pagination = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   cursor: z.string().optional(),
@@ -22,6 +31,22 @@ export const CURSOR_COLUMN = 'created_at_cursor';
 const IDENT_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const CURSOR_TS_RE = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}(:?\d{2}){0,2})?$/;
 const CURSOR_ID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+const CURSOR_TS_PARTS_RE = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.\d{1,6})?(?:Z|[+-](\d{2})(?::?(\d{2}))?(?::?(\d{2}))?)?$/;
+
+/**
+ * The shape regex alone lets out-of-range values through (month 13, Feb 30, hour 25, year 0000, offset +99:99)
+ * and `$n::timestamptz` then raises 22007/22008/22009 (a 500). Accept only values PostgreSQL will parse.
+ */
+function isCursorTimestampInRange(s: string): boolean {
+  const m = CURSOR_TS_PARTS_RE.exec(s);
+  if (!m) return false;
+  const [y, mo, d, h, mi, se] = m.slice(1, 7).map(Number);
+  const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  const daysInMonth = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mo - 1];
+  if (y < 1 || !daysInMonth || d < 1 || d > daysInMonth || h > 23 || mi > 59 || se > 59) return false;
+  const [oh, om, os] = [m[7], m[8], m[9]].map((v) => (v === undefined ? 0 : Number(v)));
+  return oh <= 15 && om <= 59 && os <= 59;
+}
 
 /**
  * SQL select-list snippet that exposes the exact (microsecond) sort key as text, independent of the session's
@@ -58,7 +83,7 @@ export function decodeCursor(cursor?: string): { createdAt: string; id: string }
     if (!Array.isArray(parsed) || parsed.length !== 2) return null;
     const [createdAt, id] = parsed;
     if (typeof createdAt !== 'string' || typeof id !== 'string') return null;
-    if (!CURSOR_TS_RE.test(createdAt) || !CURSOR_ID_RE.test(id)) return null;
+    if (!CURSOR_TS_RE.test(createdAt) || !isCursorTimestampInRange(createdAt) || !CURSOR_ID_RE.test(id)) return null;
     return { createdAt, id };
   } catch {
     return null;

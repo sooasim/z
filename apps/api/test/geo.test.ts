@@ -41,9 +41,10 @@ describe('PLAT-02 geo adapter', () => {
   });
 
   it('fuzzes coordinates deterministically by id (~200-300m)', () => {
-    const a = fuzzCoordinates('11111111-1111-1111-1111-111111111111', 37.5, 127.0);
-    const b = fuzzCoordinates('11111111-1111-1111-1111-111111111111', 37.5, 127.0);
-    const c = fuzzCoordinates('22222222-2222-2222-2222-222222222222', 37.5, 127.0);
+    const key = 'k'.repeat(32);
+    const a = fuzzCoordinates('11111111-1111-1111-1111-111111111111', 37.5, 127.0, key);
+    const b = fuzzCoordinates('11111111-1111-1111-1111-111111111111', 37.5, 127.0, key);
+    const c = fuzzCoordinates('22222222-2222-2222-2222-222222222222', 37.5, 127.0, key);
     expect(a).toEqual(b);
     expect(a).not.toEqual(c);
     for (const p of [a, c]) {
@@ -51,6 +52,9 @@ describe('PLAT-02 geo adapter', () => {
       expect(m).toBeGreaterThan(150);
       expect(m).toBeLessThan(350);
     }
+    // the offset depends on the server secret: another key gives another point, and no key is refused
+    expect(fuzzCoordinates('11111111-1111-1111-1111-111111111111', 37.5, 127.0, 'x'.repeat(32))).not.toEqual(a);
+    expect(() => fuzzCoordinates('11111111-1111-1111-1111-111111111111', 37.5, 127.0, '')).toThrow();
   });
 
   it('caches provider results and falls back to STATIC when the provider fails', async () => {

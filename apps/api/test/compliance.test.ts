@@ -135,7 +135,11 @@ describe('STAY-03 compliance gate', () => {
     const pub = await call(t, host, 'POST', `/v1/properties/${id}/publish`);
     expect(pub.status).toBe(200);
     expect(pub.body.item).toMatchObject({ status: 'PUBLISHED', paidBookingEnabled: true });
-    await expect(assertPaidBookingAllowed(t.pool, id)).resolves.toBeUndefined();
+    // the rule restricts guests (foreigners_only): the gate needs the guest and fails closed without one
+    await expect(assertPaidBookingAllowed(t.pool, id)).rejects.toMatchObject({ status: 403, code: 'GUEST_NOT_ELIGIBLE' });
+    const foreigner = await createUser(t, { verified: true });
+    await t.pool.query(`INSERT INTO user_profiles(user_id, country) VALUES ($1,'JP')`, [foreigner.id]);
+    await expect(assertPaidBookingAllowed(t.pool, id, { guestId: foreigner.id })).resolves.toBeUndefined();
 
     // permit validity ends → daily job expires it, re-evaluates and switches paid booking off
     expect(registeredJobs().map((j) => j.name)).toContain('compliance.permit-expiry');
@@ -157,7 +161,7 @@ describe('STAY-03 compliance gate', () => {
     expect((await evaluatePropertyCompliance(t.pool, hanok, { persist: false })).reasons).toEqual(['NO_APPROVED_RULE']);
     // a future-dated rule does not apply yet
     await approvedRule({ ruleKey: 'kr49.future', jurisdiction: 'KR-49', requiredPermitTypes: [], effectiveFrom: day(30) });
-    const jeju = await rentalListing({ region: 'KR-49', city: 'Jeju' });
+    const jeju = await rentalListing({ region: 'KR-49', city: 'Jeju', lat: 33.4996, lng: 126.5312, address: { line1: '제주 제주시 어딘가 1', city: 'Jeju', publicAreaLabel: '제주시' } });
     expect((await evaluatePropertyCompliance(t.pool, jeju, { persist: false })).decision).toBe('REVIEW');
     // a rule with no required permits for the jurisdiction allows paid booking
     await approvedRule({ ruleKey: 'kr49.now', jurisdiction: 'KR-49', requiredPermitTypes: [], effectiveFrom: day(-1) });
@@ -165,7 +169,7 @@ describe('STAY-03 compliance gate', () => {
     expect(r.decision).toBe('ALLOW');
     expect(r.rulesEvaluated[0]).toMatch(/^kr49\.now@/);
     // exchange-only listing: publishable but never paid-bookable
-    const ex = await rentalListing({ rentalEnabled: false, exchangeEnabled: true, region: 'KR-26' });
+    const ex = await rentalListing({ rentalEnabled: false, exchangeEnabled: true, region: 'KR-26', city: 'Busan', lat: 35.1587, lng: 129.1604, address: { line1: '부산 해운대구 어딘가 1', city: 'Busan' } });
     expect((await evaluatePropertyCompliance(t.pool, ex, { persist: false })).reasons).toEqual(['NO_PAID_BOOKING']);
     await expect(assertPaidBookingAllowed(t.pool, ex)).rejects.toMatchObject({ code: 'COMPLIANCE_BLOCKED' });
   });

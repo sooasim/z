@@ -1,5 +1,8 @@
-import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
+import { lookup as dnsLookup } from 'node:dns/promises';
+import http from 'node:http';
+import https from 'node:https';
+import { BlockList, isIP, type LookupFunction } from 'node:net';
+import { isCalendarDate } from '../../platform/http.js';
 
 /** INT-01 iCalendar (RFC 5545) helpers — pure parse/build + an SSRF-guarded fetcher. */
 
@@ -21,21 +24,84 @@ const addDays = (d: string, n: number) => {
   return x.toISOString().slice(0, 10);
 };
 
-/** DATE or DATE-TIME value → calendar date in the property's timezone (UTC times shifted by tzOffsetHours). */
-function toDate(params: string, value: string, tzOffsetHours: number): string | null {
+// ---------------------------------------------------------------- time zones
+
+export const DEFAULT_ICAL_TIME_ZONE = 'Asia/Seoul';
+
+const dayFormatters = new Map<string, Intl.DateTimeFormat>();
+const partFormatters = new Map<string, Intl.DateTimeFormat>();
+
+/** True for an IANA zone name the runtime knows ('America/New_York'); false for garbage / Windows zone names. */
+export function isValidTimeZone(zone: string | null | undefined): zone is string {
+  if (!zone || zone.length > 64) return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Calendar date (YYYY-MM-DD) of a UTC instant in `zone` (DST-aware). */
+function localDateIn(utcMs: number, zone: string): string {
+  let f = dayFormatters.get(zone);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' });
+    dayFormatters.set(zone, f);
+  }
+  return f.format(new Date(utcMs));
+}
+
+/** Offset (ms) of `zone` from UTC at the instant `utcMs`. */
+function zoneOffsetMs(zone: string, utcMs: number): number {
+  let f = partFormatters.get(zone);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-US', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    partFormatters.set(zone, f);
+  }
+  const p: Record<string, number> = {};
+  for (const part of f.formatToParts(new Date(utcMs))) if (part.type !== 'literal') p[part.type] = Number(part.value);
+  return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(utcMs / 1000) * 1000;
+}
+
+/** UTC instant of a wall-clock time in `zone` (two passes settle DST transitions). */
+function wallToUtc(wallMs: number, zone: string): number {
+  const first = wallMs - zoneOffsetMs(zone, wallMs);
+  return wallMs - zoneOffsetMs(zone, first);
+}
+
+interface TzOpts {
+  /** IANA zone of the property: UTC / TZID instants are converted to this zone's calendar date. */
+  zone: string | null;
+  /** legacy fixed offset, used only when no zone is given */
+  offsetHours: number;
+}
+
+/**
+ * DATE or DATE-TIME value → calendar date in the property's time zone. Returns null for malformed values and
+ * for impossible calendar dates/times (20270230, T250000), so one corrupt event is skipped instead of reaching
+ * a `::date` cast and aborting the whole reconcile.
+ */
+function toDate(params: string, value: string, tz: TzOpts): string | null {
   const m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?$/.exec(value.trim());
   if (!m) return null;
   const [, y, mo, d, hh, mi, ss, z] = m;
-  if (!hh || /VALUE=DATE(?!-)/i.test(params)) return `${y}-${mo}-${d}`;
-  if (z) {
-    const utc = Date.UTC(+y, +mo - 1, +d, +hh, +mi, +ss) + tzOffsetHours * 3600_000;
-    return new Date(utc).toISOString().slice(0, 10);
-  }
-  return `${y}-${mo}-${d}`; // floating / TZID local time: use the local date
+  const ymd = `${y}-${mo}-${d}`;
+  if (!isCalendarDate(ymd)) return null;
+  if (!hh || /VALUE=DATE(?!-)/i.test(params)) return ymd;
+  if (+hh > 23 || +mi > 59 || +ss > 60) return null;
+  const wall = Date.UTC(+y, +mo - 1, +d, +hh, +mi, +ss);
+  if (z) return tz.zone ? localDateIn(wall, tz.zone) : new Date(wall + tz.offsetHours * 3600_000).toISOString().slice(0, 10);
+  // TZID=<zone> local time: re-express in the property's zone when the two differ (e.g. an OTA exporting in UTC+0)
+  const tzid = /(?:^|;)TZID=("?)([^";:]+)\1/i.exec(params)?.[2]?.trim();
+  if (tz.zone && tzid && tzid !== tz.zone && isValidTimeZone(tzid)) return localDateIn(wallToUtc(wall, tzid), tz.zone);
+  return ymd; // floating / same-zone local time: use the local date
 }
 
-export function parseIcs(text: string, opts: { tzOffsetHours?: number; maxEvents?: number } = {}): IcsEvent[] {
-  const tz = opts.tzOffsetHours ?? 9; // Asia/Seoul
+export function parseIcs(text: string, opts: { timeZone?: string | null; tzOffsetHours?: number; maxEvents?: number } = {}): IcsEvent[] {
+  // the property's IANA zone wins; a bare legacy offset is honoured only when no zone is given; default Asia/Seoul
+  const zone = isValidTimeZone(opts.timeZone) ? opts.timeZone : opts.tzOffsetHours === undefined ? DEFAULT_ICAL_TIME_ZONE : null;
+  const tz: TzOpts = { zone, offsetHours: opts.tzOffsetHours ?? 9 };
   const events: IcsEvent[] = [];
   let cur: Record<string, { params: string; value: string }> | null = null;
   for (const line of unfold(text)) {
@@ -87,14 +153,55 @@ export function buildIcs(calendarName: string, ranges: Array<{ uid: string; star
 
 export type IcalFetcher = (url: string) => Promise<string>;
 
+/**
+ * Every non-public range. BlockList matches IPv4-mapped IPv6 in ANY notation (::ffff:7f00:1, ::ffff:127.0.0.1)
+ * against the IPv4 rules, so the WHATWG URL parser's hex rewrite of `[::ffff:127.0.0.1]` cannot slip through.
+ */
+const BLOCKED = (() => {
+  const b = new BlockList();
+  const v4: Array<[string, number]> = [
+    ['0.0.0.0', 8], // "this" network
+    ['10.0.0.0', 8],
+    ['100.64.0.0', 10], // CGNAT
+    ['127.0.0.0', 8],
+    ['169.254.0.0', 16], // link-local / cloud metadata
+    ['172.16.0.0', 12],
+    ['192.0.0.0', 24], // IETF protocol assignments
+    ['192.0.2.0', 24], // TEST-NET-1
+    ['192.88.99.0', 24], // 6to4 relay anycast
+    ['192.168.0.0', 16],
+    ['198.18.0.0', 15], // benchmarking
+    ['198.51.100.0', 24], // TEST-NET-2
+    ['203.0.113.0', 24], // TEST-NET-3
+    ['224.0.0.0', 4], // multicast
+    ['240.0.0.0', 4], // reserved + broadcast
+  ];
+  for (const [a, p] of v4) b.addSubnet(a, p, 'ipv4');
+  const v6: Array<[string, number]> = [
+    ['::', 96], // unspecified, loopback, deprecated IPv4-compatible
+    ['::ffff:0:0:0', 96], // IPv4-translated (SIIT)
+    ['64:ff9b::', 96], // NAT64 well-known prefix (embeds any IPv4, internal ones included)
+    ['64:ff9b:1::', 48], // NAT64 local-use
+    ['100::', 64], // discard-only
+    ['2001::', 23], // IETF protocol assignments (Teredo, ORCHID, benchmarking)
+    ['2001:db8::', 32], // documentation
+    ['2002::', 16], // 6to4 (embeds any IPv4)
+    ['fc00::', 7], // unique local
+    ['fe80::', 10], // link-local
+    ['fec0::', 10], // site-local (deprecated)
+    ['ff00::', 8], // multicast
+  ];
+  for (const [a, p] of v6) b.addSubnet(a, p, 'ipv6');
+  return b;
+})();
+
+/** True when `ip` is not a public unicast address (fails closed for anything that is not an IP literal). */
 export function isPrivateAddress(ip: string): boolean {
-  if (isIP(ip) === 4) {
-    const [a, b] = ip.split('.').map(Number);
-    return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
-  }
-  const v = ip.toLowerCase();
-  if (v.startsWith('::ffff:')) return isPrivateAddress(v.slice(7));
-  return v === '::1' || v === '::' || v.startsWith('fc') || v.startsWith('fd') || v.startsWith('fe80');
+  const v = ip.trim().replace(/^\[|\]$/g, '').replace(/%.*$/, ''); // brackets, IPv6 zone id
+  const family = isIP(v);
+  if (family === 4) return BLOCKED.check(v, 'ipv4');
+  if (family === 6) return BLOCKED.check(v, 'ipv6');
+  return true;
 }
 
 export function assertIcalUrl(raw: string, allowHttp: boolean): URL {
@@ -109,20 +216,109 @@ export function assertIcalUrl(raw: string, allowHttp: boolean): URL {
   return u;
 }
 
-export function defaultIcalFetcher(opts: { allowHttp: boolean; maxBytes?: number; timeoutMs?: number }): IcalFetcher {
+export interface IcalFetcherOptions {
+  allowHttp: boolean;
+  maxBytes?: number;
+  timeoutMs?: number;
+  /** DNS resolution (default: the system resolver, all addresses). Called once per connection. */
+  resolve?: (hostname: string) => Promise<string[]>;
+  /** Address policy (default: isPrivateAddress). */
+  isBlocked?: (ip: string) => boolean;
+}
+
+const privateAddressError = () => Object.assign(new Error('iCal host resolves to a private address'), { code: 'ICAL_PRIVATE_ADDRESS' });
+
+/**
+ * Connection-time DNS hook: resolves ONCE, rejects the connection if any address is non-public and hands the
+ * socket exactly the addresses that were checked. The check and the connect therefore use the same IP — a
+ * rebinding name (TTL 0, public answer for a check and an internal answer for the connect) has no second lookup.
+ */
+export function pinnedLookup(resolve: (hostname: string) => Promise<string[]>, isBlocked: (ip: string) => boolean): LookupFunction {
+  return ((hostname: string, options: any, callback: any) => {
+    const cb = typeof options === 'function' ? options : callback;
+    const o = typeof options === 'function' ? {} : (options ?? {});
+    resolve(hostname)
+      .then((addrs) => {
+        if (!addrs.length) throw Object.assign(new Error(`iCal host ${hostname} could not be resolved`), { code: 'ENOTFOUND' });
+        if (addrs.some((a) => isBlocked(a))) throw privateAddressError();
+        const wanted = o.family === 4 || o.family === 'IPv4' ? 4 : o.family === 6 || o.family === 'IPv6' ? 6 : 0;
+        const entries = addrs.map((address) => ({ address, family: isIP(address) })).filter((e) => e.family !== 0 && (!wanted || e.family === wanted));
+        if (!entries.length) throw Object.assign(new Error(`iCal host ${hostname} has no usable address`), { code: 'ENOTFOUND' });
+        if (o.all) cb(null, entries);
+        else cb(null, entries[0].address, entries[0].family);
+      })
+      .catch((err) => cb(err));
+  }) as LookupFunction;
+}
+
+const systemResolve = async (hostname: string) => (await dnsLookup(hostname, { all: true, verbatim: true })).map((a) => a.address);
+
+export function defaultIcalFetcher(opts: IcalFetcherOptions): IcalFetcher {
   const maxBytes = opts.maxBytes ?? 2 * 1024 * 1024;
+  const timeoutMs = opts.timeoutMs ?? 10_000;
+  const isBlocked = opts.isBlocked ?? isPrivateAddress;
+  const lookup = pinnedLookup(opts.resolve ?? systemResolve, isBlocked);
   return async (raw) => {
     const u = assertIcalUrl(raw, opts.allowHttp);
     const host = u.hostname.replace(/^\[|\]$/g, '');
-    const addrs = isIP(host) ? [{ address: host }] : await lookup(host, { all: true });
-    if (!addrs.length || addrs.some((a) => isPrivateAddress(a.address))) throw new Error('iCal host resolves to a private address');
-    const res = await fetch(u, { redirect: 'error', signal: AbortSignal.timeout(opts.timeoutMs ?? 10_000), headers: { accept: 'text/calendar' } });
-    if (!res.ok) throw new Error(`iCal fetch failed with HTTP ${res.status}`);
-    const len = Number(res.headers.get('content-length') ?? 0);
-    if (len > maxBytes) throw new Error('iCal feed too large');
-    const text = await res.text();
-    if (text.length > maxBytes) throw new Error('iCal feed too large');
-    if (!/BEGIN:VCALENDAR/i.test(text)) throw new Error('response is not an iCalendar feed');
-    return text;
+    // IP literals never reach a lookup: validate them here (any notation; the URL parser already normalised them)
+    if (isIP(host) && isBlocked(host)) throw privateAddressError();
+    return getText(u, host, { lookup, maxBytes, timeoutMs });
   };
+}
+
+/** One GET without redirects, keep-alive or connection reuse; the body is streamed and capped at maxBytes. */
+function getText(u: URL, host: string, o: { lookup: LookupFunction; maxBytes: number; timeoutMs: number }): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    let settled = false;
+    const finish = (err: Error | null, text?: string) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (err) {
+        req.destroy();
+        reject(err);
+      } else resolve(text!);
+    };
+    const mod = u.protocol === 'https:' ? https : http;
+    const req = mod.request(
+      {
+        protocol: u.protocol,
+        hostname: host,
+        port: u.port || undefined,
+        path: `${u.pathname}${u.search}`,
+        method: 'GET',
+        headers: { accept: 'text/calendar', 'user-agent': 'JETPOOL-iCal/1.0' },
+        lookup: o.lookup,
+        agent: false,
+        ...(u.protocol === 'https:' && !isIP(host) ? { servername: host } : {}),
+      },
+      (res) => {
+        const status = res.statusCode ?? 0;
+        if (status < 200 || status >= 300) {
+          res.resume();
+          return finish(new Error(`iCal fetch failed with HTTP ${status}`)); // 3xx included: redirects are never followed
+        }
+        if (Number(res.headers['content-length'] ?? 0) > o.maxBytes) return finish(new Error('iCal feed too large'));
+        const chunks: Buffer[] = [];
+        let size = 0;
+        res.on('data', (c: Buffer) => {
+          size += c.length;
+          if (size > o.maxBytes) return finish(new Error('iCal feed too large'));
+          chunks.push(c);
+        });
+        res.on('error', (err) => finish(err));
+        res.on('aborted', () => finish(new Error('iCal fetch aborted')));
+        res.on('end', () => {
+          const text = Buffer.concat(chunks).toString('utf8');
+          if (!/BEGIN:VCALENDAR/i.test(text)) return finish(new Error('response is not an iCalendar feed'));
+          finish(null, text);
+        });
+      },
+    );
+    // overall deadline (connect + headers + body): a slow-drip feed cannot hold the sync open
+    const timer = setTimeout(() => finish(new Error('iCal fetch timed out')), o.timeoutMs);
+    req.on('error', (err) => finish(err));
+    req.end();
+  });
 }

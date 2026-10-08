@@ -5,13 +5,17 @@ import { getActor, requireAuth } from '../../platform/auth.js';
 import { ctxFromRequest } from '../../platform/context.js';
 import { withTx } from '../../platform/db.js';
 import { assertEnabled } from '../../platform/flags.js';
+import { AppError } from '../../platform/errors.js';
 import { runTravelAssistant } from './service.js';
 import { getRecommendations } from './recommendations.js';
+
+export const MAX_CONCURRENT_ASSISTANT_PER_USER = 3;
 
 /** AI-01 Travel assistant + AI-02 Recommendations. */
 export default async function aiModule(app: FastifyInstance) {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const pool = app.ctx.pool;
+  const inFlight = new Map<string, number>();
 
   r.post(
     '/v1/ai/travel-assistant',
@@ -24,7 +28,18 @@ export default async function aiModule(app: FastifyInstance) {
       const actor = getActor(req);
       await assertEnabled(pool, 'ai.assistant', { userId: actor.userId, roles: actor.roles });
       const ctx = ctxFromRequest(req);
-      return withTx(pool, (tx) => runTravelAssistant(tx, ctx, { userId: actor.userId, message: req.body.message, sessionId: req.body.sessionId }));
+      // bounded per-user concurrency: each request waits on up to two LLM calls (this instance)
+      const running = inFlight.get(actor.userId) ?? 0;
+      if (running >= MAX_CONCURRENT_ASSISTANT_PER_USER) throw new AppError(429, 'ASSISTANT_BUSY', 'Please wait for your previous assistant requests to finish');
+      inFlight.set(actor.userId, running + 1);
+      try {
+        // not wrapped in withTx: runTravelAssistant opens its own short transaction after the LLM calls
+        return await runTravelAssistant(pool, ctx, { userId: actor.userId, message: req.body.message, sessionId: req.body.sessionId });
+      } finally {
+        const n = (inFlight.get(actor.userId) ?? 1) - 1;
+        if (n > 0) inFlight.set(actor.userId, n);
+        else inFlight.delete(actor.userId);
+      }
     },
   );
 

@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import type { Ctx } from '../../platform/context.js';
+import type { AppContext, Ctx } from '../../platform/context.js';
 import type { Actor } from '../../platform/auth.js';
 import { isStaff } from '../../platform/auth.js';
 import type { Db, Tx } from '../../platform/db.js';
@@ -9,9 +9,9 @@ import { emit } from '../../platform/outbox.js';
 import { audit } from '../../platform/audit.js';
 import { StateMachine } from '../../platform/fsm.js';
 import { assertHostCanPublish } from '../hosts/service.js';
-import { evaluatePropertyCompliance, syncPaidBooking, type ComplianceResult } from '../compliance/service.js';
+import { evaluatePropertyCompliance, hostStandingBlockers, syncPaidBooking, type ComplianceResult } from '../compliance/service.js';
 import { listPropertyMedia, toPropertyMediaDto } from '../media/service.js';
-import { geocode, publicCoordinates } from '../geo/service.js';
+import { geocode, geocoderProvider, publicCoordinates, reverseGeocode, withDeadline, type GeoResult } from '../geo/service.js';
 
 export type PropertyStatus = 'DRAFT' | 'IN_REVIEW' | 'PUBLISHED' | 'UNLISTED' | 'BLOCKED' | 'ARCHIVED';
 export const propertyFsm = new StateMachine<PropertyStatus>('PROPERTY', {
@@ -50,8 +50,57 @@ const COLUMNS: Record<string, string> = {
   cleaningFeeMinor: 'cleaning_fee_minor', currency: 'currency', minNights: 'min_nights', maxNights: 'max_nights',
   checkInTime: 'check_in_time', checkOutTime: 'check_out_time',
 };
-/** fields whose change requires a fresh compliance evaluation */
-const COMPLIANCE_FIELDS = new Set(['rentalEnabled', 'exchangeEnabled', 'propertyType', 'roomType', 'country', 'region']);
+/**
+ * Everything a compliance decision depends on: listing modes, type, declared + geocoded jurisdiction and the
+ * LOCATION (address and coordinates — a permit is verified for one place). Compared before/after every edit of a
+ * live listing; any change re-evaluates compliance (and so re-checks permit bindings) instead of trusting a
+ * hand-maintained field list.
+ */
+const COMPLIANCE_SNAPSHOT_SQL = `SELECT p.rental_enabled, p.exchange_enabled, p.property_type, p.room_type, p.country, p.region, p.city, p.lat, p.lng,
+       p.geo_jurisdictions, a.line1, a.line2, a.postal_code, a.city AS a_city, a.region AS a_region, a.country AS a_country
+  FROM properties p LEFT JOIN property_addresses a ON a.property_id = p.id WHERE p.id = $1`;
+const complianceSnapshot = async (db: Db, id: string) => JSON.stringify(await maybeOne(db, COMPLIANCE_SNAPSHOT_SQL, [id]));
+
+// --- input validation ---------------------------------------------------------------------------
+
+/** ISO 3166-2 subdivisions of KR (incl. the 2023/2024 Gangwon/Jeonbuk special self-governing province codes). */
+export const KR_SUBDIVISIONS = new Set([
+  'KR-11', 'KR-26', 'KR-27', 'KR-28', 'KR-29', 'KR-30', 'KR-31', 'KR-41', 'KR-42', 'KR-43', 'KR-44', 'KR-45', 'KR-46', 'KR-47', 'KR-48',
+  'KR-49', 'KR-50', 'KR-51', 'KR-52',
+]);
+
+/**
+ * Normalise a declared region to an ISO 3166-2 code of the listing's country ('11' / 'kr-11' → 'KR-11').
+ * Free text and other countries' codes are refused: the region selects compliance rules (invariant 7).
+ */
+export function normalizeRegion(region: string | null | undefined, country: string): string | null {
+  if (region === null || region === undefined || region.trim() === '') return null;
+  const c = country.trim().toUpperCase();
+  let r = region.trim().toUpperCase();
+  if (/^[A-Z0-9]{1,3}$/.test(r)) r = `${c}-${r}`;
+  if (!/^[A-Z]{2}-[A-Z0-9]{1,3}$/.test(r)) throw badRequest('INVALID_REGION', `region must be an ISO 3166-2 subdivision code such as ${c}-11`, { region });
+  if (!r.startsWith(`${c}-`)) throw unprocessable('REGION_COUNTRY_MISMATCH', `region ${r} is not a subdivision of ${c}`, { region: r, country: c });
+  if (c === 'KR' && !KR_SUBDIVISIONS.has(r)) throw badRequest('INVALID_REGION', `${r} is not a Korean ISO 3166-2 subdivision`, { region: r });
+  return r;
+}
+
+/**
+ * IANA time zone known to BOTH the JS runtime and PostgreSQL (SQL does `now() AT TIME ZONE p.timezone`; an
+ * unknown zone fails every query that touches the row — e.g. the platform-wide stay auto-completion).
+ * Returns the canonical name.
+ */
+export async function assertValidTimezone(db: Db, tz: string): Promise<string> {
+  let canonical: string;
+  try {
+    canonical = new Intl.DateTimeFormat('en-US', { timeZone: tz }).resolvedOptions().timeZone;
+  } catch {
+    throw badRequest('INVALID_TIMEZONE', 'Unknown IANA timezone', { timezone: tz });
+  }
+  for (const name of new Set([tz, canonical])) {
+    if (await maybeOne(db, `SELECT 1 FROM pg_timezone_names WHERE name = $1`, [name])) return name;
+  }
+  throw badRequest('INVALID_TIMEZONE', 'Unknown IANA timezone', { timezone: tz });
+}
 
 // --- slug ---------------------------------------------------------------------------------------
 
@@ -214,7 +263,7 @@ export async function publicView(db: Db, p: any) {
 
 // --- writes -------------------------------------------------------------------------------------
 
-async function applyRelated(tx: Tx, ctx: Ctx, id: string, input: PropertyInput) {
+async function applyRelated(tx: Tx, id: string, input: PropertyInput) {
   if (input.address !== undefined) {
     if (input.address === null) await tx.query(`DELETE FROM property_addresses WHERE property_id = $1`, [id]);
     else {
@@ -249,21 +298,165 @@ async function applyRelated(tx: Tx, ctx: Ctx, id: string, input: PropertyInput) 
     }
     await tx.query(`UPDATE properties SET cancellation_policy_id = $2 WHERE id = $1`, [id, policyId]);
   }
-  // Fill region (ISO subdivision) / coordinates from the geocoder when missing. Coordinates are only filled from
-  // address-precision providers: a city centroid must never masquerade as the listing location.
-  const p = await maybeOne(tx, `SELECT p.lat, p.lng, p.region, p.city, a.line1, a.city AS a_city FROM properties p LEFT JOIN property_addresses a ON a.property_id = p.id WHERE p.id = $1`, [id]);
-  if (p && (p.region === null || p.lat === null) && (p.line1 || p.city || p.a_city)) {
-    const query = [p.a_city ?? p.city, p.line1].filter(Boolean).join(' ');
-    const [hit] = await geocode(ctx.app, query, { limit: 1 }).catch(() => []);
-    if (hit) {
-      const exact = hit.precision === 'ADDRESS' || hit.precision === 'POI';
-      await tx.query(
-        `UPDATE properties SET region = coalesce(region, $2), lat = CASE WHEN lat IS NULL AND $5 THEN $3 ELSE lat END,
-            lng = CASE WHEN lng IS NULL AND $5 THEN $4 ELSE lng END WHERE id = $1`,
-        [id, hit.region ?? null, hit.lat, hit.lng, exact],
-      );
+}
+
+// --- geocoding (runs BEFORE the write transaction: never hold a row lock / pooled connection across HTTP) --------
+
+/** The location inputs geocoding depends on. */
+interface LocationBasis {
+  country: string; region: string | null; city: string | null; lat: number | null; lng: number | null;
+  line1: string | null; aCity: string | null; aCountry: string | null;
+}
+const LOCATION_SQL = `SELECT p.host_id, p.status, p.country, p.region, p.city, p.lat, p.lng, p.geo_jurisdictions,
+       a.line1, a.city AS a_city, a.country AS a_country
+  FROM properties p LEFT JOIN property_addresses a ON a.property_id = p.id WHERE p.id = $1`;
+const coord = (v: unknown) => (v === null || v === undefined ? null : Math.round(Number(v) * 1e6) / 1e6); // numeric(9,6)
+const basisOf = (r: any): LocationBasis => ({
+  country: String(r.country ?? 'KR').trim().toUpperCase(), region: r.region ?? null, city: r.city ?? null, lat: coord(r.lat), lng: coord(r.lng),
+  line1: r.line1 ?? null, aCity: r.a_city ?? null, aCountry: r.a_country ? String(r.a_country).trim().toUpperCase() : null,
+});
+function mergeBasis(cur: LocationBasis | null, input: PropertyInput): LocationBasis {
+  const b: LocationBasis = cur ? { ...cur } : { country: 'KR', region: null, city: null, lat: null, lng: null, line1: null, aCity: null, aCountry: null };
+  if (input.country !== undefined) b.country = input.country.toUpperCase();
+  if (input.region !== undefined) b.region = input.region ?? null;
+  if (input.city !== undefined) b.city = input.city ?? null;
+  if (input.lat !== undefined) b.lat = coord(input.lat);
+  if (input.lng !== undefined) b.lng = coord(input.lng);
+  if (input.address !== undefined) {
+    b.line1 = input.address?.line1 ?? null;
+    b.aCity = input.address?.city ?? null;
+    b.aCountry = input.address ? (input.address.country ?? 'KR').toUpperCase() : null;
+  }
+  return b;
+}
+/** Fields the server-derived jurisdiction depends on (the DECLARED region is deliberately not one of them). */
+const placeKey = (b: LocationBasis) => JSON.stringify([b.country, b.city, b.lat, b.lng, b.line1, b.aCity, b.aCountry]);
+const basisKey = (b: LocationBasis) => JSON.stringify([placeKey(b), b.region]);
+
+interface GeoPlan {
+  basis: LocationBasis;
+  fill: { region: string | null; lat: number | null; lng: number | null } | null;
+  /**
+   * server-derived jurisdiction codes: undefined = leave the stored value, null = reset to "not computed" (the
+   * provider was degraded; the backfill job retries), array = store.
+   */
+  jurisdictions?: string[] | null;
+}
+
+/** Internal geocoding budget: queue wait (Nominatim) and an overall deadline per provider call. */
+const GEO_MAX_WAIT_MS = 5000;
+const GEO_DEADLINE_MS = 6000;
+
+const exactHit = (h: GeoResult) => h.precision === 'ADDRESS' || h.precision === 'POI';
+/** Precise enough to place a listing in an ISO subdivision (STATIC city centroids + radius are not). */
+const trustedForJurisdiction = (h: GeoResult, kind: 'forward' | 'reverse') =>
+  kind === 'forward' ? exactHit(h) : h.provider !== 'STATIC' || h.precision !== 'CITY';
+
+/**
+ * Work out geocoder fills (missing region / address-precision coordinates) and the server-derived jurisdiction of
+ * a listing location. Pure I/O against the geocoder — called OUTSIDE any DB transaction.
+ */
+async function planGeo(app: AppContext, basis: LocationBasis, recomputeJurisdictions: boolean): Promise<GeoPlan | null> {
+  const text = [basis.aCity ?? basis.city, basis.line1].filter(Boolean).join(' ');
+  const needFill = (basis.region === null || basis.lat === null) && !!text;
+  if (!needFill && !recomputeJurisdictions) return null;
+  const provider = geocoderProvider(app);
+  // a timeout, or a STATIC fallback answer while a real provider is configured, is not authoritative
+  let degraded = false;
+  const observe = <T extends GeoResult | null | undefined>(r: { ok: true; value: T } | { ok: false }): T | undefined => {
+    if (!r.ok) {
+      degraded = true;
+      return undefined;
+    }
+    if (r.value && provider !== 'STATIC' && r.value.provider === 'STATIC') degraded = true;
+    return r.value;
+  };
+  let hit: GeoResult | undefined;
+  if (text && (needFill || basis.line1)) {
+    const res = await withDeadline(geocode(app, text, { limit: 1, maxWaitMs: GEO_MAX_WAIT_MS }), GEO_DEADLINE_MS);
+    hit = observe(res.ok ? { ok: true, value: res.value[0] } : res) ?? undefined;
+  }
+  const regionOk = (h: GeoResult) => !!h.region && h.region.toUpperCase().startsWith(`${basis.country}-`);
+  const fill = needFill && hit
+    ? {
+        region: basis.region === null && regionOk(hit) ? hit.region!.toUpperCase() : null,
+        lat: basis.lat === null && exactHit(hit) ? coord(hit.lat) : null,
+        lng: basis.lat === null && exactHit(hit) ? coord(hit.lng) : null,
+      }
+    : null;
+  if (!recomputeJurisdictions) return { basis, fill };
+  const codes = new Set<string>();
+  const add = (h: GeoResult | null | undefined, kind: 'forward' | 'reverse') => {
+    if (!h || !trustedForJurisdiction(h, kind)) return;
+    const c = String(h.country ?? '').toUpperCase();
+    if (h.region && /^[A-Z]{2}-[A-Z0-9]{1,3}$/.test(h.region.toUpperCase())) codes.add(h.region.toUpperCase());
+    else if (/^[A-Z]{2}$/.test(c)) codes.add(c);
+  };
+  add(hit, 'forward');
+  const lat = basis.lat ?? fill?.lat ?? null;
+  const lng = basis.lng ?? fill?.lng ?? null;
+  if (lat !== null && lng !== null) add(observe(await withDeadline(reverseGeocode(app, lat, lng, { maxWaitMs: GEO_MAX_WAIT_MS }), GEO_DEADLINE_MS)), 'reverse');
+  return { basis, fill, jurisdictions: degraded ? null : [...codes].sort() };
+}
+
+/** Apply a geocoding plan inside the write tx, but only if the location is still the one that was geocoded. */
+async function applyGeoPlan(tx: Tx, id: string, plan: GeoPlan | null) {
+  if (!plan) return;
+  const cur = await maybeOne(tx, LOCATION_SQL, [id]);
+  if (basisKey(basisOf(cur)) !== basisKey(plan.basis)) {
+    throw conflict('CONCURRENT_MODIFICATION', 'The listing location changed concurrently; retry');
+  }
+  await tx.query(
+    `UPDATE properties SET region = coalesce(region, $2),
+        lat = CASE WHEN lat IS NULL AND $3::numeric IS NOT NULL THEN $3::numeric ELSE lat END,
+        lng = CASE WHEN lng IS NULL AND $4::numeric IS NOT NULL THEN $4::numeric ELSE lng END,
+        geo_jurisdictions = CASE WHEN $5 THEN $6::text[] ELSE geo_jurisdictions END
+      WHERE id = $1`,
+    [id, plan.fill?.region ?? null, plan.fill?.lat ?? null, plan.fill?.lng ?? null, plan.jurisdictions !== undefined, plan.jurisdictions ?? null],
+  );
+}
+
+/** Validate + normalise the host input that needs the DB or the merged state (region, timezone). */
+async function normalizeInput(db: Db, input: PropertyInput, cur: LocationBasis | null): Promise<PropertyInput> {
+  const out: PropertyInput = { ...input };
+  const country = (input.country ?? cur?.country ?? 'KR').toUpperCase();
+  if (input.region !== undefined) out.region = normalizeRegion(input.region, country);
+  else if (input.country !== undefined && cur?.region) normalizeRegion(cur.region, country); // keeps region ⊂ country
+  if (input.timezone !== undefined) out.timezone = await assertValidTimezone(db, input.timezone);
+  return out;
+}
+
+/**
+ * Job: compute geo_jurisdictions for listings that predate it (migration 0960) or whose geocoding produced nothing
+ * yet, outside any transaction; live listings are then re-synced so the union jurisdiction takes effect.
+ */
+export async function backfillGeoJurisdictions(ctx: Ctx, limit = 50): Promise<number> {
+  const rows = await q<{ id: string }>(
+    ctx.app.pool,
+    `SELECT p.id FROM properties p
+      WHERE p.geo_jurisdictions IS NULL AND p.status <> 'ARCHIVED'
+        AND (p.lat IS NOT NULL OR EXISTS (SELECT 1 FROM property_addresses a WHERE a.property_id = p.id))
+      ORDER BY (p.status = 'PUBLISHED') DESC, p.id LIMIT $1`,
+    [limit],
+  );
+  let n = 0;
+  for (const { id } of rows) {
+    try {
+      const pre = await maybeOne(ctx.app.pool, LOCATION_SQL, [id]);
+      if (!pre || pre.geo_jurisdictions !== null) continue;
+      const plan = await planGeo(ctx.app, basisOf(pre), true);
+      await withTx(ctx.app.pool, async (tx) => {
+        const p = await maybeOne(tx, `SELECT status, geo_jurisdictions FROM properties WHERE id = $1 FOR UPDATE`, [id]);
+        if (!p || p.geo_jurisdictions !== null) return;
+        await applyGeoPlan(tx, id, plan);
+        if (p.status === 'PUBLISHED') await syncPaidBooking(tx, ctx, id, 'jurisdiction derived from location');
+      });
+      n++;
+    } catch (err) {
+      ctx.app.log.warn({ err: String(err), propertyId: id }, 'geo jurisdiction backfill failed');
     }
   }
+  return n;
 }
 
 export async function replaceAmenities(tx: Tx, propertyId: string, codes: string[]) {
@@ -289,7 +482,9 @@ function columnValues(input: PropertyInput) {
   return { cols, vals };
 }
 
-export async function createProperty(ctx: Ctx, actor: Actor, input: PropertyInput & { title: string; propertyType: string }) {
+export async function createProperty(ctx: Ctx, actor: Actor, rawInput: PropertyInput & { title: string; propertyType: string }) {
+  const input = { ...rawInput, ...(await normalizeInput(ctx.app.pool, rawInput, null)) };
+  const plan = await planGeo(ctx.app, mergeBasis(null, input), true);
   return withTx(ctx.app.pool, async (tx) => {
     const slug = await uniqueSlug(tx, input.title);
     const { cols, vals } = columnValues(input);
@@ -299,31 +494,51 @@ export async function createProperty(ctx: Ctx, actor: Actor, input: PropertyInpu
       `INSERT INTO properties(host_id, slug, ${cols.join(', ')}) VALUES ($1, $2, ${cols.map((_, i) => `$${i + 3}`).join(', ')}) RETURNING id`,
       params,
     );
-    await applyRelated(tx, ctx, row.id, input);
+    await applyRelated(tx, row.id, input);
+    await applyGeoPlan(tx, row.id, plan);
     await emit(tx, ctx, { aggregateType: 'property', aggregateId: row.id, eventType: 'property.created', payload: { propertyId: row.id, hostId: actor.userId } });
     const p = await maybeOne(tx, `SELECT * FROM properties WHERE id = $1`, [row.id]);
     return ownerView(tx, p);
   });
 }
 
-export async function updateProperty(ctx: Ctx, actor: Actor, id: string, input: PropertyInput) {
+export async function updateProperty(ctx: Ctx, actor: Actor, id: string, rawInput: PropertyInput) {
+  // read + authorise without locks, then geocode OUTSIDE the transaction
+  const pre = await maybeOne(ctx.app.pool, LOCATION_SQL, [id]);
+  if (!pre) throw notFound('Property');
+  if (pre.host_id !== actor.userId) throw forbidden('NOT_PROPERTY_OWNER', 'You do not own this property');
+  if (pre.status === 'ARCHIVED') throw conflict('PROPERTY_ARCHIVED', 'Archived properties cannot be edited');
+  const preBasis = basisOf(pre);
+  const input = await normalizeInput(ctx.app.pool, rawInput, preBasis);
+  const target = mergeBasis(preBasis, input);
+  const plan = await planGeo(ctx.app, target, pre.geo_jurisdictions === null || placeKey(target) !== placeKey(preBasis));
+
   return withTx(ctx.app.pool, async (tx) => {
     const before = await loadForWrite(tx, actor, id);
     if (before.status === 'ARCHIVED') throw conflict('PROPERTY_ARCHIVED', 'Archived properties cannot be edited');
+    const snapBefore = await complianceSnapshot(tx, id);
     const { cols, vals } = columnValues(input);
     if (cols.length) {
       await tx.query(`UPDATE properties SET ${cols.map((c, i) => `${c} = $${i + 2}`).join(', ')} WHERE id = $1`, [id, ...vals]);
     } else {
       await tx.query(`UPDATE properties SET updated_at = now() WHERE id = $1`, [id]);
     }
-    await applyRelated(tx, ctx, id, input);
+    await applyRelated(tx, id, input);
+    await applyGeoPlan(tx, id, plan);
     const fields = Object.keys(input).filter((k) => (input as any)[k] !== undefined);
     let p = await maybeOne(tx, `SELECT * FROM properties WHERE id = $1`, [id]);
     if (p.status === 'PUBLISHED') {
       // a live listing must stay publishable after the edit
       const errors = await validateForPublish(tx, p);
       if (errors.length) throw unprocessable('PUBLISH_VALIDATION_FAILED', 'Edit would make the published listing invalid', { errors });
-      if (fields.some((f) => COMPLIANCE_FIELDS.has(f))) {
+      if ((await complianceSnapshot(tx, id)) !== snapBefore) {
+        // location / type / mode / jurisdiction changed: re-evaluate (permit bindings included) before it goes live
+        if (p.exchange_enabled) {
+          const ex = await evaluatePropertyCompliance(tx, id, { persist: false, modes: ['EXCHANGE'] });
+          if (ex.decision !== 'ALLOW') {
+            throw unprocessable('COMPLIANCE_DENIED', 'Edit would make the live listing violate the home-exchange compliance rules', { reasons: ex.reasons, decision: ex.decision });
+          }
+        }
         await syncPaidBooking(tx, ctx, id, 'listing edited');
         p = await maybeOne(tx, `SELECT * FROM properties WHERE id = $1`, [id]);
       }
@@ -381,59 +596,93 @@ export async function publishProperty(ctx: Ctx, actor: Actor, id: string) {
     const errors = await validateForPublish(tx, p);
     if (errors.length) throw unprocessable('PUBLISH_VALIDATION_FAILED', 'Listing is missing required content', { errors });
     await assertHostCanPublish(tx, actor.userId);
+    // combined decision (persisted for the record) + one decision per enabled listing mode: RENTAL rules gate paid
+    // booking, EXCHANGE rules gate publication of an exchange listing (both are configured legal predicates)
     const compliance: ComplianceResult = await evaluatePropertyCompliance(tx, id, { persist: true });
+    const both = p.rental_enabled && p.exchange_enabled;
+    const rental = p.rental_enabled ? (both ? await evaluatePropertyCompliance(tx, id, { persist: false, modes: ['RENTAL'] }) : compliance) : null;
+    const exchange = p.exchange_enabled ? (both ? await evaluatePropertyCompliance(tx, id, { persist: false, modes: ['EXCHANGE'] }) : compliance) : null;
 
     let outcome: PublishOutcome;
     let paid = false;
-    if (p.rental_enabled && compliance.decision === 'ALLOW') {
+    let reasons = compliance.reasons;
+    if (exchange) {
+      // exchange listing: the EXCHANGE decision decides publication; paid booking only on a RENTAL ALLOW
+      if (exchange.decision === 'DENY') {
+        outcome = 'DENIED';
+        reasons = exchange.reasons;
+      } else if (exchange.decision === 'REVIEW') {
+        outcome = 'IN_REVIEW';
+        reasons = exchange.reasons;
+      } else {
+        outcome = 'PUBLISHED'; // exchange-only until compliance allows paid booking
+        paid = rental?.decision === 'ALLOW';
+      }
+    } else if (rental!.decision === 'ALLOW') {
       outcome = 'PUBLISHED';
       paid = true;
-    } else if (p.rental_enabled && p.exchange_enabled) {
-      outcome = 'PUBLISHED'; // exchange-only until compliance allows paid booking
-    } else if (p.rental_enabled) {
-      outcome = compliance.decision === 'DENY' ? 'DENIED' : 'IN_REVIEW';
     } else {
-      outcome = 'PUBLISHED'; // exchange-only listing
+      outcome = rental!.decision === 'DENY' ? 'DENIED' : 'IN_REVIEW';
     }
 
     if (outcome === 'PUBLISHED') {
       const { row } = await propertyFsm.transition(tx, ctx, {
         table: 'properties', id, to: 'PUBLISHED', reason: paid ? 'published (paid booking allowed)' : 'published without paid booking',
-        metadata: { compliance: compliance.decision },
+        metadata: { compliance: compliance.decision, rental: rental?.decision ?? null, exchange: exchange?.decision ?? null },
         set: { paid_booking_enabled: paid, published_at: p.published_at ?? new Date() },
       });
       await emit(tx, ctx, { aggregateType: 'property', aggregateId: id, eventType: 'property.published', payload: { propertyId: id, hostId: p.host_id, slug: row.slug, paidBookingEnabled: paid, compliance: compliance.decision } });
     } else if (outcome === 'IN_REVIEW' && p.status !== 'IN_REVIEW') {
-      await propertyFsm.transition(tx, ctx, { table: 'properties', id, to: 'IN_REVIEW', reason: 'awaiting compliance review', metadata: { compliance: compliance.decision, reasons: compliance.reasons }, set: { paid_booking_enabled: false } });
+      await propertyFsm.transition(tx, ctx, { table: 'properties', id, to: 'IN_REVIEW', reason: 'awaiting compliance review', metadata: { compliance: compliance.decision, reasons }, set: { paid_booking_enabled: false } });
       await emit(tx, ctx, { aggregateType: 'property', aggregateId: id, eventType: 'property.updated', payload: { propertyId: id, fields: ['status'], status: 'IN_REVIEW' } });
     }
     const fresh = await maybeOne(tx, `SELECT * FROM properties WHERE id = $1`, [id]);
-    return { outcome, compliance, item: await ownerView(tx, fresh) };
+    return { outcome, compliance, reasons, item: await ownerView(tx, fresh) };
   });
+  const { reasons, ...out } = res;
   if (res.outcome === 'DENIED') {
-    throw unprocessable('COMPLIANCE_DENIED', 'Paid listing cannot be published: compliance requirements are not met', { reasons: res.compliance.reasons });
+    throw unprocessable('COMPLIANCE_DENIED', 'Listing cannot be published: compliance requirements are not met', { reasons });
   }
-  return res;
+  return out;
 }
 
-async function simpleTransition(ctx: Ctx, actor: Actor, id: string, to: PropertyStatus, eventType: string, reason: string) {
+/**
+ * Host lifecycle actions, each restricted to its legitimate SOURCE states. In particular nothing here can leave
+ * BLOCKED: a staff/compliance block is lifted only by unblockProperty (staff, audited).
+ */
+const HOST_TRANSITIONS = {
+  unlist: { from: ['PUBLISHED'], to: 'UNLISTED', eventType: 'property.unlisted', reason: 'unlisted by host' },
+  archive: { from: ['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'UNLISTED'], to: 'ARCHIVED', eventType: 'property.archived', reason: 'archived by host' },
+  withdraw: { from: ['IN_REVIEW'], to: 'DRAFT', eventType: 'property.updated', reason: 'review withdrawn by host' },
+} as const satisfies Record<string, { from: readonly PropertyStatus[]; to: PropertyStatus; eventType: string; reason: string }>;
+
+async function hostTransition(ctx: Ctx, actor: Actor, id: string, action: keyof typeof HOST_TRANSITIONS) {
+  const t = HOST_TRANSITIONS[action];
   return withTx(ctx.app.pool, async (tx) => {
     const p = await loadForWrite(tx, actor, id);
-    await propertyFsm.transition(tx, ctx, { table: 'properties', id, to, reason, set: to === 'PUBLISHED' ? {} : { paid_booking_enabled: false } });
-    await emit(tx, ctx, { aggregateType: 'property', aggregateId: id, eventType, payload: { propertyId: id, hostId: p.host_id, from: p.status, to } });
+    await propertyFsm.transition(tx, ctx, { table: 'properties', id, from: t.from, to: t.to, reason: t.reason, actorType: 'USER', set: { paid_booking_enabled: false } });
+    await emit(tx, ctx, { aggregateType: 'property', aggregateId: id, eventType: t.eventType, payload: { propertyId: id, hostId: p.host_id, from: p.status, to: t.to } });
     return ownerView(tx, await maybeOne(tx, `SELECT * FROM properties WHERE id = $1`, [id]));
   });
 }
 
-export const unlistProperty = (ctx: Ctx, actor: Actor, id: string) => simpleTransition(ctx, actor, id, 'UNLISTED', 'property.unlisted', 'unlisted by host');
-export const archiveProperty = (ctx: Ctx, actor: Actor, id: string) => simpleTransition(ctx, actor, id, 'ARCHIVED', 'property.archived', 'archived by host');
-export const withdrawProperty = (ctx: Ctx, actor: Actor, id: string) => simpleTransition(ctx, actor, id, 'DRAFT', 'property.updated', 'review withdrawn by host');
+export const unlistProperty = (ctx: Ctx, actor: Actor, id: string) => hostTransition(ctx, actor, id, 'unlist');
+export const archiveProperty = (ctx: Ctx, actor: Actor, id: string) => hostTransition(ctx, actor, id, 'archive');
+export const withdrawProperty = (ctx: Ctx, actor: Actor, id: string) => hostTransition(ctx, actor, id, 'withdraw');
+
+/** Staff never act on their own listings (conflict of interest / four-eyes, like rule approval and permit decisions). */
+function assertNotOwnListing(ctx: Ctx, p: { host_id: string }) {
+  if (!ctx.actor || ctx.actor.userId === p.host_id) {
+    throw forbidden('FOUR_EYES_REQUIRED', 'Staff cannot block or unblock their own listing (conflict of interest)');
+  }
+}
 
 /** Admin / compliance block (staff AAL2 enforced by route). Audited under COMPLIANCE. */
 export async function blockProperty(ctx: Ctx, id: string, reason: string) {
   return withTx(ctx.app.pool, async (tx) => {
     const before = await maybeOne(tx, `SELECT * FROM properties WHERE id = $1 FOR UPDATE`, [id]);
     if (!before) throw notFound('Property');
+    assertNotOwnListing(ctx, before);
     const { row } = await propertyFsm.transition(tx, ctx, { table: 'properties', id, to: 'BLOCKED', reason, actorType: 'ADMIN', set: { paid_booking_enabled: false } });
     await audit(tx, ctx, { action: 'property.blocked', resourceType: 'property', resourceId: id, before: { status: before.status, paidBookingEnabled: before.paid_booking_enabled }, after: { status: row.status }, reason, category: 'COMPLIANCE' });
     await emit(tx, ctx, { aggregateType: 'property', aggregateId: id, eventType: 'listing.blocked', payload: { propertyId: id, hostId: row.host_id, scope: 'LISTING', reason } });
@@ -443,11 +692,33 @@ export async function blockProperty(ctx: Ctx, id: string, reason: string) {
 
 export async function unblockProperty(ctx: Ctx, id: string, reason: string) {
   return withTx(ctx.app.pool, async (tx) => {
+    const before = await maybeOne(tx, `SELECT host_id FROM properties WHERE id = $1 FOR UPDATE`, [id]);
+    if (!before) throw notFound('Property');
+    assertNotOwnListing(ctx, before);
     const { row, from } = await propertyFsm.transition(tx, ctx, { table: 'properties', id, from: 'BLOCKED', to: 'UNLISTED', reason, actorType: 'ADMIN' });
     await audit(tx, ctx, { action: 'property.unblocked', resourceType: 'property', resourceId: id, before: { status: from }, after: { status: row.status }, reason, category: 'COMPLIANCE' });
     await emit(tx, ctx, { aggregateType: 'property', aggregateId: id, eventType: 'property.unblocked', payload: { propertyId: id, hostId: row.host_id, reason } });
     return ownerView(tx, row);
   });
+}
+
+/**
+ * Take a host's LIVE listings down when the host is no longer in good standing (LISTING_SUSPENSION /
+ * ACCOUNT_SUSPENSION / BAN sanction, account suspended or pending deletion, HOST role or host approval revoked).
+ * PUBLISHED → UNLISTED (system actor, audited); search drops them via property.unlisted. Republishing is gated
+ * by assertHostCanPublish, so the host can only relist once the standing is restored. Idempotent.
+ */
+export async function enforceHostStanding(tx: Tx, ctx: Ctx, hostId: string, trigger: string): Promise<number> {
+  const blockers = await hostStandingBlockers(tx, hostId);
+  if (!blockers.length) return 0;
+  const live = await q<{ id: string }>(tx, `SELECT id FROM properties WHERE host_id = $1 AND status = 'PUBLISHED' ORDER BY id FOR UPDATE`, [hostId]);
+  for (const { id } of live) {
+    const reason = `host not eligible: ${blockers.join(', ')}`;
+    await propertyFsm.transition(tx, ctx, { table: 'properties', id, from: 'PUBLISHED', to: 'UNLISTED', reason, actorType: 'SYSTEM', metadata: { trigger, blockers }, set: { paid_booking_enabled: false } });
+    await audit(tx, ctx, { action: 'property.unlisted', resourceType: 'property', resourceId: id, before: { status: 'PUBLISHED' }, after: { status: 'UNLISTED' }, reason, category: 'COMPLIANCE' });
+    await emit(tx, ctx, { aggregateType: 'property', aggregateId: id, eventType: 'property.unlisted', payload: { propertyId: id, hostId, from: 'PUBLISHED', to: 'UNLISTED', reason: 'HOST_NOT_ELIGIBLE', blockers, trigger } });
+  }
+  return live.length;
 }
 
 // --- reads --------------------------------------------------------------------------------------

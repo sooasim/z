@@ -14,7 +14,7 @@ import {
   createEntry,
   deleteRedirect,
   getPublished,
-  listPublished,
+  pagePublished,
   listRedirects,
   parseEntryType,
   resolveRedirect,
@@ -103,8 +103,17 @@ export default async function cmsModule(app: FastifyInstance) {
   // ---- public content (published only, locale fallback ko-KR)
   r.get(
     '/v1/content/:type',
-    { schema: { tags: TAG, params: z.object({ type: z.string().max(40) }), querystring: z.object({ locale: locale.default('ko-KR'), limit: z.coerce.number().int().min(1).max(100).default(50) }) } },
-    async (req) => ({ items: (await listPublished(pool, parseEntryType(req.params.type), req.query.locale, req.query.limit)).map((e) => toPublicEntryDto(e, webUrl)) }),
+    {
+      schema: {
+        tags: TAG,
+        params: z.object({ type: z.string().max(40) }),
+        querystring: z.object({ locale: locale.default('ko-KR'), limit: z.coerce.number().int().min(1).max(100).default(50), cursor: z.string().max(200).optional() }),
+      },
+    },
+    async (req) => {
+      const res = await pagePublished(pool, parseEntryType(req.params.type), req.query.locale, req.query.limit, req.query.cursor);
+      return { items: res.items.map((e) => toPublicEntryDto(e, webUrl)), nextCursor: res.nextCursor };
+    },
   );
   r.get(
     '/v1/content/:type/:slug',

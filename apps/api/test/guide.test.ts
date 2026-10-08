@@ -475,7 +475,8 @@ describe('GUIDE-02/03 availability, search & matching', () => {
     expect(top.availability).toBe('AVAILABLE');
     expect(top.explanation.join(' | ')).toMatch(/Speaks ko, en/);
     expect(top.explanation.join(' | ')).toMatch(/Shares interests: food, history/);
-    expect(top.distanceKm).toBe(0);
+    // distance is computed from the public ≈1 km point and bucketed to whole km (never the exact location)
+    expect(top.distanceKm).toBe(1);
     expect(r.body.items[1].availability).toBe('ON_REQUEST');
     expect(r.body.items[2].availability).toBe('UNAVAILABLE');
     const only = await call(t, null, 'GET', `/v1/search/guides?${qs}&availableOnly=true`);

@@ -119,6 +119,8 @@ describe('detections derived from existing events', () => {
     expect(login.status).toBe(200);
     const rotated = await call(t, null, 'POST', '/v1/auth/refresh', { refreshToken: login.body.refreshToken });
     expect(rotated.status).toBe(200);
+    // replayed after the benign two-tab race window (REFRESH_REUSE_GRACE_SEC): treated as theft
+    await t.pool.query(`UPDATE session_refresh_history SET rotated_at = rotated_at - interval '1 minute' WHERE session_id = $1`, [login.body.sessionId]);
     const reuse = await call(t, null, 'POST', '/v1/auth/refresh', { refreshToken: login.body.refreshToken });
     expect(reuse.body.code).toBe('REFRESH_TOKEN_REUSED');
     await t.drain();

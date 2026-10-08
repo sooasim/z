@@ -105,7 +105,12 @@ export async function postSystemMessage(db: Db, ctx: Ctx, conversationId: string
 }
 
 async function afterInsert(db: Db, ctx: Ctx, msg: MessageRow) {
-  await db.query(`UPDATE conversations SET last_message_at = $2 WHERE id = $1`, [msg.conversation_id, msg.created_at]);
+  // monotonic: concurrent senders may commit out of order, the newest timestamp must win
+  // (the row's own created_at, not the JS Date copy: keeps microsecond precision)
+  await db.query(
+    `UPDATE conversations SET last_message_at = greatest(coalesce(last_message_at, '-infinity'), (SELECT created_at FROM messages WHERE id = $2)) WHERE id = $1`,
+    [msg.conversation_id, msg.id],
+  );
   const payload = { messageId: msg.id, conversationId: msg.conversation_id, senderId: msg.sender_id, type: msg.type };
   // message.created is the AsyncAPI contract name; message.sent is kept for consumers wired to the build brief.
   await emit(db, ctx, { aggregateType: 'conversation', aggregateId: msg.conversation_id, eventType: 'message.created', payload });
@@ -269,7 +274,9 @@ export async function sendMessage(
   await assertMember(db, args.conversationId, args.senderId);
   const conv = await one<{ status: string; context_type: string; context_id: string | null }>(
     db,
-    `SELECT status, context_type, context_id FROM conversations WHERE id = $1 FOR SHARE`,
+    // FOR NO KEY UPDATE, the mode afterInsert's `UPDATE conversations` needs anyway: senders queue per conversation.
+    // (FOR SHARE here deadlocked two concurrent senders upgrading their shared locks — 40P01 → 500.)
+    `SELECT status, context_type, context_id FROM conversations WHERE id = $1 FOR NO KEY UPDATE`,
     [args.conversationId],
   );
   if (conv.status !== 'OPEN') throw conflict('CONVERSATION_LOCKED', 'This conversation no longer accepts messages');
@@ -314,7 +321,11 @@ export async function sendMessage(
     );
     return { message: existing, created: false };
   }
-  await db.query(`UPDATE conversation_members SET last_read_at = $3 WHERE conversation_id = $1 AND user_id = $2`, [args.conversationId, args.senderId, ins.created_at]);
+  await db.query(
+    `UPDATE conversation_members SET last_read_at = greatest(coalesce(last_read_at, '-infinity'), (SELECT created_at FROM messages WHERE id = $3))
+      WHERE conversation_id = $1 AND user_id = $2`,
+    [args.conversationId, args.senderId, ins.id],
+  );
   await afterInsert(db, ctx, ins);
   return { message: ins, created: true };
 }

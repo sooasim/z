@@ -4,7 +4,9 @@ import { maybeOne, one, q, withTx } from '../../platform/db.js';
 import type { AppContext, Ctx } from '../../platform/context.js';
 import { systemCtx } from '../../platform/context.js';
 import type { Actor } from '../../platform/auth.js';
-import { conflict, forbidden, gone, notFound, unprocessable } from '../../platform/errors.js';
+import { isStaff } from '../../platform/auth.js';
+import { audit } from '../../platform/audit.js';
+import { AppError, badRequest, conflict, forbidden, gone, notFound, unprocessable } from '../../platform/errors.js';
 import { emit } from '../../platform/outbox.js';
 import { notify } from '../../platform/notify.js';
 import { assertEnabled } from '../../platform/flags.js';
@@ -16,9 +18,13 @@ import { ensureConversation } from '../messaging/service.js';
 import { holdMachine, reservationMachine, ADDRESS_VISIBLE, PRE_CONFIRMATION, type ReservationStatus } from './fsm.js';
 import { loadProperty, quoteDto, validateStayRequest, type QuoteRow } from './pricing.js';
 import { localToday } from './dates.js';
-import { staffOk } from './availability.js';
+import { staffDenied, staffOk, type StaffCapability } from './availability.js';
 
 export const PAID_BOOKING_FLAG = 'stay.paid_booking';
+/** Concurrent live holds one guest may have across all listings (inventory-squatting guard, SECURITY §2.3). */
+export const MAX_ACTIVE_HOLDS_PER_GUEST = 3;
+/** Holds one guest may place on the same listing per rolling 24 h (re-hold after release/expiry is capped). */
+export const MAX_HOLDS_PER_GUEST_PROPERTY_PER_DAY = 6;
 
 export interface ReservationRow {
   id: string;
@@ -61,20 +67,33 @@ export async function lockReservation(tx: Db, id: string): Promise<ReservationRo
 }
 
 export type ReservationRole = 'GUEST' | 'HOST' | 'STAFF';
-export function roleOf(actor: Actor | null, r: Pick<ReservationRow, 'guest_id' | 'host_id'>): ReservationRole | null {
+/** Party role of the actor, or STAFF only when the actor holds the staff capability `cap` (see STAFF_CAPABILITIES). */
+export function roleOf(actor: Actor | null, r: Pick<ReservationRow, 'guest_id' | 'host_id'>, cap: StaffCapability = 'READ'): ReservationRole | null {
   if (!actor) return null;
   if (actor.userId === r.guest_id) return 'GUEST';
   if (actor.userId === r.host_id) return 'HOST';
-  if (staffOk(actor)) return 'STAFF';
+  if (staffOk(actor, cap)) return 'STAFF';
   return null;
 }
-function requireRoleOn(actor: Actor | null, r: ReservationRow, allowed: ReservationRole[]): ReservationRole {
-  const role = roleOf(actor, r);
-  if (!role || !allowed.includes(role)) throw forbidden();
+export function requireRoleOn(actor: Actor | null, r: Pick<ReservationRow, 'guest_id' | 'host_id'>, allowed: ReservationRole[], cap: StaffCapability = 'LIFECYCLE'): ReservationRole {
+  const role = roleOf(actor, r, cap);
+  if (!role) throw staffDenied(actor, cap);
+  if (!allowed.includes(role)) throw forbidden();
   return role;
 }
 const actorTypeOf = (ctx: Ctx, fallback: ActorType = 'SYSTEM'): ActorType =>
-  !ctx.actor ? fallback : staffOk(ctx.actor) ? 'ADMIN' : 'USER';
+  !ctx.actor ? fallback : isStaff(ctx.actor) && ctx.actor.aal === 'aal2' ? 'ADMIN' : 'USER';
+
+/** A staff override of a party action: a reason is mandatory and the act is audited (MONEY: it moves payouts/refunds). */
+async function auditStaffAction(db: Db, ctx: Ctx, r: Pick<ReservationRow, 'id' | 'status' | 'host_id' | 'guest_id'>, action: string, reason: string | undefined, after: Record<string, unknown> = {}) {
+  await audit(db, ctx, {
+    action, resourceType: 'reservation', resourceId: r.id, before: { status: r.status }, after: { hostId: r.host_id, guestId: r.guest_id, ...after },
+    reason: reason ?? null, category: 'MONEY',
+  });
+}
+function requireStaffReason(reason: string | undefined) {
+  if (!reason || !reason.trim()) throw badRequest('REASON_REQUIRED', 'Staff actions on a reservation require a reason');
+}
 
 export function reservationDto(r: ReservationRow, extra: Record<string, unknown> = {}) {
   return {
@@ -110,6 +129,28 @@ const holdDto = (h: any) => ({ id: h.id, quoteId: h.quote_id, propertyId: h.prop
 
 // ---------------------------------------------------------------- STAY-08 hold
 
+/**
+ * Inventory-squatting guard: a guest may keep at most MAX_ACTIVE_HOLDS_PER_GUEST live holds at once and place at most
+ * MAX_HOLDS_PER_GUEST_PROPERTY_PER_DAY holds on one listing per rolling 24 h (release + re-hold loops are capped).
+ * Serialized per guest with a transaction-scoped advisory lock so parallel requests cannot both pass the count.
+ */
+async function assertHoldQuota(tx: Tx, guestId: string, propertyId: string) {
+  await tx.query(`SELECT pg_advisory_xact_lock(hashtextextended('booking.hold-quota:' || $1::text, 0))`, [guestId]);
+  const c = await one<{ active: number; recent: number }>(
+    tx,
+    `SELECT count(*) FILTER (WHERE status = 'ACTIVE' AND expires_at > now())::int AS active,
+            count(*) FILTER (WHERE property_id = $2 AND created_at > now() - interval '24 hours')::int AS recent
+       FROM reservation_holds WHERE guest_id = $1`,
+    [guestId, propertyId],
+  );
+  if (c.active >= MAX_ACTIVE_HOLDS_PER_GUEST) {
+    throw new AppError(429, 'HOLD_LIMIT', `You can hold at most ${MAX_ACTIVE_HOLDS_PER_GUEST} stays at a time; pay for or release a hold first`, { activeHolds: c.active, limit: MAX_ACTIVE_HOLDS_PER_GUEST });
+  }
+  if (c.recent >= MAX_HOLDS_PER_GUEST_PROPERTY_PER_DAY) {
+    throw new AppError(429, 'HOLD_RATE_LIMIT', 'Too many holds on this listing in the last 24 hours', { holds24h: c.recent, limit: MAX_HOLDS_PER_GUEST_PROPERTY_PER_DAY });
+  }
+}
+
 export async function createHold(tx: Tx, ctx: Ctx, quoteId: string) {
   const actor = ctx.actor!;
   const quote = await maybeOne<QuoteRow & { expired: boolean }>(
@@ -125,6 +166,7 @@ export async function createHold(tx: Tx, ctx: Ctx, quoteId: string) {
   await assertPaidBookingAllowed(tx, quote.property_id);
   const existing = await maybeOne(tx, `SELECT id FROM reservation_holds WHERE quote_id = $1 AND status IN ('ACTIVE','CONVERTED')`, [quoteId]);
   if (existing) throw conflict('HOLD_EXISTS', 'This quote already has an active hold');
+  await assertHoldQuota(tx, actor.userId, quote.property_id);
 
   const prop = await loadProperty(tx, quote.property_id, true);
   // invariant 5: recheck all availability predicates inside the hold transaction
@@ -190,11 +232,15 @@ export async function releaseHold(tx: Tx, ctx: Ctx, holdId: string) {
   const actor = ctx.actor!;
   const hold = await maybeOne(tx, `SELECT * FROM reservation_holds WHERE id = $1 FOR UPDATE`, [holdId]);
   if (!hold) throw notFound('Hold');
-  if (hold.guest_id !== actor.userId && !staffOk(actor)) throw forbidden();
+  const byStaff = hold.guest_id !== actor.userId;
+  if (byStaff && !staffOk(actor, 'LIFECYCLE')) throw staffDenied(actor, 'LIFECYCLE');
   if (hold.status !== 'ACTIVE') throw conflict('HOLD_NOT_ACTIVE', `Hold is ${hold.status}`);
-  const res = await maybeOne<{ id: string }>(tx, `SELECT id FROM reservations WHERE hold_id = $1`, [holdId]);
+  const res = await maybeOne<{ id: string; status: string; host_id: string; guest_id: string }>(tx, `SELECT id, status, host_id, guest_id FROM reservations WHERE hold_id = $1`, [holdId]);
   if (res && (await paymentInFlight(tx, res.id))) throw conflict('PAYMENT_IN_PROGRESS', 'A payment for this hold is being processed');
-  const reservationId = await endHold(tx, ctx, hold, 'RELEASED', 'hold released by guest');
+  if (byStaff) {
+    await audit(tx, ctx, { action: 'reservation.hold.staff_released', resourceType: 'reservation_hold', resourceId: holdId, after: { reservationId: res?.id ?? null, guestId: hold.guest_id }, category: 'PERMISSION' });
+  }
+  const reservationId = await endHold(tx, ctx, hold, 'RELEASED', byStaff ? 'hold released by staff' : 'hold released by guest');
   await emit(tx, ctx, {
     aggregateType: 'reservation',
     aggregateId: reservationId ?? holdId,
@@ -235,16 +281,25 @@ export async function expireHolds(app: AppContext): Promise<number> {
 
 /** Job: auto-complete checked-in stays once the check-out date has arrived in the property timezone. */
 export async function autoCompleteStays(app: AppContext): Promise<number> {
+  // the zone is joined from pg_timezone_names: a listing with a zone PostgreSQL does not know is skipped instead of
+  // failing the whole platform-wide statement (and with it every host's completion and settlement)
   const due = await q<{ id: string }>(
     app.pool,
-    `SELECT r.id FROM reservations r JOIN properties p ON p.id = r.property_id
-      WHERE r.status = 'CHECKED_IN' AND r.check_out <= (now() AT TIME ZONE p.timezone)::date LIMIT 200`,
+    `SELECT r.id FROM reservations r JOIN properties p ON p.id = r.property_id JOIN pg_timezone_names tz ON tz.name = p.timezone
+      WHERE r.status = 'CHECKED_IN' AND r.check_out <= (now() AT TIME ZONE tz.name)::date ORDER BY r.check_out, r.id LIMIT 200`,
   );
+  let completed = 0;
   for (const { id } of due) {
     const ctx = systemCtx(app, `job-auto-complete-${randomUUID()}`);
-    await withTx(app.pool, (tx) => completeStay(tx, ctx, id, 'auto-completed after check-out', true));
+    try {
+      await withTx(app.pool, (tx) => completeStay(tx, ctx, id, 'auto-completed after check-out', true));
+      completed++;
+    } catch (err) {
+      // one failing stay must not abort the rest of the batch
+      app.log.warn({ err, reservationId: id }, 'stay auto-completion failed');
+    }
   }
-  return due.length;
+  return completed;
 }
 
 // ---------------------------------------------------------------- STAY-09 payment subject (PAY-01 contract)
@@ -258,10 +313,26 @@ async function activeHold(tx: Db, holdId: string | null) {
   );
 }
 
+/**
+ * A payment attempt keeps the dates for PAYMENT_TTL_SEC, but never past the hold's absolute deadline
+ * (created_at + HOLD_TTL_SEC + PAYMENT_TTL_SEC): re-preparing a payment before each expiry cannot keep a hold
+ * alive forever. A payment already CONFIRMING/APPROVED is still protected by the expiry job (in-flight guard).
+ */
 async function extendHoldForPayment(tx: Db, ctx: Ctx, r: ReservationRow) {
-  const secs = ctx.app.config.PAYMENT_TTL_SEC;
-  await tx.query(`UPDATE reservation_holds SET expires_at = greatest(expires_at, now() + make_interval(secs => $2)) WHERE id = $1 AND status = 'ACTIVE'`, [r.hold_id, secs]);
-  await tx.query(`UPDATE inventory_blocks SET expires_at = greatest(expires_at, now() + make_interval(secs => $2)) WHERE id = $1 AND state = 'ACTIVE' AND block_type = 'HOLD'`, [r.inventory_block_id, secs]);
+  const { PAYMENT_TTL_SEC: pay, HOLD_TTL_SEC: hold } = ctx.app.config;
+  await tx.query(
+    `UPDATE reservation_holds
+        SET expires_at = greatest(expires_at, least(now() + make_interval(secs => $2), created_at + make_interval(secs => $2 + $3)))
+      WHERE id = $1 AND status = 'ACTIVE'`,
+    [r.hold_id, pay, hold],
+  );
+  // the block follows the hold exactly (copied in SQL: no millisecond truncation through JS Dates)
+  await tx.query(
+    `UPDATE inventory_blocks b SET expires_at = greatest(b.expires_at, h.expires_at)
+       FROM reservation_holds h
+      WHERE b.id = $1 AND h.id = $2 AND h.status = 'ACTIVE' AND b.state = 'ACTIVE' AND b.block_type = 'HOLD'`,
+    [r.inventory_block_id, r.hold_id],
+  );
 }
 
 export const reservationPaymentSubject: PaymentSubjectHandler = {
@@ -366,26 +437,39 @@ async function propertyTz(db: Db, propertyId: string) {
   return (await one<{ timezone: string }>(db, `SELECT timezone FROM properties WHERE id = $1`, [propertyId])).timezone;
 }
 
-export async function checkIn(tx: Tx, ctx: Ctx, id: string) {
+export async function checkIn(tx: Tx, ctx: Ctx, id: string, reason?: string) {
   const r = await lockReservation(tx, id);
-  requireRoleOn(ctx.actor, r, ['GUEST', 'HOST', 'STAFF']);
+  const role = requireRoleOn(ctx.actor, r, ['GUEST', 'HOST', 'STAFF'], 'LIFECYCLE');
   reservationMachine.assert(r.status, 'CHECKED_IN');
+  if (role === 'STAFF') requireStaffReason(reason);
   const today = await localToday(tx, await propertyTz(tx, r.property_id));
   if (today < r.check_in || today >= r.check_out) throw conflict('CHECK_IN_NOT_ALLOWED', 'Check-in is only possible from the check-in date until check-out', { checkIn: r.check_in, today });
   const { row } = await reservationMachine.transition(tx, ctx, {
-    table: 'reservations', id, from: 'CONFIRMED', to: 'CHECKED_IN', reason: 'checked in', actorType: actorTypeOf(ctx), versioned: true, set: { checked_in_at: new Date() },
+    table: 'reservations', id, from: 'CONFIRMED', to: 'CHECKED_IN', reason: reason ?? 'checked in', actorType: actorTypeOf(ctx), versioned: true, set: { checked_in_at: new Date() },
   });
+  if (role === 'STAFF') await auditStaffAction(tx, ctx, r, 'reservation.staff_checked_in', reason);
   await emit(tx, ctx, { aggregateType: 'reservation', aggregateId: id, eventType: 'reservation.checked_in', payload: { reservationId: id, propertyId: r.property_id } });
   return row;
 }
 
-export async function completeStay(tx: Tx, ctx: Ctx, id: string, reason = 'stay completed', system = false) {
+/**
+ * CHECKED_IN → COMPLETED. A party/staff completion is allowed only once the check-out date has arrived in the property
+ * timezone (COMPLETED makes the stay settlement-eligible and ends the guest's cancellation path); the system job
+ * selects only due stays.
+ */
+export async function completeStay(tx: Tx, ctx: Ctx, id: string, reason?: string, system = false) {
   const r = await lockReservation(tx, id);
-  if (!system) requireRoleOn(ctx.actor, r, ['HOST', 'STAFF']);
+  const role = system ? null : requireRoleOn(ctx.actor, r, ['HOST', 'STAFF'], 'LIFECYCLE');
   reservationMachine.assert(r.status, 'COMPLETED');
+  if (role === 'STAFF') requireStaffReason(reason);
+  if (!system) {
+    const today = await localToday(tx, await propertyTz(tx, r.property_id));
+    if (today < r.check_out) throw conflict('STAY_NOT_ENDED', 'A stay can be completed only on or after its check-out date', { checkOut: r.check_out, today });
+  }
   const { row } = await reservationMachine.transition(tx, ctx, {
-    table: 'reservations', id, from: 'CHECKED_IN', to: 'COMPLETED', reason, actorType: actorTypeOf(ctx), versioned: true, set: { completed_at: new Date() },
+    table: 'reservations', id, from: 'CHECKED_IN', to: 'COMPLETED', reason: reason ?? 'stay completed', actorType: actorTypeOf(ctx), versioned: true, set: { completed_at: new Date() },
   });
+  if (role === 'STAFF') await auditStaffAction(tx, ctx, r, 'reservation.staff_completed', reason);
   await emit(tx, ctx, {
     aggregateType: 'reservation',
     aggregateId: id,
@@ -397,13 +481,15 @@ export async function completeStay(tx: Tx, ctx: Ctx, id: string, reason = 'stay 
 
 export async function markNoShow(tx: Tx, ctx: Ctx, id: string, reason?: string) {
   const r = await lockReservation(tx, id);
-  requireRoleOn(ctx.actor, r, ['HOST', 'STAFF']);
+  const role = requireRoleOn(ctx.actor, r, ['HOST', 'STAFF'], 'LIFECYCLE');
   reservationMachine.assert(r.status, 'NO_SHOW');
+  if (role === 'STAFF') requireStaffReason(reason);
   const today = await localToday(tx, await propertyTz(tx, r.property_id));
   if (today <= r.check_in) throw conflict('NO_SHOW_TOO_EARLY', 'No-show can be reported only after the check-in day', { checkIn: r.check_in, today });
   const { row } = await reservationMachine.transition(tx, ctx, {
     table: 'reservations', id, from: 'CONFIRMED', to: 'NO_SHOW', reason: reason ?? 'guest did not arrive', actorType: actorTypeOf(ctx), versioned: true,
   });
+  if (role === 'STAFF') await auditStaffAction(tx, ctx, r, 'reservation.staff_no_show', reason);
   await tx.query(
     `INSERT INTO reservation_adjustments(reservation_id, adjustment_type, amount_minor, currency, policy_evaluation, created_by)
      VALUES ($1,'NO_SHOW',0,$2,$3,$4)`,
@@ -415,18 +501,28 @@ export async function markNoShow(tx: Tx, ctx: Ctx, id: string, reason?: string) 
 
 // ---------------------------------------------------------------- reads
 
-export async function getReservation(db: Db, actor: Actor, id: string) {
+/**
+ * Parties, or staff with READ (ADMIN/SUPPORT/ACCOUNTING, AAL2). A staff read is an audited ELEVATED_ACCESS read and
+ * includes the exact address only for the roles that act on stays (ADMIN/SUPPORT).
+ */
+export async function getReservation(db: Db, actor: Actor, id: string, ctx: Ctx) {
   const r = await maybeOne<ReservationRow & { property_title: string; property_city: string | null }>(
     db,
     `SELECT ${RES_COLS}, p.title AS property_title, p.city AS property_city FROM reservations r JOIN properties p ON p.id = r.property_id WHERE r.id = $1`,
     [id],
   );
   if (!r) throw notFound('Reservation');
-  const role = roleOf(actor, r);
-  if (!role) throw forbidden();
+  const role = roleOf(actor, r, 'READ');
+  if (!role) throw staffDenied(actor, 'READ');
   let address: unknown = null;
-  if (ADDRESS_VISIBLE.includes(r.status)) {
+  const addressAllowed = role !== 'STAFF' || staffOk(actor, 'LIFECYCLE');
+  if (ADDRESS_VISIBLE.includes(r.status) && addressAllowed) {
     address = await maybeOne(db, `SELECT line1, line2, postal_code AS "postalCode", city, region, country FROM property_addresses WHERE property_id = $1`, [r.property_id]);
+  }
+  if (role === 'STAFF') {
+    await audit(db, ctx, {
+      action: 'reservation.read', resourceType: 'reservation', resourceId: id, after: { status: r.status, addressRevealed: !!address }, category: 'ELEVATED_ACCESS',
+    });
   }
   const history = await q(
     db,

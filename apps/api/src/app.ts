@@ -71,12 +71,25 @@ export function createLogger(level: string, stream?: pino.DestinationStream) {
   );
 }
 
+/** config.TRUST_PROXY → Fastify trustProxy: 'true'/'false', a hop count, or a comma-separated address/CIDR list. */
+export function trustProxySetting(v: string): boolean | string | ((address: string, hop: number) => boolean) {
+  const s = v.trim();
+  if (s === 'true') return true;
+  if (s === 'false' || s === '') return false;
+  if (/^\d+$/.test(s)) {
+    const hops = Number(s);
+    return (_address: string, hop: number) => hop < hops;
+  }
+  return s;
+}
+
 export async function buildApp(opts: BuildOptions = {}): Promise<FastifyInstance> {
   const config = loadConfig(opts.config as any);
   const log = createLogger(opts.logger === false ? 'silent' : config.LOG_LEVEL, opts.logStream);
   const app = Fastify({
     loggerInstance: log as unknown as import("fastify").FastifyBaseLogger,
-    trustProxy: true,
+    // never `true`: that makes req.ip the left-most (client-chosen) X-Forwarded-For value (rate limits, audit IPs)
+    trustProxy: trustProxySetting(config.TRUST_PROXY),
     bodyLimit: 2 * 1024 * 1024,
     genReqId: (req) => (req.headers['x-correlation-id'] as string) || randomUUID(),
   });

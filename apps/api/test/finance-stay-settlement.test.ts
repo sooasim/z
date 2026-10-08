@@ -105,7 +105,8 @@ describe('FIN-02 settlement of terminal stays (no-show / cancellation proceeds)'
     const rb = await bookAndPay(b.propertyId, day(3), day(5));
     const cb = await call(t, guest, 'POST', `/v1/reservations/${rb.reservationId}/cancel`, { reason: 'change of plans' }, idem());
     expect(cb.status, show(cb)).toBe(200);
-    expect(cb.body.item.cancellation.refundMinor).toBe(applyBps(TOTAL - PLATFORM_FEE, 5000));
+    // 50 % of the stay gross; the kept service fee keeps its VAT too (component refund, feeRefundMinor 0)
+    expect(cb.body.item.cancellation).toMatchObject({ refundMinor: applyBps(FEE_BASE, 5000), feeRefundMinor: 0 });
     await t.drain();
     expect(await status(rb.reservationId)).toBe('PARTIALLY_REFUNDED');
 

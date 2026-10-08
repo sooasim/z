@@ -15,7 +15,7 @@ import { allocate, applyBps } from '../../platform/money.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../platform/errors.js';
 import { registerPaymentSubject, type PayableSnapshot } from '../../platform/payment-subjects.js';
 import { quoteFees } from '../finance/rules.js';
-import { requestRefund } from '../payments/service.js';
+import { refundableRemaining, requestRefund } from '../payments/service.js';
 
 export type OrderStatus = 'CART' | 'PENDING' | 'PAYMENT_PENDING' | 'PAID' | 'FULFILLED' | 'CANCELLED' | 'PARTIALLY_REFUNDED' | 'REFUNDED' | 'PAYMENT_FAILED' | 'EXPIRED';
 export type DepartureStatus = 'OPEN' | 'CLOSED' | 'GUARANTEED' | 'CANCELLED' | 'DEPARTED';
@@ -67,21 +67,50 @@ export const voucherCode = () => `TV${randomBytes(8).toString('hex').toUpperCase
  * commissionBps/commissionMinor) is internal settlement data for payable(); it is never shown to buyers, and a
  * supplier view (opts.supplierId) sees only its own entry.
  */
-export function pricingDto(p: any, opts: { supplierId?: string } = {}) {
+export interface OrderViewOpts {
+  /** supplier view: only these suppliers' pricing.suppliers[] entries */
+  supplierId?: string;
+  supplierIds?: string[];
+  /** supplier view: only these products' snapshotted cancellation terms */
+  productIds?: string[];
+}
+
+export function pricingDto(p: any, opts: OrderViewOpts = {}) {
   if (!p) return null;
+  const sup = new Set([...(opts.supplierIds ?? []), ...(opts.supplierId ? [opts.supplierId] : [])]);
+  const supplierView = sup.size > 0;
+  const terms =
+    supplierView && opts.productIds && p.cancellationTerms && typeof p.cancellationTerms === 'object'
+      ? Object.fromEntries(Object.entries(p.cancellationTerms).filter(([productId]) => opts.productIds!.includes(productId)))
+      : p.cancellationTerms;
   return {
     subtotalMinor: p.subtotalMinor,
     platformFeeMinor: p.platformFeeMinor,
     taxMinor: p.taxMinor,
     totalMinor: p.totalMinor,
     rulesVersion: p.rulesVersion,
-    cancellationTerms: p.cancellationTerms,
+    cancellationTerms: terms,
     quotedAt: p.quotedAt,
-    ...(opts.supplierId ? { suppliers: (p.suppliers ?? []).filter((s: any) => s.supplierId === opts.supplierId) } : {}),
+    ...(supplierView ? { suppliers: (p.suppliers ?? []).filter((s: any) => sup.has(s.supplierId)) } : {}),
   };
 }
 
-export function orderDto(o: any, items: any[] = [], vouchers: any[] = [], opts: { supplierId?: string } = {}) {
+/**
+ * The order as seen by the owner of one (or more) of its suppliers: only that supplier's lines, its vouchers (never
+ * another supplier's bearer codes), its own pricing.suppliers[] entry and its own products' cancellation terms.
+ * `vouchers` = null → no voucher codes at all (list view).
+ */
+export async function supplierOrderView(db: Db, order: any, items: any[], vouchers: any[] | null, supplierIds: string[]) {
+  const own = items.filter((i) => supplierIds.includes(i.supplier_id));
+  const ownIds = new Set(own.map((i) => i.id));
+  const termKeys = Object.keys(order.pricing_snapshot?.cancellationTerms ?? {}).filter((k) => /^[0-9a-f-]{36}$/i.test(k));
+  const products = termKeys.length
+    ? await q<{ id: string }>(db, `SELECT id FROM travel_products WHERE id = ANY($1::uuid[]) AND supplier_id = ANY($2::uuid[])`, [termKeys, supplierIds])
+    : [];
+  return orderDto(order, own, (vouchers ?? []).filter((v) => ownIds.has(v.order_item_id)), { supplierIds, productIds: products.map((p) => p.id) });
+}
+
+export function orderDto(o: any, items: any[] = [], vouchers: any[] = [], opts: OrderViewOpts = {}) {
   return {
     id: o.id,
     code: o.code,
@@ -212,11 +241,19 @@ export async function createOrder(tx: Tx, ctx: Ctx, input: { items: Array<{ depa
      VALUES ($1,'PENDING',$2,$3,$4,$5,$6, now() + make_interval(secs => $7), $8) RETURNING *`,
     [buyerId, currency, subtotal, fees.platformFeeMinor + fees.taxMinor, total, [...mors][0], ctx.app.config.HOLD_TTL_SEC, JSON.stringify(pricing)],
   );
+  // every option line points at the departure line it was booked with (several departures of one product may share
+  // an order; refunds are computed per departure line with its own tier)
+  const departureLine = new Map<string, string>();
   for (const l of lines) {
-    await tx.query(
-      `INSERT INTO order_items(order_id, sellable_type, sellable_id, supplier_id, title, qty, unit_price_minor, amount_minor) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [order.id, l.type, l.sellableId, l.supplierId, l.title.slice(0, 300), l.qty, l.unit, l.unit * l.qty],
+    const parent = l.type === 'TRAVEL_OPTION' ? departureLine.get(l.departureId) : null;
+    if (l.type === 'TRAVEL_OPTION' && !parent) throw new Error(`option line without its departure line (${l.departureId})`);
+    const row = await one<{ id: string }>(
+      tx,
+      `INSERT INTO order_items(order_id, sellable_type, sellable_id, supplier_id, title, qty, unit_price_minor, amount_minor, parent_item_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [order.id, l.type, l.sellableId, l.supplierId, l.title.slice(0, 300), l.qty, l.unit, l.unit * l.qty, parent ?? null],
     );
+    if (l.type === 'TRAVEL_DEPARTURE') departureLine.set(l.departureId, row.id);
   }
   await recordTransition(tx, ctx, { aggregateType: 'order', aggregateId: order.id, from: null, to: 'PENDING', reason: 'CREATED' });
   await emit(tx, ctx, { aggregateType: 'order', aggregateId: order.id, eventType: 'order.created', payload: { orderId: order.id, buyerId, totalMinor: total, currency } });
@@ -272,6 +309,14 @@ export async function cancellationRefundBreakdown(db: Db, order: any): Promise<{
   );
   const optionLines = await q(db, `SELECT i.*, o.product_id FROM order_items i JOIN travel_product_options o ON o.id = i.sellable_id WHERE i.order_id = $1 AND i.sellable_type = 'TRAVEL_OPTION' AND i.status = 'ACTIVE'`, [order.id]);
   const terms = order.pricing_snapshot?.cancellationTerms ?? {};
+  // Each option line counts ONCE, with the departure line it was booked with (parent_item_id). Legacy lines without
+  // the link go to the earliest departure of their product in the order (never to several departures).
+  const byStart = [...lines].sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime() || (a.id < b.id ? -1 : 1));
+  const optionsOf = new Map<string, number>();
+  for (const o of optionLines) {
+    const parent = o.parent_item_id ? lines.find((l) => l.id === o.parent_item_id) : byStart.find((l) => l.product_id === o.product_id);
+    if (parent) optionsOf.set(parent.id, (optionsOf.get(parent.id) ?? 0) + o.amount_minor);
+  }
   let refundSub = 0;
   let allFeeRefundable = true;
   for (const l of lines) {
@@ -280,8 +325,7 @@ export async function cancellationRefundBreakdown(db: Db, order: any): Promise<{
     const t = terms[l.product_id] ?? {};
     const pct = refundPct(t, hours);
     if (t.fee_refundable !== true) allFeeRefundable = false;
-    const opts = optionLines.filter((o) => o.product_id === l.product_id).reduce((a, o) => a + o.amount_minor, 0);
-    refundSub += applyBps(l.amount_minor + opts, pct * 100);
+    refundSub += applyBps(l.amount_minor + (optionsOf.get(l.id) ?? 0), pct * 100);
   }
   const fee = order.total_minor - order.subtotal_minor;
   const feeRefund = allFeeRefundable && order.subtotal_minor > 0 ? Math.floor((fee * refundSub) / order.subtotal_minor) : 0;
@@ -299,9 +343,19 @@ export async function cancelOrder(tx: Tx, ctx: Ctx, args: { orderId: string; rea
     await releaseCapacity(tx, ctx, order.id);
   } else if (order.status === 'PAID' || order.status === 'PARTIALLY_REFUNDED') {
     // a full refund returns every remaining component (pro rata reversal); a policy refund states its fee part
-    const { amountMinor: amount, feeRefundMinor } = args.full
+    const base: { amountMinor: number; feeRefundMinor: number | null } = args.full
       ? { amountMinor: order.total_minor - order.refunded_minor, feeRefundMinor: null }
       : await cancellationRefundBreakdown(tx, order);
+    // refunds still in flight (requested / retrying) are already promised to the buyer: cap at what the payment can
+    // still refund, under the payment lock, so one pending refund never makes the cancellation (or a whole departure
+    // cancellation) fail with REFUND_EXCEEDS_REFUNDABLE
+    const payment = await maybeOne<{ id: string; amount_minor: number; refunded_minor: number }>(
+      tx,
+      `SELECT id, amount_minor, refunded_minor FROM payments WHERE subject_type = 'ORDER' AND subject_id = $1 AND status IN ('APPROVED','PARTIALLY_REFUNDED','REFUNDED') FOR UPDATE`,
+      [order.id],
+    );
+    const amount = payment ? Math.max(0, Math.min(base.amountMinor, await refundableRemaining(tx, payment))) : base.amountMinor;
+    const feeRefundMinor = base.feeRefundMinor == null ? null : Math.min(base.feeRefundMinor, amount);
     await OrderFSM.transition(tx, ctx, { table: 'orders', id: order.id, to: 'CANCELLED', reason: args.reason, versioned: true, set: { cancelled_at: new Date(), cancel_reason: args.reason.slice(0, 300) } });
     await releaseCapacity(tx, ctx, order.id);
     if (amount > 0) {
@@ -417,7 +471,19 @@ export function registerOrderPaymentSubject() {
       if (!o) return;
       await tx.query(`UPDATE orders SET refunded_minor = $2 WHERE id = $1`, [orderId, Math.min(refund.totalRefundedMinor, o.total_minor)]);
       if (['PAID', 'FULFILLED', 'PARTIALLY_REFUNDED'].includes(o.status)) {
+        if (refund.fullyRefunded) {
+          // REFUNDED is terminal: a buyer refunded in full (staff refund, PG console cancel synced by webhook) must not
+          // keep redeemable vouchers, and seats of a departure that has not run yet go back on sale
+          if (o.status === 'FULFILLED') {
+            await tx.query(`UPDATE vouchers SET status = 'VOID' WHERE status = 'ISSUED' AND order_item_id IN (SELECT id FROM order_items WHERE order_id = $1)`, [orderId]);
+          } else {
+            await releaseCapacity(tx, ctx, orderId);
+          }
+        }
         await OrderFSM.transition(tx, ctx, { table: 'orders', id: orderId, to: refund.fullyRefunded ? 'REFUNDED' : 'PARTIALLY_REFUNDED', reason: `REFUND ${refund.refundId}`, versioned: true });
+        if (refund.fullyRefunded) {
+          await emit(tx, ctx, { aggregateType: 'order', aggregateId: orderId, eventType: 'order.refunded', payload: { orderId, refundId: refund.refundId, totalRefundedMinor: refund.totalRefundedMinor } });
+        }
       }
     },
   });
