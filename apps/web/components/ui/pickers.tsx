@@ -85,24 +85,49 @@ export function useFitPopover(open: boolean, pop: RefObject<HTMLElement | null>)
       if (!el) return;
       el.style.translate = '';
       el.style.maxHeight = '';
-      const r = el.getBoundingClientRect();
       const vw = document.documentElement.clientWidth;
       const g = 16;
+      let r = el.getBoundingClientRect();
+      // Prefer anchoring to the opposite edge before nudging (keeps the popover aligned with its field).
+      if (r.right > vw - g && !el.classList.contains('right')) {
+        el.classList.add('right', 'auto-right');
+        r = el.getBoundingClientRect();
+        if (r.left < g) {
+          el.classList.remove('right', 'auto-right');
+          r = el.getBoundingClientRect();
+        }
+      }
       let dx = 0;
       if (r.right > vw - g) dx = vw - g - r.right;
       if (r.left + dx < g) dx = g - r.left;
       if (dx) el.style.translate = `${Math.round(dx)}px 0`;
+      const vh = window.innerHeight;
+      if (r.bottom <= vh - 8) return;
       if (hasStickyAncestor(el)) {
-        const avail = window.innerHeight - r.top - 12;
-        if (r.height > avail && avail > 160) {
+        // A sticky/fixed anchor cannot be scrolled into view: open upwards when there is room, else cap the height.
+        const anchor = el.parentElement?.getBoundingClientRect();
+        const above = (anchor?.top ?? r.top) - 16;
+        if (above >= r.height && !el.classList.contains('up')) {
+          el.classList.add('up');
+          return;
+        }
+        const avail = vh - r.top - 12;
+        if (avail > 160) {
           el.style.maxHeight = `${Math.floor(avail)}px`;
           el.style.overflowY = 'auto';
         }
+      } else {
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
     };
     fit();
-    window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
+    const onResize = () => {
+      pop.current?.classList.remove('up');
+      if (pop.current?.classList.contains('auto-right')) pop.current.classList.remove('right', 'auto-right');
+      fit();
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, [open]);
 }
 

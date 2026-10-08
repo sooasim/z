@@ -459,6 +459,36 @@ export function SideNav({ items: navItems, label }: { items: Array<{ href: strin
   );
 }
 
+/**
+ * Start every forward navigation to a new path at the top of the page. Next.js only resets scroll when the new
+ * segment's first element is off-screen at commit time; client pages that render a skeleton/gate first (checkout,
+ * exchange detail) otherwise inherit the previous page's scroll offset (mobile Reserve → checkout landed on the
+ * footer). Back/forward (popstate) and #hash navigations keep the browser's own restoration.
+ */
+export function ScrollReset() {
+  const path = usePathname();
+  const pop = useRef(false);
+  const first = useRef(true);
+  useEffect(() => {
+    const on = () => (pop.current = true);
+    window.addEventListener('popstate', on);
+    return () => window.removeEventListener('popstate', on);
+  }, []);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    if (pop.current) {
+      pop.current = false;
+      return;
+    }
+    if (window.location.hash) return;
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+  }, [path]);
+  return null;
+}
+
 export function ServiceWorkerRegister() {
   useEffect(() => {
     if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) {

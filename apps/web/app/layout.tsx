@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
 import { Providers } from '@/components/providers';
-import { Header, Footer, BottomNav, ServiceWorkerRegister } from '@/components/shell';
+import { Header, Footer, BottomNav, ScrollReset, ServiceWorkerRegister } from '@/components/shell';
 import { THEME_SCRIPT } from '@/components/theme';
 import { SITE_URL } from '@/lib/env';
 
@@ -57,6 +57,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </main>
           <Footer />
           <BottomNav />
+          <ScrollReset />
           <ServiceWorkerRegister />
         </Providers>
       </body>

@@ -1,0 +1,26 @@
+{
+  "name": "@jetpool/legacy-import",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MIG-01 legacy WONT/Sixshop site migrator: polite crawl, media extraction, download, sharp optimisation, publish to apps/web/public/legacy and CMS import inputs.",
+  "bin": {
+    "jetpool-legacy-import": "./bin/migrate.mjs"
+  },
+  "scripts": {
+    "migrate": "node ./bin/migrate.mjs",
+    "fixture-site": "node ./test/fixture-server.mjs",
+    "test": "node --test --test-concurrency=1 test/",
+    "typecheck": "node ./scripts/check-syntax.mjs",
+    "build": "echo 'no build'"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "cheerio": "^1.2.0",
+    "pg": "^8.16.0",
+    "sharp": "^0.35.5",
+    "undici": "^7.19.0"
+  }
+}

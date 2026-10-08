@@ -36,15 +36,19 @@
 - 결제는 **테스트(MOCK) 모드**입니다. 토스페이먼츠 SDK를 불러오지 않고 웹의 MOCK 경로(결제 성공 리다이렉트 → 서버 승인 흉내)를 그대로 탑니다.
 - 상세 페이지는 미리 렌더링된 id만 열립니다(녹화된 id + 데모에서 새로 만들 예약·맞교환·주문 등을 위한 id 풀 30개씩).
   풀을 다 쓰면 새 항목은 목록에는 보이지만 상세 페이지는 404가 될 수 있습니다 → DEMO 리본의 **초기화**를 누르세요.
-- 실시간(SSE)은 이 브라우저에서 생긴 이벤트(메시지 자동 응답, 알림)만 전달합니다. 지도 타일·웹폰트 등 외부 리소스는 인터넷에서 불러옵니다.
+- 녹화된 날짜는 열어 보는 날에 맞춰 **지난 일수만큼 앞으로 옮겨집니다**(예정된 예약·출발일·최근 알림이 계속 '다가오는/최근' 상태로 보이도록).
+- 실시간(SSE)은 이 브라우저에서 생긴 이벤트(메시지 자동 응답, 알림)만 전달합니다. 지도 타일 같은 외부 리소스는 인터넷에서 불러옵니다.
 - 기록되지 않은 GET 요청은 가장 비슷한 녹화 응답(쿼리 무시) → 404 순서로 대체됩니다.
+- 데모 런타임이 보완하는 부분(실제 API 응답에는 없음): 예약 목록 행의 숙소 이름·게스트 이름, 맞교환 홈 목록의 slug/사진,
+  한국어 도시명 검색(예: `제주` → Jeju 숙소). 실제 API/웹에서 고칠 거리로 남겨 둡니다.
 
 ### GitHub Pages 켜기
-1. 저장소 **Settings → Pages → Build and deployment → Source: GitHub Actions** 를 선택합니다.
-2. **비공개(Private) 저장소**에서 Pages를 쓰려면 유료 GitHub 플랜(Pro/Team/Enterprise)이 필요합니다. 무료 플랜이면 저장소를 **공개(Public)** 로 바꿔야 합니다.
-3. `claude/eager-ride-bjce41` 브랜치에 push 하거나 **Actions → pages → Run workflow** 로 실행하면 `.github/workflows/pages.yml`이 빌드·배포합니다.
-   (`github-pages` 환경의 배포 브랜치 규칙이 이 브랜치를 허용해야 합니다 — 기본 브랜치이면 자동으로 허용됩니다.)
-4. 완료 후 주소: **https://sooasim.github.io/z/** (basePath는 `actions/configure-pages`가 알려주는 값을 씁니다.)
+`.github/workflows/pages.yml`이 정적 사이트를 빌드해 **`gh-pages` 브랜치**에 올립니다(브랜치 배포 방식).
+1. `claude/eager-ride-bjce41` 브랜치에 push 하거나 **Actions → pages → Run workflow** 로 한 번 실행해 `gh-pages` 브랜치를 만듭니다.
+2. 저장소 **Settings → Pages → Build and deployment → Source: Deploy from a branch → Branch: `gh-pages` / `(root)`** 를 선택하고 저장합니다.
+   (공개 저장소는 `gh-pages` 브랜치가 생기면 GitHub가 자동으로 켜 주기도 합니다.)
+3. **비공개(Private) 저장소**에서 Pages를 쓰려면 유료 GitHub 플랜(Pro/Team/Enterprise)이 필요합니다. 무료 플랜이면 저장소를 **공개(Public)** 로 바꿔야 합니다.
+4. 1~2분 뒤 주소: **https://sooasim.github.io/z/** (basePath는 저장소 이름 `/z`).
 
 ### 픽스처 다시 녹화하기 / 로컬 빌드
 ```bash
@@ -89,15 +93,19 @@ All use the password `Jetpool!2026dev`: `guest@`, `host.seoul@`, `host.jeju@`, `
   confirmation, emulated) is used.
 - Detail pages exist only for prerendered ids (recorded ids + a pool of 30 ids per kind for things you create). If the
   pool runs out, use **Reset** in the DEMO ribbon.
-- Realtime only carries events created in this browser. Map tiles and web fonts still load from the internet.
+- Recorded dates are **shifted forward by the days elapsed since recording**, so upcoming stays/departures stay upcoming.
+- Realtime only carries events created in this browser. Map tiles still load from the internet.
 - Unrecorded GETs fall back to the closest recorded response (query-insensitive), then 404.
+- Filled in by the demo runtime (absent from the real API responses): listing/guest names on reservation list rows,
+  slug/photos on exchange-home rows, Korean city names in stay search (`제주` → Jeju). Worth fixing in the real API/web.
 
 ### Enabling GitHub Pages
-1. **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-2. A **private repository** needs a paid GitHub plan for Pages; on the free plan make the repository **public**.
-3. Push to `claude/eager-ride-bjce41` or run **Actions → pages → Run workflow** (`.github/workflows/pages.yml`).
-   The `github-pages` environment must allow deployments from that branch (automatic when it is the default branch).
-4. The site is published at **https://sooasim.github.io/z/**.
+`.github/workflows/pages.yml` builds the site and force-pushes it to the **`gh-pages` branch** (branch deployment).
+1. Push to `claude/eager-ride-bjce41` or run **Actions → pages → Run workflow** once, which creates `gh-pages`.
+2. **Settings → Pages → Build and deployment → Source: Deploy from a branch → Branch: `gh-pages` / `(root)`**, then save
+   (for public repositories GitHub may switch this on by itself once `gh-pages` exists).
+3. A **private repository** needs a paid GitHub plan for Pages; on the free plan make the repository **public**.
+4. A minute or two later the site is at **https://sooasim.github.io/z/** (basePath = the repository name, `/z`).
 
 ### Re-recording fixtures and building locally
 See the commands above: `bash scripts/pages/record.sh` (isolated `jetpool_demo` DB + private API on :4100, real flows with

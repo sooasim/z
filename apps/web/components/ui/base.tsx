@@ -4,6 +4,7 @@ import { useId, useRef, type ReactNode, type InputHTMLAttributes, type SelectHTM
 import { formatMoney, formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { errorMessage } from '@/lib/errors';
+import { knownEnumLabel } from '@/lib/enums';
 import { StatusPill } from './status';
 import { Stepper } from './display';
 import { Icon, type IconName } from './icons';
@@ -165,6 +166,7 @@ export function tabPanelProps(base: string, v: string) {
  * tabs still work, they just don't reference a panel. `badge` shows a count next to the label.
  */
 export function Tabs<T extends string>({ value, onChange, tabs, label, idBase }: { value: T; onChange: (v: T) => void; tabs: Array<{ value: T; label: string; badge?: ReactNode; icon?: IconName }>; label: string; idBase?: string }) {
+  const { lang } = useI18n();
   const gen = useId();
   const base = idBase ?? `tabs${gen.replace(/:/g, '')}`;
   const ref = useRef<HTMLDivElement>(null);
@@ -198,7 +200,7 @@ export function Tabs<T extends string>({ value, onChange, tabs, label, idBase }:
             onClick={() => onChange(tb.value)}
           >
             {tb.icon && <Icon name={tb.icon} size={16} style={{ display: 'inline-block', verticalAlign: '-3px', marginRight: 6 }} />}
-            {tb.label}
+            {knownEnumLabel(tb.label, lang) ?? tb.label}
             {tb.badge !== undefined && tb.badge !== null && tb.badge !== 0 && <span className="badge" style={{ marginLeft: 6 }}>{tb.badge}</span>}
           </button>
         );

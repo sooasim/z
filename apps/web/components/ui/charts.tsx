@@ -1,5 +1,18 @@
 'use client';
 import type { ReactNode } from 'react';
+import { useI18n } from '@/lib/i18n';
+import { STATES } from '@/lib/statuses';
+import { knownEnumLabel } from '@/lib/enums';
+
+/** Machine enums used as chart labels (CONFIRMED, RESERVATION …) are shown localized. */
+function useLabel() {
+  const { lang } = useI18n();
+  return (l: string) => {
+    const st = STATES[String(l).toUpperCase()];
+    if (st && /^[A-Z_]+$/.test(l)) return lang === 'ko' ? st[1] : st[2];
+    return knownEnumLabel(l, lang) ?? l;
+  };
+}
 
 /** Lightweight inline-SVG charts (no chart library). */
 export function Sparkline({ data, stroke = 'var(--accent)', fill = true, height = 40, label }: { data: number[]; stroke?: string; fill?: boolean; height?: number; label?: string }) {
@@ -21,6 +34,8 @@ export function Sparkline({ data, stroke = 'var(--accent)', fill = true, height 
 }
 
 export function BarChart({ data, height = 180, format = (n: number) => String(n), label }: { data: Array<{ label: string; value: number }>; height?: number; format?: (n: number) => string; label: string }) {
+  const tr = useLabel();
+  data = data.map((d) => ({ ...d, label: tr(d.label) }));
   const w = 600;
   const pad = { l: 8, r: 8, t: 12, b: 26 };
   const max = Math.max(1, ...data.map((d) => d.value));
