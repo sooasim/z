@@ -83,13 +83,20 @@ function Checkout() {
       // API returns { item: { hold, reservation } } — the reservation (HELD) is created together with the hold.
       const holdId = str(h, 'hold.id', 'holdId', 'id');
       setHold({ id: holdId, expiresAt: str(h, 'hold.expiresAt', 'expiresAt') });
-      let rid = str(h, 'reservationId', 'reservation.id');
-      if (!rid) {
-        const rkey = stableKey('reservation', holdId, newIdempotencyKey);
-        const r = await post('/v1/reservations', { holdId, quoteId: quote.id, guestMessage: message || undefined }, { idempotencyKey: rkey });
-        rid = str(item(r), 'id', 'reservationId');
-      }
+      const rid = str(h, 'reservation.id', 'reservationId');
+      if (!rid) throw new Error(L('예약을 만들지 못했습니다. 다시 시도해 주세요.', 'Could not create the reservation. Please try again.'));
       setReservationId(rid);
+      // The hold takes only { quoteId }; the reservation conversation opens on confirmation. Deliver the optional
+      // note now as an inquiry to the host (idempotent per hold). Best effort — never blocks checkout.
+      if (message.trim() && quote.propertyId) {
+        post('/v1/conversations', {
+          contextType: 'INQUIRY',
+          targetType: 'PROPERTY',
+          targetId: quote.propertyId,
+          message: `[${L('예약 진행 중', 'Booking in progress')} ${formatRange(quote.checkIn, quote.checkOut, lang)}] ${message.trim()}`.slice(0, 4000),
+          clientMessageId: `hold-note-${holdId}`,
+        }).catch(() => undefined);
+      }
       setStep(2);
     } catch (e) {
       setErr(e);

@@ -1,7 +1,21 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import type { Map as MlMap, MapOptions, Marker as MlMarker } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useI18n } from '@/lib/i18n';
+
+type MapLibre = typeof import('maplibre-gl');
+
+/**
+ * maplibre-gl v6 is ESM-only (named exports, no default) and starts its worker from a URL derived from its own
+ * import.meta.url, which a bundled chunk does not keep. Point it at the worker module explicitly: webpack turns
+ * `new URL('<pkg file>', import.meta.url)` into a hashed same-origin static asset, so CSP `worker-src 'self'` covers it.
+ */
+async function loadMapLibre(): Promise<MapLibre> {
+  const lib = await import('maplibre-gl');
+  lib.setWorkerUrl(new URL('maplibre-gl/dist/maplibre-gl-worker.mjs', import.meta.url).href);
+  return lib;
+}
 
 export interface MapPoint {
   id: string;
@@ -12,18 +26,18 @@ export interface MapPoint {
 }
 
 /** Free OSM raster style — no API key. Respect the OSM tile usage policy (attribution, modest traffic). */
-export const OSM_STYLE = {
-  version: 8 as const,
+export const OSM_STYLE: Exclude<MapOptions['style'], string | undefined> = {
+  version: 8,
   sources: {
     osm: {
-      type: 'raster' as const,
+      type: 'raster',
       tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
       tileSize: 256,
       maxzoom: 19,
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     },
   },
-  layers: [{ id: 'osm', type: 'raster' as const, source: 'osm' }],
+  layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
 };
 
 export interface Bounds {
@@ -39,32 +53,37 @@ export interface Bounds {
  */
 export function MapView({ points, onMove, height = 480, center = [126.978, 37.5665], zoom = 6, activeId, onPinHover, fill }: { points: MapPoint[]; onMove?: (b: Bounds) => void; height?: number | string; center?: [number, number]; zoom?: number; activeId?: string | null; onPinHover?: (id: string | null) => void; fill?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-  const markersRef = useRef<any[]>([]);
+  const mapRef = useRef<MlMap | null>(null);
+  const markersRef = useRef<MlMarker[]>([]);
   const elsRef = useRef<Map<string, HTMLElement>>(new Map());
   const hoverRef = useRef(onPinHover);
   hoverRef.current = onPinHover;
-  const libRef = useRef<any>(null);
+  const libRef = useRef<MapLibre | null>(null);
   const [failed, setFailed] = useState(false);
   const { L } = useI18n();
   const onMoveRef = useRef(onMove);
   onMoveRef.current = onMove;
+  // Latest points for callbacks registered once (avoids a stale closure from the first render).
+  const pointsRef = useRef(points);
+  pointsRef.current = points;
 
   useEffect(() => {
     let disposed = false;
     (async () => {
       try {
-        const lib = (await import('maplibre-gl')).default;
+        const lib = await loadMapLibre();
         if (disposed || !ref.current) return;
         libRef.current = lib;
-        const map = new lib.Map({ container: ref.current, style: OSM_STYLE as any, center, zoom, attributionControl: { compact: true } });
+        const map = new lib.Map({ container: ref.current, style: OSM_STYLE, center, zoom, attributionControl: { compact: true } });
         map.addControl(new lib.NavigationControl({ showCompass: false }), 'top-right');
         map.on('moveend', () => {
           const b = map.getBounds();
           onMoveRef.current?.({ north: b.getNorth(), south: b.getSouth(), east: b.getEast(), west: b.getWest() });
         });
         mapRef.current = map;
-        map.on('load', () => renderMarkers());
+        // Markers are DOM overlays: render them right away rather than on 'load', which waits for tiles
+        // (slow or blocked tile servers would otherwise hide every price pin).
+        renderMarkers();
       } catch {
         setFailed(true);
       }
@@ -84,7 +103,7 @@ export function MapView({ points, onMove, height = 480, center = [126.978, 37.56
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
     elsRef.current.clear();
-    const valid = points.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+    const valid = pointsRef.current.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
     for (const p of valid) {
       const el = document.createElement(p.href ? 'a' : 'span');
       el.className = 'map-pin';
@@ -105,7 +124,7 @@ export function MapView({ points, onMove, height = 480, center = [126.978, 37.56
   };
 
   useEffect(() => {
-    if (mapRef.current?.loaded()) renderMarkers();
+    if (mapRef.current) renderMarkers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(points)]);
 
