@@ -252,21 +252,24 @@ async function seed() {
     if (!row || !first) continue;
     const m = byAsset.get(first);
     const data = { ...row.data };
-    const seo = { ...row.seo, og: { ...(row.seo?.og ?? {}) } };
+    let seo = row.seo ?? {};
+    let coverSet = false;
     if (isPlaceholder(data.coverUrl) && !data.legacyCover) {
-      data.legacyCover = { previous: data.coverUrl ?? null, previousOgImage: seo.og.image ?? null, assetId: first };
+      data.legacyCover = { previous: data.coverUrl ?? null, previousOgImage: seo.og?.image ?? null, assetId: first };
       data.coverUrl = m.publicUrl;
-      if (isPlaceholder(seo.og.image)) seo.og.image = m.publicUrl;
+      if (isPlaceholder(seo.og?.image)) seo = { ...seo, og: { ...(seo.og ?? {}), image: m.publicUrl } };
+      coverSet = true;
     }
     if (c.gallery) {
       const items = c.pool.filter((a) => mediaId.has(a)).map((a) => ({ assetId: a, url: byAsset.get(a).publicUrl, srcset: byAsset.get(a).srcset, alt: byAsset.get(a).alt, caption: byAsset.get(a).caption, width: byAsset.get(a).width, height: byAsset.get(a).height, placeholder: byAsset.get(a).placeholder }));
       const g = { source: LEGACY_SYSTEM, importHash: sha256(J(items)), items };
       if (data.legacyGallery?.importHash !== g.importHash) data.legacyGallery = g;
     }
-    if (J(data) === J(row.data) && J(seo) === J(row.seo) && row.hero_media_id) continue;
+    if (J(data) === J(row.data) && J(seo) === J(row.seo ?? {})) continue;
     const r = await q(
-      `UPDATE cms_entries SET data = $2, seo = $3, hero_media_id = coalesce(hero_media_id, $4) WHERE id = $1 AND data = $5::jsonb AND seo = $6::jsonb`,
-      [row.id, J(data), J(seo), mediaId.get(first), J(row.data), J(row.seo)],
+      `UPDATE cms_entries SET data = $2, seo = $3, hero_media_id = CASE WHEN $7::boolean THEN coalesce(hero_media_id, $4) ELSE hero_media_id END
+        WHERE id = $1 AND data = $5::jsonb AND seo = $6::jsonb`,
+      [row.id, J(data), J(seo), mediaId.get(first), J(row.data), J(row.seo ?? {}), coverSet],
     );
     bump(`curated ${c.type} (legacy cover/gallery)`, r.rowCount);
   }
