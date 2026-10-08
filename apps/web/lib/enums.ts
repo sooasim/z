@@ -1,3 +1,6 @@
+import { langName } from './art';
+import { placeLabel } from './places';
+
 /**
  * Localized labels for API enum values that are not FSM statuses (statuses live in components/ui/status.tsx):
  * payment subjects/methods, ledger entry types, fee rule types, domains, roles, audit categories/actions,
@@ -303,4 +306,32 @@ export function knownEnumLabel(v: unknown, lang: 'ko' | 'en' = 'ko'): string | u
   if (typeof v !== 'string') return undefined;
   const a = ACTION_LABELS[v] ?? ENUM_LABELS[v];
   return a ? a[lang === 'ko' ? 0 : 1] : undefined;
+}
+
+
+/**
+ * Search "why this result" lines come from the API as English sentences (guide search). Translate the known
+ * templates; drop lines that repeat what the card already shows (rating) or that cannot be localized.
+ * Returns null when the line should not be shown.
+ */
+export function localizeExplanation(line: string, lang: 'ko' | 'en' = 'ko'): string | null {
+  const s = String(line ?? '').trim();
+  if (!s) return null;
+  const ko = lang === 'ko';
+  let m: RegExpExecArray | null;
+  if (/^Rated [\d.]+\/5$/.test(s)) return null; // the card already shows the rating
+  if (/^No overlapping interests$/i.test(s)) return null;
+  if (/^New guide \(no ratings yet\)$/i.test(s)) return ko ? '새로 합류한 가이드' : 'New guide';
+  if ((m = /^Speaks (.+) \((\d+)\/(\d+) requested languages\)$/.exec(s))) {
+    const names = m[1].split(/,\s*/).map((c) => langName(c, lang)).join(', ');
+    return ko ? `${names} 가능` : `Speaks ${names}`;
+  }
+  if ((m = /^Shares interests: (.+)$/.exec(s))) return ko ? `관심사 일치: ${m[1]}` : `Shared interests: ${m[1]}`;
+  if (/^Available for the whole requested time$/i.test(s)) return ko ? '요청한 시간 모두 가능' : 'Available the whole time';
+  if (/^No published schedule; availability on request$/i.test(s)) return ko ? '일정은 문의 후 확정' : 'Availability on request';
+  if (/^Not available for the requested time$/i.test(s)) return ko ? '요청한 시간에는 어려워요' : 'Not available then';
+  if ((m = /^About ([\d.]+) km away$/.exec(s))) return ko ? `약 ${m[1]}km 거리` : `About ${m[1]} km away`;
+  if ((m = /^Based in (.+)$/.exec(s))) return ko ? `${placeLabel(m[1], 'ko')} 활동` : `Based in ${m[1]}`;
+  if (ko && !/[가-힣]/.test(s)) return null;
+  return s;
 }

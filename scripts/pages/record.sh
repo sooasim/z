@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Re-record the GitHub Pages demo fixtures from a fresh, ISOLATED database (never touches the 'jetpool' dev DB):
-#   1. (re)create database jetpool_demo, migrate, seed-dev, add extra demo listings (demo-enrich.mjs)
+#   1. (re)create database jetpool_demo, migrate, seed-dev (packages/db/seed-dev.mjs — the rich demo data set)
 #   2. start a private API (+ worker) on $DEMO_API_PORT (default 4100) against it
 #   3. run record-fixtures.mjs --scenario (real bookings with MOCK payments, messages, exchanges, guides, orders)
 #   4. stop the private API/worker
@@ -21,7 +21,6 @@ dropdb -h "$PGHOST" -U "$PGUSER" --if-exists --force "$DB"
 createdb -h "$PGHOST" -U "$PGUSER" "$DB"
 node "$ROOT/packages/db/migrate.mjs" >/dev/null
 NODE_ENV=development node "$ROOT/packages/db/seed-dev.mjs"
-node "$ROOT/scripts/pages/demo-enrich.mjs"
 
 export NODE_ENV=development PAYMENT_PROVIDER=MOCK OAUTH_MOCK=true PORT="$PORT" RATE_LIMIT_PER_MIN=100000 WORKER_METRICS_PORT=off
 pids=()

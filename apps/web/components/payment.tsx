@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { post, newIdempotencyKey } from '@/lib/api';
+import { stableKey } from '@/lib/quote';
 import { loadScript, parsePrepare, TOSS_SDK, type Prepared } from '@/lib/payment';
 import { useI18n } from '@/lib/i18n';
 import { useAuth } from '@/lib/auth';
@@ -24,8 +25,10 @@ export function TossPayment({ subjectType, subjectId, onPrepared }: { subjectTyp
   const [ready, setReady] = useState(false);
   const [paying, setPaying] = useState(false);
   const widgetsRef = useRef<any>(null);
+  // One prepare per payment subject: re-entering / reloading checkout replays the same prepare (same idempotency key)
+  // instead of creating a fresh payment attempt row every mount.
   const keyRef = useRef<string>('');
-  if (!keyRef.current) keyRef.current = newIdempotencyKey();
+  if (!keyRef.current) keyRef.current = stableKey('prepare', `${subjectType}:${subjectId}`, newIdempotencyKey);
 
   useEffect(() => {
     let cancelled = false;

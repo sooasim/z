@@ -4,6 +4,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { formatMoney } from '@/lib/format';
 import { RatingStars } from './display';
+import { Icon } from './icons';
 
 const FALLBACK_ART = ['/art/postcards/coast.svg', '/art/postcards/mountain.svg', '/art/postcards/city.svg'];
 
@@ -37,19 +38,19 @@ export function Carousel({ images, alt }: { images: string[]; alt: string }) {
         }}
       >
         {images.map((src, k) => (
-          <img key={k} src={src} alt={k === i ? alt : ''} loading="lazy" draggable={false} onError={(e) => { const el = e.currentTarget; if (!el.dataset.fallback) { el.dataset.fallback = '1'; el.src = FALLBACK_ART[k % FALLBACK_ART.length]; } }} />
+          <img key={k} src={src} alt={k === i ? alt : ''} data-on={k === i ? 'true' : undefined} aria-hidden={k === i ? undefined : true} loading={k === 0 ? undefined : 'lazy'} draggable={false} onError={(e) => { const el = e.currentTarget; if (!el.dataset.fallback) { el.dataset.fallback = '1'; el.src = FALLBACK_ART[k % FALLBACK_ART.length]; } }} />
         ))}
       </div>
       {n > 1 && (
         <>
           {i > 0 && (
             <button type="button" className="nav-btn prev" onClick={(e) => go(-1, e)} aria-label={L('이전 사진', 'Previous photo')}>
-              ‹
+              <Icon name="left" size={16} strokeWidth={2.4} />
             </button>
           )}
           {i < n - 1 && (
             <button type="button" className="nav-btn next" onClick={(e) => go(1, e)} aria-label={L('다음 사진', 'Next photo')}>
-              ›
+              <Icon name="right" size={16} strokeWidth={2.4} />
             </button>
           )}
           <div className="dots" aria-hidden="true">
@@ -106,7 +107,7 @@ export function ListingCard({
           <div className="badges">
             {badges.slice(0, 2).map((b) => (
               <span key={b.label} className="badge solid">
-                {b.tone === 'exchange' ? '⇄ ' : b.tone === 'ok' ? '✓ ' : ''}
+                {b.tone === 'exchange' ? <Icon name="swap" size={13} /> : b.tone === 'ok' ? <Icon name="check" size={13} /> : null}
                 {b.label}
               </span>
             ))}

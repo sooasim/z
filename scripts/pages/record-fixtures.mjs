@@ -181,133 +181,142 @@ async function bookStay(key, propertyId, checkIn, nights, guests, tag) {
   return { quote: q, reservationId: rid, prepare: prep, confirm };
 }
 
+/** Try a few listings/dates until a stay can be booked (the seed already holds many reservations). */
+async function bookSomewhere(key, candidates, offsets, nights, guests, tag) {
+  for (const p of candidates) {
+    for (const off of offsets) {
+      try {
+        const r = await bookStay(key, p.id, addDays(TODAY, off), nights, guests, tag);
+        return { ...r, property: p };
+      } catch (e) {
+        if (!/DATES_UNAVAILABLE|INVENTORY_UNAVAILABLE|MIN_NIGHTS|MAX_GUESTS|SELF_BOOKING|NOT_BOOKABLE|HOLD_EXISTS/.test(e.message)) throw e;
+      }
+    }
+  }
+  throw new Error('no bookable listing/date found');
+}
+
 async function runScenario() {
   log('scenario: creating demo activity through the real API');
-  // Listings inserted directly into the recording DB (demo-enrich.mjs) need a search reindex.
+  // Seeded listings are inserted with SQL; make sure the search projection is complete.
   if (sessions.admin?.aal === 'aal2') {
     const before = (await must('anon', 'GET', '/v1/search/properties?limit=50')).total ?? 0;
     await step('admin search reindex', () => must('admin', 'POST', '/v1/admin/search/reindex', { reset: true }));
-    for (let i = 0; i < 30; i++) {
-      await sleep(2000);
+    for (let i = 0; i < 20; i++) {
+      await sleep(1500);
       const t = (await must('anon', 'GET', '/v1/search/properties?limit=50')).total ?? 0;
-      if (t > before) {
-        log(`scenario: search index now has ${t} listings`);
+      if (t >= before && t > 0 && i >= 2) {
+        log(`scenario: search index has ${t} listings`);
         break;
       }
     }
   }
-  const search = await must('anon', 'GET', '/v1/search/properties?limit=50');
-  const bySlug = Object.fromEntries((search.items || []).map((p) => [p.slug, p]));
-  const pid = (slug) => bySlug[slug]?.id;
-  if (!pid('seoul-hanok')) throw new Error('seed listings not indexed yet (search returned no seoul-hanok)');
+  const all = [...((await must('anon', 'GET', '/v1/search/properties?limit=50')).items ?? []), ...((await must('anon', 'GET', '/v1/search/properties?limit=50&page=2')).items ?? [])];
+  if (!all.length) throw new Error('search returned no listings — is the worker indexing?');
+  const hostOf = async (p) => {
+    const d = await must('anon', 'GET', `/v1/properties/by-slug/${encodeURIComponent(p.slug)}`);
+    return d.item?.host?.id ?? d.item?.hostId;
+  };
+  const me = (k) => sessions[k]?.user?.id;
+  const bookable = all.filter((p) => p.rentalEnabled && p.paidBookingEnabled && (p.maxGuests ?? 2) >= 2);
+  // Prefer listings of the recorded host personas so their dashboards show the new bookings too.
+  const byHost = [];
+  for (const p of bookable) byHost.push({ ...p, hostId: await hostOf(p) });
+  const forGuest = [...byHost.filter((p) => p.hostId === me('host')), ...byHost.filter((p) => p.hostId === me('hostJeju')), ...byHost.filter((p) => ![me('host'), me('hostJeju')].includes(p.hostId))];
 
-  // Guest stays (MOCK payments).
-  await step('guest books 북촌 한옥 (3 nights)', () => bookStay('guest', pid('seoul-hanok'), addDays(TODAY, 33), 3, 2, true));
-  await step('guest books 애월 오션뷰 빌라 (5 nights)', () => bookStay('guest', pid('jeju-villa'), addDays(TODAY, 56), 5, 3));
-  if (pid('gangneung-anmok-house')) await step('guest books 강릉 바다집 (2 nights)', () => bookStay('guest', pid('gangneung-anmok-house'), addDays(TODAY, 12), 2, 2));
-  // A held-but-unpaid quote shape for cancellation previews etc. is not needed; cancellation preview is recorded per reservation.
+  // Guest stays (MOCK payments) far enough ahead not to collide with seeded reservations.
+  await step('guest books a Seoul stay (template)', () => bookSomewhere('guest', forGuest, [150, 165, 180, 195], 3, 2, true));
+  await step('guest books a Jeju stay', () => bookSomewhere('guest', forGuest.filter((p) => p.hostId === me('hostJeju')).concat(forGuest), [205, 220, 235], 4, 2));
 
   // Inquiry thread with the Seoul host.
+  const inquiryTarget = byHost.find((p) => p.hostId === me('host')) ?? byHost[0];
   await step('guest inquiry + host reply', async () => {
     const conv = await must('guest', 'POST', '/v1/conversations', {
-      contextType: 'INQUIRY', targetType: 'PROPERTY', targetId: pid('seoul-apt'),
-      message: '안녕하세요! 11월 말부터 2주 정도 머물 수 있을까요? 재택근무용 책상이 있는지도 궁금해요.', clientMessageId: 'demo-inq-1',
+      contextType: 'INQUIRY', targetType: 'PROPERTY', targetId: inquiryTarget.id,
+      message: '안녕하세요! 다음 달 말부터 2주 정도 머물 수 있을까요? 재택근무용 책상이 있는지도 궁금해요.', clientMessageId: 'demo-inq-1',
     });
     templates.conversation = conv;
     const cid = conv.item?.id ?? conv.id;
-    templates.message = await must('host', 'POST', `/v1/conversations/${cid}/messages`, { body: '안녕하세요! 네, 거실 창가에 넓은 책상과 모니터가 있어요. 2주 이상 머무시면 장기 숙박 할인도 적용됩니다 :)', clientMessageId: 'demo-reply-1' });
+    templates.message = await must('host', 'POST', `/v1/conversations/${cid}/messages`, { body: '안녕하세요! 네, 창가에 넓은 책상과 모니터가 있어요. 2주 이상 머무시면 장기 숙박 할인도 적용됩니다 :)', clientMessageId: 'demo-reply-1' });
     await must('guest', 'POST', `/v1/conversations/${cid}/messages`, { body: '좋아요! 날짜 확정되면 바로 예약할게요. 감사합니다 🙏', clientMessageId: 'demo-inq-2' });
   });
 
-  // Favorites.
+  // Favorites (a few cities).
   await step('guest favorites', async () => {
-    for (const slug of ['jeju-villa', 'gangneung-anmok-house', 'gyeongju-hwangnidan-hanok']) {
-      if (pid(slug)) templates.favorite = await must('guest', 'POST', '/v1/favorites', { targetType: 'PROPERTY', targetId: pid(slug) });
+    const seen = new Set();
+    for (const p of all) {
+      if (seen.has(p.city) || seen.size >= 3) continue;
+      seen.add(p.city);
+      const r = await call('guest', 'POST', '/v1/favorites', { body: { targetType: 'PROPERTY', targetId: p.id } });
+      if (r.status < 300) templates.favorite = r.body;
     }
   });
 
-  // Home exchanges (exchange.busan ↔ host.seoul). Both members need a complete exchange profile first.
-  await step('exchange profiles', async () => {
-    await must('exchange', 'PUT', '/v1/exchange/profile', { homeDescription: '해운대 해변까지 도보 7분, 조용한 주거 단지의 방 2개 아파트입니다. 재택근무 책상과 자전거 2대가 있어요.', preferredDestinations: ['Seoul', 'Jeju', 'Gangneung'], flexibleDates: true });
-    await must('host', 'PUT', '/v1/exchange/profile', { homeDescription: '북촌 골목 안 마당이 있는 한옥과 강릉 바닷가 집을 맞교환으로 열어 두었습니다.', preferredDestinations: ['Busan', 'Jeju'], flexibleDates: true });
-  });
+  // A fresh home-exchange request for the Seoul host to answer in the demo.
   await step('exchange request (REQUESTED)', async () => {
-    const start = addDays(TODAY, 85);
-    templates.exchange = await must('exchange', 'POST', '/v1/exchanges', {
-      myPropertyId: pid('busan-home'), theirPropertyId: pid('seoul-hanok'), datesA: { start, end: addDays(start, 28) }, datesB: { start, end: addDays(start, 28) }, guestsA: 2, guestsB: 2,
-      message: '안녕하세요! 해운대 집과 북촌 한옥을 한 달 맞교환하고 싶어요. 저희는 조용한 2인 가족이고, 반려동물은 없습니다.',
-    });
-  });
-  if (pid('busan-gwangalli-view') && pid('gangneung-anmok-house')) {
-    await step('exchange accepted → verified → signed → confirmed', async () => {
-      const start = addDays(TODAY, 130);
-      const ex = await must('exchange', 'POST', '/v1/exchanges', {
-        myPropertyId: pid('busan-gwangalli-view'), theirPropertyId: pid('gangneung-anmok-house'), datesA: { start, end: addDays(start, 14) }, datesB: { start, end: addDays(start, 14) }, guestsA: 2, guestsB: 3,
-        message: '광안리 아파트와 강릉 바다집, 2주 맞교환 어떠세요?',
+    const homes = (await must('exchange', 'GET', '/v1/exchange/homes?limit=50')).items ?? [];
+    const mine = (await must('exchange', 'GET', '/v1/host/properties')).items?.find((p) => p.exchangeEnabled);
+    const theirs = homes.find((h) => (h.host?.id ?? h.hostId) === me('host')) ?? homes[0];
+    if (!mine || !theirs) throw new Error('no exchange homes');
+    for (const off of [240, 270, 300]) {
+      const start = addDays(TODAY, off);
+      const r = await call('exchange', 'POST', '/v1/exchanges', {
+        body: { myPropertyId: mine.id, theirPropertyId: theirs.id, datesA: { start, end: addDays(start, 21) }, datesB: { start, end: addDays(start, 21) }, guestsA: 2, guestsB: 2, message: '안녕하세요! 저희 부산 집과 3주 맞교환 어떠세요? 조용한 2인 가족이고 반려동물은 없습니다.' },
       });
-      const id = ex.item.id;
-      const version = ex.item.offerVersion ?? ex.item.version ?? 1;
-      templates.exchangeAccept = await must('host', 'POST', `/v1/exchanges/${id}/accept`, { offerVersion: version });
-      for (const k of ['exchange', 'host']) {
-        await call(k, 'POST', `/v1/exchanges/${id}/safety-ack`, { body: { acknowledged: true } });
-        const v = await call(k, 'POST', `/v1/exchanges/${id}/verify`, { body: {} });
-        if (v.status < 300) templates.exchangeVerify = v.body;
-        else warn(`exchange verify (${k}) → ${v.status} ${JSON.stringify(v.body).slice(0, 200)}`);
+      if (r.status < 300) {
+        templates.exchange = r.body;
+        return;
       }
-      const ag = await must('exchange', 'GET', `/v1/exchanges/${id}/agreement`);
-      const termsHash = ag.item?.termsHash ?? ag.termsHash;
-      for (const k of ['exchange', 'host']) {
-        const s = await call(k, 'POST', `/v1/exchanges/${id}/agreement/sign`, { body: { termsHash } });
-        if (s.status < 300) templates.exchangeSign = s.body;
-        else warn(`exchange sign (${k}) → ${s.status} ${JSON.stringify(s.body).slice(0, 200)}`);
-      }
-      const c = await call('exchange', 'POST', `/v1/exchanges/${id}/confirm`, { body: {} });
-      if (c.status < 300) templates.exchangeConfirm = c.body;
-      else warn(`exchange confirm → ${c.status} ${JSON.stringify(c.body).slice(0, 200)}`);
+      if (r.status !== 409) throw new Error(`${r.status} ${JSON.stringify(r.body).slice(0, 200)}`);
+    }
+    throw new Error('exchange dates unavailable');
+  });
+
+  // Guides: a free friend booking, and a paid offer left for the guest to accept + pay in the demo.
+  const guides = (await must('anon', 'GET', '/v1/search/guides?limit=50')).items.map((g) => g.guide ?? g);
+  const gid = (userKey) => guides.find((g) => g.guideId === me(userKey))?.guideId;
+  const at = (days, hour) => `${addDays(TODAY, days)}T${String(hour).padStart(2, '0')}:00:00+09:00`;
+  if (gid('guide')) {
+    await step('guide request (free) → offer → accept', async () => {
+      const req = await must('guest', 'POST', '/v1/guide-requests', {
+        guideId: gid('guide'), startAt: at(160, 10), endAt: at(160, 13), partySize: 2, city: 'Seoul', languages: ['ko', 'en'], interests: ['cafe', 'food', 'walking'],
+        message: '성수동 카페 골목과 서울숲 근처를 현지인처럼 걸어보고 싶어요!',
+      });
+      templates.guideRequest = req;
+      const rid = req.item.id;
+      templates.guideOffer = await must('guide', 'POST', `/v1/guide-requests/${rid}/offers`, { startAt: at(160, 10), endAt: at(160, 13), paid: false, itinerary: '10:00 성수역 3번 출구 → 카페 골목 → 수제화 거리 → 서울숲 산책 → 13:00 브런치' });
+      const g = await must('guest', 'GET', `/v1/guide-requests/${rid}`);
+      const offerVersion = g.item?.current_offer_version ?? g.item?.currentOfferVersion ?? 1;
+      templates.guideAccept = await must('guest', 'POST', `/v1/guide-requests/${rid}/accept`, { offerVersion }, idem(`demo-accept-${rid}`));
+    });
+  }
+  if (gid('proGuide')) {
+    await step('guide request (paid) → offer pending', async () => {
+      const req = await must('guest', 'POST', '/v1/guide-requests', {
+        guideId: gid('proGuide'), startAt: at(167, 9), endAt: at(167, 13), partySize: 2, city: 'Seoul', languages: ['ko'], interests: ['history', 'palace'],
+        message: '경복궁과 창덕궁 후원을 역사 해설과 함께 둘러보고 싶습니다.',
+      });
+      await must('proGuide', 'POST', `/v1/guide-requests/${req.item.id}/offers`, { startAt: at(167, 9), endAt: at(167, 13), paid: true, priceMinor: 200000, itinerary: '09:00 광화문 → 경복궁 해설 → 북촌 점심 → 창덕궁 후원 특별관람' });
     });
   }
 
-  // Guides.
-  const guides = await must('anon', 'GET', '/v1/search/guides?limit=20');
-  const gid = (name) => (guides.items || []).map((g) => g.guide ?? g).find((g) => g.displayName === name)?.guideId;
-  const at = (days, hour) => `${addDays(TODAY, days)}T${String(hour).padStart(2, '0')}:00:00+09:00`;
-  await step('guide request (free) → offer → accept', async () => {
-    const req = await must('guest', 'POST', '/v1/guide-requests', {
-      guideId: gid('Local Friend Mina'), startAt: at(20, 10), endAt: at(20, 13), partySize: 2, city: 'Seoul', languages: ['ko', 'en'], interests: ['cafe', 'food', 'walking'],
-      message: '성수동 카페 골목과 서울숲 근처를 현지인처럼 걸어보고 싶어요!',
-    });
-    templates.guideRequest = req;
-    const rid = req.item.id;
-    templates.guideOffer = await must('guide', 'POST', `/v1/guide-requests/${rid}/offers`, { startAt: at(20, 10), endAt: at(20, 13), paid: false, itinerary: '10:00 성수역 3번 출구 → 카페 골목 → 수제화 거리 → 서울숲 산책 → 13:00 브런치' });
-    const g = await must('guest', 'GET', `/v1/guide-requests/${rid}`);
-    const offerVersion = g.item?.offerVersion ?? g.item?.currentOffer?.version ?? g.item?.offers?.at?.(-1)?.version ?? 1;
-    templates.guideAccept = await must('guest', 'POST', `/v1/guide-requests/${rid}/accept`, { offerVersion }, idem(`demo-accept-${rid}`));
-  });
-  await step('guide request (paid) → offer pending', async () => {
-    const req = await must('guest', 'POST', '/v1/guide-requests', {
-      guideId: gid('Pro Guide Jun'), startAt: at(27, 9), endAt: at(27, 13), partySize: 2, city: 'Seoul', languages: ['ko'], interests: ['history', 'palace'],
-      message: '경복궁과 창덕궁 후원을 역사 해설과 함께 둘러보고 싶습니다.',
-    });
-    await must('proGuide', 'POST', `/v1/guide-requests/${req.item.id}/offers`, { startAt: at(27, 9), endAt: at(27, 13), paid: true, priceMinor: 200000, itinerary: '09:00 광화문 → 경복궁 해설 → 북촌 점심 → 창덕궁 후원 특별관람' });
-  });
-  await step('exchange member asks a guide (open request)', async () => {
-    await must('exchange', 'POST', '/v1/guide-requests', { guideId: gid('Local Friend Mina'), startAt: at(40, 14), endAt: at(40, 17), partySize: 3, city: 'Seoul', languages: ['ko'], interests: ['market', 'food'], message: '광장시장 먹거리 투어 부탁드려요!' });
-  });
-
   // Tour order (MOCK payment).
   await step('guest orders a tour + pays', async () => {
-    const products = await must('anon', 'GET', '/v1/travel-products?limit=10');
-    const prod = products.items[0];
-    const deps = await must('anon', 'GET', `/v1/travel-products/${prod.id}/departures?limit=30`);
-    const dep = deps.items[0];
-    const order = await must('guest', 'POST', '/v1/orders', { items: [{ departureId: dep.id, qty: 2 }] }, idem(`demo-order-${dep.id}`));
-    templates.order = order;
-    const oid = order.item?.id ?? order.id;
-    const prep = await must('guest', 'POST', '/v1/payments/toss/prepare', { subjectType: 'ORDER', subjectId: oid }, idem(`demo-prep-${oid}`));
-    templates.orderConfirm = await must('guest', 'POST', '/v1/payments/toss/confirm', { paymentKey: `mock_${prep.orderId}`, orderId: prep.orderId, amount: prep.amount }, idem(`confirm-${prep.orderId}`));
+    const products = (await must('anon', 'GET', '/v1/travel-products?limit=50')).items;
+    for (const prod of products) {
+      const deps = (await must('anon', 'GET', `/v1/travel-products/${prod.id}/departures?limit=30`)).items ?? [];
+      const dep = deps.find((d) => (d.remaining ?? 10) >= 2 && Date.parse(d.startsAt) > Date.now() + 3 * 86400000);
+      if (!dep) continue;
+      const order = await must('guest', 'POST', '/v1/orders', { items: [{ departureId: dep.id, qty: 2 }] }, idem(`demo-order-${dep.id}`));
+      templates.order = order;
+      const oid = order.item?.id ?? order.id;
+      const prep = await must('guest', 'POST', '/v1/payments/toss/prepare', { subjectType: 'ORDER', subjectId: oid }, idem(`demo-prep-${oid}`));
+      templates.orderConfirm = await must('guest', 'POST', '/v1/payments/toss/confirm', { paymentKey: `mock_${prep.orderId}`, orderId: prep.orderId, amount: prep.amount }, idem(`confirm-${prep.orderId}`));
+      return;
+    }
+    throw new Error('no departure with seats');
   });
 
-  // Cancellation preview template (read-only).
   log('scenario: waiting for the worker to fan out notifications…');
   await sleep(Number(process.env.SCENARIO_SETTLE_MS || 8000));
 }
@@ -469,9 +478,9 @@ function variants(t) {
   const cal = { from: TODAY, to: addDays(TODAY, 365) };
   switch (t) {
     case '/v1/search/properties': {
-      const out = [{}, { limit: 12, sort: 'relevance' }, { limit: 24, page: 1, sort: 'relevance' }, { limit: 24, page: 2, sort: 'relevance' }, { limit: 50 }];
+      const out = [{}, { limit: 12, sort: 'relevance' }, { limit: 24, page: 1, sort: 'relevance' }, { limit: 24, page: 2, sort: 'relevance' }, { limit: 50 }, { limit: 50, page: 2 }];
       const ranges = [[], [addDays(TODAY, 14), addDays(TODAY, 17)], [addDays(TODAY, 30), addDays(TODAY, 60)]];
-      for (const city of ['서울', 'Seoul', '제주', 'Jeju', '부산', 'Busan', '강릉', 'Gangneung', '경주', 'Gyeongju', '속초', 'Sokcho']) {
+      for (const city of ['서울', 'Seoul', '제주', 'Jeju', '부산', 'Busan', '강릉', 'Gangneung', '경주', 'Gyeongju', '속초', 'Sokcho', '전주', 'Jeonju', '여수', 'Yeosu']) {
         for (const [ci, co] of ranges) out.push({ q: city, checkIn: ci, checkOut: co, page: 1, limit: 24, sort: 'relevance' });
         out.push({ q: city, guests: 2, page: 1, limit: 24, sort: 'relevance' });
       }
