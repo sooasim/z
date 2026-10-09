@@ -1497,14 +1497,18 @@ try {
   // inputs changed (copy, photos, reputation). The worker's search.projection consumer re-projects it; an unchanged
   // listing gets the same event id again, so a re-run emits nothing.
   const fp = await run(
-    `SELECT p.id, p.updated_at, rs.review_count, rs.rating_avg,
+    `SELECT p.id, p.slug, p.updated_at, rs.review_count, rs.rating_avg,
             (SELECT string_agg(m.public_url, ',' ORDER BY pm.sort_order) FROM property_media pm JOIN media_assets m ON m.id = pm.media_id WHERE pm.property_id = p.id) AS photos
        FROM properties p LEFT JOIN reputation_scores rs ON rs.target_type = 'PROPERTY' AND rs.target_id = p.id
       WHERE p.id = ANY($1::uuid[]) AND p.status = 'PUBLISHED'`,
     [Object.values(PROP).map((p) => p.id)],
   );
   for (const r of fp.rows) {
-    const fingerprint = sha256(J([new Date(r.updated_at).toISOString(), r.review_count, r.rating_avg, r.photos]));
+    // Photos of a media-assigned stay belong to seed-media, which runs after this transaction and emits its own
+    // projection event for them. Including them here would fingerprint NULL on a first run and the real list on the
+    // next one, so a re-run would emit a second event for an unchanged listing.
+    const photos = MEDIA_ASSIGNED_STAYS.has(r.slug) ? null : r.photos;
+    const fingerprint = sha256(J([new Date(r.updated_at).toISOString(), r.review_count, r.rating_avg, photos]));
     await ins('outbox_events (search projection)', `INSERT INTO outbox_events(id, aggregate_type, aggregate_id, event_type, payload, correlation_id) VALUES ($1,'property',$2,'property.seed_refreshed',$3,'seed-dev') ON CONFLICT DO NOTHING`,
       [uid(`outbox:search:${r.id}:${fingerprint}`), r.id, J({ propertyId: r.id, source: 'seed-dev' })]);
   }

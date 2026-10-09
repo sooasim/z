@@ -156,13 +156,18 @@ export async function evaluatePropertyCompliance(
     reasons.push('NO_LISTING_MODE');
   } else {
     const jurisdictions = propertyJurisdictions(p);
+    // `rule_key COLLATE "C"`: this order decides the order of `reasons`, which is persisted as compliance
+    // evidence (compliance_decisions.reasons). A locale-aware collation ignores punctuation at the primary
+    // level, so 'r7.kr.biz' and 'r7.kr11.homestay' sort one way on a C-locale cluster and the other way on an
+    // en_US.utf8 one — the same listing would yield a different evidence row per deployment. Byte order keeps
+    // the decision reproducible everywhere.
     const candidates = await q(
       db,
       `SELECT * FROM compliance_rules
         WHERE subject_type = 'PROPERTY' AND status = 'APPROVED' AND approved_at IS NOT NULL
           AND effective_from <= current_date AND (effective_until IS NULL OR effective_until >= current_date)
           AND jurisdiction = ANY($1::text[])
-        ORDER BY effective_from, rule_key`,
+        ORDER BY effective_from, rule_key COLLATE "C"`,
       [jurisdictions],
     );
     const rules = candidates.filter((r) => ruleApplies(r, p, modes));

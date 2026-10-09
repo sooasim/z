@@ -65,6 +65,10 @@ Optional observability: `docker compose -f docker-compose.yml -f infra/observabi
 
 ### Option B — local PostgreSQL + pnpm
 Requirements: Node 22 (`.nvmrc`), pnpm 10 (`corepack enable`), PostgreSQL 16+ on `localhost:5432`.
+
+Run the cluster in **UTC** (`timezone = 'UTC'`, which is the default for the Docker image and CI). The tests
+build period boundaries from `new Date().toISOString()`, so on a cluster set to a local zone the settlement
+and departure tests fail whenever the local date is ahead of the UTC date.
 ```bash
 pnpm install --frozen-lockfile
 cp .env.example .env                 # adjust DATABASE_URL etc.

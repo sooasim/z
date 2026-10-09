@@ -39,8 +39,16 @@ paths = [
   '''\.test\.tsx?$''',
   '''(^|/)pnpm-lock\.yaml$''',
   '''^infra/k8s/overlays/.*/secrets\.example\.env$''',
+  # Generated, minified web build output. The scan walks every commit, which includes the `gh-pages`
+  # branch the pages workflow force-pushes (docs/DEMO.md); bundler chunks trip generic-api-key on
+  # third-party option names such as `secret:"…"`. Source is scanned, so nothing is lost here.
+  '''(^|/)_next/static/''',
 ]
 regexes = [
   '''minio12345''',
   '''dev-master-key''',
+  # TossPayments `customerKey` is a merchant-assigned *customer identifier*, not a credential —
+  # apps/api/src/modules/payments/service.ts builds it as `JPU_<userId>`. It is recorded verbatim in the
+  # demo fixtures, where the id belongs to a throwaway local demo user.
+  '''JPU_[0-9a-zA-Z_\-]*''',
 ]
