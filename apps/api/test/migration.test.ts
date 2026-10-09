@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readFileSync, mkdtempSync, existsSync, readFileSync as rf } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createTestApp, createUser, type TestApp } from './helpers.js';
@@ -145,15 +146,18 @@ describe('MIG-01 dry run vs apply', () => {
   it('CLI: inventory and dry-run import run end-to-end', () => {
     const out = mkdtempSync(path.join(tmpdir(), 'jp-mig-'));
     const cli = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../scripts/migrate-legacy.ts');
-    const tsx = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../node_modules/.bin/tsx');
-    execFileSync(tsx, [cli, 'inventory', '--file', path.join(FIX, 'sitemap.xml'), '--out', path.join(out, 'inv.json')], { encoding: 'utf8' });
+    // The `.bin/tsx` shim is an extension-less shell script that Node cannot spawn on Windows; run tsx's own
+    // entrypoint with the current `node` instead (what the shim does on POSIX).
+    const tsxPkg = createRequire(import.meta.url).resolve('tsx/package.json');
+    const tsx = [path.resolve(path.dirname(tsxPkg), JSON.parse(rf(tsxPkg, 'utf8')).bin as string), cli];
+    execFileSync(process.execPath, [...tsx, 'inventory', '--file', path.join(FIX, 'sitemap.xml'), '--out', path.join(out, 'inv.json')], { encoding: 'utf8' });
     expect(JSON.parse(rf(path.join(out, 'inv.json'), 'utf8')).count).toBe(6);
     const dbUrl = (t.app.ctx.config.DATABASE_URL);
-    const res = spawnSync(tsx, [cli, 'import-redirects', '--file', path.join(FIX, 'redirects.csv')], { encoding: 'utf8', env: { ...process.env, DATABASE_URL: dbUrl } });
+    const res = spawnSync(process.execPath, [...tsx, 'import-redirects', '--file', path.join(FIX, 'redirects.csv')], { encoding: 'utf8', env: { ...process.env, DATABASE_URL: dbUrl } });
     expect(res.status).toBe(1); // the fixture contains an unsafe target → non-zero exit for CI gating
     expect(JSON.parse(res.stdout.slice(res.stdout.indexOf('{')))).toMatchObject({ mode: 'DRY_RUN', sourceCount: 4, errors: 1 });
     try {
-      execFileSync(tsx, [cli, 'reconcile', '--inventory', path.join(FIX, 'sitemap.xml'), '--out', path.join(out, 'rep')], { encoding: 'utf8', env: { ...process.env, DATABASE_URL: dbUrl } });
+      execFileSync(process.execPath, [...tsx, 'reconcile', '--inventory', path.join(FIX, 'sitemap.xml'), '--out', path.join(out, 'rep')], { encoding: 'utf8', env: { ...process.env, DATABASE_URL: dbUrl } });
     } catch (e: any) {
       expect(e.status).toBe(1); // not ready for cutover
     }

@@ -38,7 +38,7 @@ export default async function notificationsModule(app: FastifyInstance) {
   r.get(
     '/v1/notifications',
     {
-      schema: {
+      schema: { summary: 'List notifications',
         tags: TAG,
         querystring: z.object({
           unread: z.enum(['true', 'false']).optional().transform((v) => v === 'true'),
@@ -53,20 +53,20 @@ export default async function notificationsModule(app: FastifyInstance) {
 
   r.post(
     '/v1/notifications/:id/read',
-    { schema: { tags: TAG, params: z.object({ id: z.uuid() }) }, preHandler: requireAuth },
+    { schema: { summary: 'Mark a notification as read', tags: TAG, params: z.object({ id: z.uuid() }) }, preHandler: requireAuth },
     async (req) => ({ item: await markNotificationRead(pool, getActor(req).userId, req.params.id) }),
   );
 
-  r.post('/v1/notifications/read-all', { schema: { tags: TAG }, preHandler: requireAuth }, async (req) => markAllRead(pool, getActor(req).userId));
+  r.post('/v1/notifications/read-all', { schema: { summary: 'Mark every notification as read', tags: TAG }, preHandler: requireAuth }, async (req) => markAllRead(pool, getActor(req).userId));
 
-  r.get('/v1/notification-preferences', { schema: { tags: TAG }, preHandler: requireAuth }, async (req) => ({
+  r.get('/v1/notification-preferences', { schema: { summary: 'Get notification preferences', tags: TAG }, preHandler: requireAuth }, async (req) => ({
     items: await effectivePreferences(pool, getActor(req).userId),
   }));
 
   r.patch(
     '/v1/notification-preferences',
     {
-      schema: {
+      schema: { summary: 'Update notification preferences',
         tags: TAG,
         body: z.object({
           preferences: z.array(z.object({ category: z.enum(CATEGORIES), channel: z.enum(CHANNELS), enabled: z.boolean() })).min(1).max(50),

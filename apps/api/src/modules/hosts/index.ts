@@ -23,17 +23,17 @@ export default async function hostsModule(app: FastifyInstance) {
     return reply.status(201).send({ item });
   });
 
-  r.get('/v1/host-applications', { schema: { tags: TAG }, preHandler: requireAuth }, async (req) => ({
+  r.get('/v1/host-applications', { schema: { summary: 'List host applications of the current user', tags: TAG }, preHandler: requireAuth }, async (req) => ({
     items: await q(pool, `SELECT id, status, checklist, decision_reason, created_at, decided_at FROM host_applications WHERE user_id = $1 ORDER BY created_at DESC`, [getActor(req).userId]),
   }));
 
-  r.get('/v1/host-applications/:id', { schema: { tags: TAG, params: idParams }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/host-applications/:id', { schema: { summary: 'Get a host application', tags: TAG, params: idParams }, preHandler: requireAuth }, async (req) => {
     const item = await maybeOne(pool, `SELECT id, user_id, status, checklist, decision_reason, created_at, decided_at FROM host_applications WHERE id = $1 AND user_id = $2`, [req.params.id, getActor(req).userId]);
     if (!item) throw notFound('Host application');
     return { item };
   });
 
-  r.post('/v1/host-applications/:id/withdraw', { schema: { tags: TAG, params: idParams }, preHandler: requireAuth }, async (req) => ({
+  r.post('/v1/host-applications/:id/withdraw', { schema: { summary: 'Withdraw a host application', tags: TAG, params: idParams }, preHandler: requireAuth }, async (req) => ({
     item: await withTx(pool, (tx) => svc.withdraw(tx, ctxFromRequest(req), req.params.id)),
   }));
 
@@ -44,7 +44,7 @@ export default async function hostsModule(app: FastifyInstance) {
   // ---- admin -------------------------------------------------------------------------------------------------
   const staff = requireRole('ADMIN', 'COMPLIANCE');
   r.get('/v1/admin/host-applications', {
-    schema: { tags: TAG, querystring: pagination.extend({ status: z.enum(['SUBMITTED', 'IN_REVIEW', 'APPROVED', 'REJECTED', 'WITHDRAWN']).optional() }) },
+    schema: { summary: 'List host applications', tags: TAG, querystring: pagination.extend({ status: z.enum(['SUBMITTED', 'IN_REVIEW', 'APPROVED', 'REJECTED', 'WITHDRAWN']).optional() }) },
     preHandler: staff,
   }, async (req) => {
     const c = decodeCursor(req.query.cursor);
@@ -60,12 +60,12 @@ export default async function hostsModule(app: FastifyInstance) {
   });
 
   r.post('/v1/admin/host-applications/:id/approve', {
-    schema: { tags: TAG, params: idParams, body: z.object({ reason: z.string().max(1000).optional() }).nullish() },
+    schema: { summary: 'Approve a host application', tags: TAG, params: idParams, body: z.object({ reason: z.string().max(1000).optional() }).nullish() },
     preHandler: staff,
   }, async (req) => ({ item: await withTx(pool, (tx) => svc.decide(tx, ctxFromRequest(req), req.params.id, { approve: true, reason: req.body?.reason })) }));
 
   r.post('/v1/admin/host-applications/:id/reject', {
-    schema: { tags: TAG, params: idParams, body: z.object({ reason: z.string().trim().min(3).max(1000) }) },
+    schema: { summary: 'Reject a host application', tags: TAG, params: idParams, body: z.object({ reason: z.string().trim().min(3).max(1000) }) },
     preHandler: staff,
   }, async (req) => ({ item: await withTx(pool, (tx) => svc.decide(tx, ctxFromRequest(req), req.params.id, { approve: false, reason: req.body.reason })) }));
 }

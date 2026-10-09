@@ -62,7 +62,7 @@ export default async function charterModule(app: FastifyInstance) {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const pool = app.ctx.pool;
 
-  r.get('/v1/content/charter', { schema: { tags: [TAG], querystring: z.object({ locale: z.string().max(10).default('ko-KR') }) } }, async (req) => {
+  r.get('/v1/content/charter', { schema: { summary: 'Published charter and flight-share content', tags: [TAG], querystring: z.object({ locale: z.string().max(10).default('ko-KR') }) } }, async (req) => {
     const entry = await maybeOne(
       pool,
       `SELECT slug, locale, title, summary, body_md, data, seo, published_at FROM cms_entries
@@ -152,7 +152,7 @@ export default async function charterModule(app: FastifyInstance) {
     },
   );
 
-  r.get('/v1/charter/requests/mine', { schema: { tags: [TAG] }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/charter/requests/mine', { schema: { summary: 'List charter enquiries of the current user', tags: [TAG] }, preHandler: requireAuth }, async (req) => {
     const rows = await q(pool, `SELECT * FROM charter_requests WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`, [getActor(req).userId]);
     return { items: rows.map((x) => ({ ...leadDto(x), adminNote: undefined, assigneeId: undefined })) };
   });
@@ -169,7 +169,7 @@ export default async function charterModule(app: FastifyInstance) {
   // ---- admin lead pipeline
   r.get(
     '/v1/admin/charter/requests',
-    { schema: { tags: [TAG], querystring: pagination.extend({ status: z.enum(['NEW', 'CONTACTED', 'QUALIFIED', 'CLOSED']).optional() }) }, preHandler: requireRole('ADMIN', 'SUPPORT') },
+    { schema: { summary: 'List charter enquiries', tags: [TAG], querystring: pagination.extend({ status: z.enum(['NEW', 'CONTACTED', 'QUALIFIED', 'CLOSED']).optional() }) }, preHandler: requireRole('ADMIN', 'SUPPORT') },
     async (req) => {
       const c = decodeCursor(req.query.cursor);
       const rows = await q(
@@ -186,7 +186,7 @@ export default async function charterModule(app: FastifyInstance) {
   r.patch(
     '/v1/admin/charter/requests/:id',
     {
-      schema: {
+      schema: { summary: 'Update a charter enquiry',
         tags: [TAG],
         params: idParams,
         body: z.object({ status: z.enum(['CONTACTED', 'QUALIFIED', 'CLOSED']).optional(), adminNote: z.string().max(4000).optional(), assigneeId: z.uuid().nullable().optional() }),

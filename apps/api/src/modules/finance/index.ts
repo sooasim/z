@@ -99,7 +99,7 @@ export default async function financeModule(app: FastifyInstance) {
   // ------------------------------------------------------------------ FIN-03 rules
   r.get(
     '/v1/finance/rules',
-    { schema: { tags: [T_RULES], querystring: z.object({ status: z.enum(['DRAFT', 'APPROVED', 'RETIRED']).optional(), ruleType: z.string().optional(), domain: z.string().optional() }) }, preHandler: accounting },
+    { schema: { summary: 'List effective-dated fee and tax rules', tags: [T_RULES], querystring: z.object({ status: z.enum(['DRAFT', 'APPROVED', 'RETIRED']).optional(), ruleType: z.string().optional(), domain: z.string().optional() }) }, preHandler: accounting },
     async (req) => {
       const rows = await q(
         pool,
@@ -111,7 +111,7 @@ export default async function financeModule(app: FastifyInstance) {
     },
   );
 
-  r.post('/v1/finance/rules', { schema: { tags: [T_RULES], body: ruleBody }, preHandler: accounting }, async (req, reply) => {
+  r.post('/v1/finance/rules', { schema: { summary: 'Propose a fee or tax rule version', tags: [T_RULES], body: ruleBody }, preHandler: accounting }, async (req, reply) => {
     const ctx = ctxFromRequest(req);
     const b = req.body;
     const row = await withTx(pool, async (tx) => {
@@ -129,7 +129,7 @@ export default async function financeModule(app: FastifyInstance) {
     return reply.status(201).send({ item: ruleDto(row) });
   });
 
-  r.post('/v1/finance/rules/:id/approve', { schema: { tags: [T_RULES], params: idParams }, preHandler: accounting }, async (req) => {
+  r.post('/v1/finance/rules/:id/approve', { schema: { summary: 'Approve a fee or tax rule version', tags: [T_RULES], params: idParams }, preHandler: accounting }, async (req) => {
     const ctx = ctxFromRequest(req);
     const actor = getActor(req);
     const row = await withTx(pool, async (tx) => {
@@ -166,7 +166,7 @@ export default async function financeModule(app: FastifyInstance) {
    */
   r.post(
     '/v1/finance/rules/:id/retire',
-    { schema: { tags: [T_RULES], params: idParams, body: z.object({ reason: z.string().min(3).max(500) }) }, preHandler: accounting },
+    { schema: { summary: 'Retire a fee or tax rule version', tags: [T_RULES], params: idParams, body: z.object({ reason: z.string().min(3).max(500) }) }, preHandler: accounting },
     async (req, reply) => {
       const ctx = ctxFromRequest(req);
       const actor = getActor(req);
@@ -227,7 +227,7 @@ export default async function financeModule(app: FastifyInstance) {
     async (req) => ({ item: await quoteFees(pool, req.query) }),
   );
 
-  r.get('/v1/receipts', { schema: { tags: [T_RULES], querystring: pagination }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/receipts', { schema: { summary: 'List receipts of the current user', tags: [T_RULES], querystring: pagination }, preHandler: requireAuth }, async (req) => {
     const actor = getActor(req);
     const c = decodeCursor(req.query.cursor);
     const rows = await q(
@@ -245,7 +245,7 @@ export default async function financeModule(app: FastifyInstance) {
   });
 
   // ------------------------------------------------------------------ FIN-01 ledger (admin read + PG settlement)
-  r.get('/v1/admin/ledger/accounts', { schema: { tags: [T_LEDGER], querystring: z.object({ currency: z.string().optional(), ownerId: z.uuid().optional() }) }, preHandler: accounting }, async (req) => {
+  r.get('/v1/admin/ledger/accounts', { schema: { summary: 'List ledger accounts', tags: [T_LEDGER], querystring: z.object({ currency: z.string().optional(), ownerId: z.uuid().optional() }) }, preHandler: accounting }, async (req) => {
     const rows = await q(
       pool,
       `SELECT b.account_id AS id, b.code, b.account_type, b.currency, b.debit_minor::bigint AS debit_minor, b.credit_minor::bigint AS credit_minor, b.balance_minor::bigint AS balance_minor,
@@ -259,7 +259,7 @@ export default async function financeModule(app: FastifyInstance) {
 
   r.get(
     '/v1/admin/ledger/transactions',
-    { schema: { tags: [T_LEDGER], querystring: pagination.extend({ sourceType: z.string().optional(), sourceId: z.uuid().optional(), type: z.string().optional() }) }, preHandler: accounting },
+    { schema: { summary: 'List double-entry ledger transactions', tags: [T_LEDGER], querystring: pagination.extend({ sourceType: z.string().optional(), sourceId: z.uuid().optional(), type: z.string().optional() }) }, preHandler: accounting },
     async (req) => {
       const c = decodeCursor(req.query.cursor);
       const txs = await q(
@@ -295,7 +295,7 @@ export default async function financeModule(app: FastifyInstance) {
     },
   );
 
-  r.get('/v1/admin/ledger/trial-balance', { schema: { tags: [T_LEDGER] }, preHandler: accounting }, async () => trialBalance(pool));
+  r.get('/v1/admin/ledger/trial-balance', { schema: { summary: 'Trial balance per currency', tags: [T_LEDGER] }, preHandler: accounting }, async () => trialBalance(pool));
 
   r.post(
     '/v1/admin/ledger/pg-settlements',
@@ -354,14 +354,14 @@ export default async function financeModule(app: FastifyInstance) {
     },
   );
 
-  r.get('/v1/payout-accounts', { schema: { tags: [T_SETTLE] }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/payout-accounts', { schema: { summary: 'List payout accounts of the current user', tags: [T_SETTLE] }, preHandler: requireAuth }, async (req) => {
     const rows = await q(pool, `SELECT * FROM payout_accounts WHERE user_id = $1 ORDER BY created_at DESC`, [getActor(req).userId]);
     return { items: rows.map(payoutAccountDto) };
   });
 
   r.post(
     '/v1/admin/payout-accounts/:id/verify',
-    { schema: { tags: [T_SETTLE], params: idParams, body: z.object({ decision: z.enum(['VERIFIED', 'REJECTED', 'DISABLED']).default('VERIFIED') }) }, preHandler: accounting },
+    { schema: { summary: 'Verify a payout account', tags: [T_SETTLE], params: idParams, body: z.object({ decision: z.enum(['VERIFIED', 'REJECTED', 'DISABLED']).default('VERIFIED') }) }, preHandler: accounting },
     async (req) => {
       const ctx = ctxFromRequest(req);
       const row = await withTx(pool, async (tx) => {
@@ -378,7 +378,7 @@ export default async function financeModule(app: FastifyInstance) {
   // ------------------------------------------------------------------ FIN-02 settlements
   r.post(
     '/v1/admin/settlements/generate',
-    { schema: { tags: [T_SETTLE], body: z.object({ periodStart: isoDate, periodEnd: isoDate }) }, preHandler: accounting },
+    { schema: { summary: 'Generate settlement statements for a period', tags: [T_SETTLE], body: z.object({ periodStart: isoDate, periodEnd: isoDate }) }, preHandler: accounting },
     async (req, reply) => {
       const ctx = ctxFromRequest(req);
       const key = idempotencyKeyFrom(req, false);
@@ -392,7 +392,7 @@ export default async function financeModule(app: FastifyInstance) {
 
   r.get(
     '/v1/admin/settlements',
-    { schema: { tags: [T_SETTLE], querystring: pagination.extend({ status: z.string().optional(), payeeId: z.uuid().optional() }) }, preHandler: accounting },
+    { schema: { summary: 'List settlement statements', tags: [T_SETTLE], querystring: pagination.extend({ status: z.string().optional(), payeeId: z.uuid().optional() }) }, preHandler: accounting },
     async (req) => {
       const c = decodeCursor(req.query.cursor);
       const rows = await q<SettlementRow>(
@@ -418,20 +418,20 @@ export default async function financeModule(app: FastifyInstance) {
     return reply.type('text/csv; charset=utf-8').header('content-disposition', 'attachment; filename="payouts.csv"').send(payoutCsv(rows as any));
   });
 
-  r.get('/v1/admin/settlements/:id', { schema: { tags: [T_SETTLE], params: idParams }, preHandler: accounting }, async (req) => {
+  r.get('/v1/admin/settlements/:id', { schema: { summary: 'Get a settlement statement with its lines', tags: [T_SETTLE], params: idParams }, preHandler: accounting }, async (req) => {
     const s = await maybeOne<SettlementRow>(pool, `SELECT * FROM settlements WHERE id = $1`, [req.params.id]);
     if (!s) throw notFound('Settlement');
     const items = await q(pool, `SELECT * FROM settlement_items WHERE settlement_id = $1 ORDER BY source_type, source_id`, [s.id]);
     return { item: { ...settlementDto(s), items } };
   });
 
-  r.post('/v1/admin/settlements/:id/approve', { schema: { tags: [T_SETTLE], params: idParams }, preHandler: requireRole('ACCOUNTING') }, async (req) => {
+  r.post('/v1/admin/settlements/:id/approve', { schema: { summary: 'Approve a settlement statement', tags: [T_SETTLE], params: idParams }, preHandler: requireRole('ACCOUNTING') }, async (req) => {
     const ctx = ctxFromRequest(req);
     const row = await withTx(pool, (tx) => approveSettlement(tx, ctx, req.params.id));
     return { item: settlementDto(row) };
   });
 
-  r.post('/v1/admin/settlements/:id/payout', { schema: { tags: [T_SETTLE], params: idParams }, preHandler: requireRole('ACCOUNTING') }, async (req, reply) => {
+  r.post('/v1/admin/settlements/:id/payout', { schema: { summary: 'Start the payout for a settlement statement', tags: [T_SETTLE], params: idParams }, preHandler: requireRole('ACCOUNTING') }, async (req, reply) => {
     const ctx = ctxFromRequest(req);
     const key = idempotencyKeyFrom(req);
     const res = await withIdempotency(pool, `finance.settlement.payout:${req.params.id}`, key, {}, async (tx) => ({ body: await executePayout(tx, ctx, req.params.id) }));
@@ -440,7 +440,7 @@ export default async function financeModule(app: FastifyInstance) {
 
   r.post(
     '/v1/admin/settlements/:id/mark-paid',
-    { schema: { tags: [T_SETTLE], params: idParams, body: z.object({ payoutRef: z.string().min(3).max(200) }) }, preHandler: requireRole('ACCOUNTING') },
+    { schema: { summary: 'Mark a settlement statement as paid', tags: [T_SETTLE], params: idParams, body: z.object({ payoutRef: z.string().min(3).max(200) }) }, preHandler: requireRole('ACCOUNTING') },
     async (req, reply) => {
       const ctx = ctxFromRequest(req);
       const key = idempotencyKeyFrom(req);
@@ -451,7 +451,7 @@ export default async function financeModule(app: FastifyInstance) {
     },
   );
 
-  r.post('/v1/admin/settlements/:id/reconcile', { schema: { tags: [T_SETTLE], params: idParams }, preHandler: requireRole('ACCOUNTING') }, async (req) => {
+  r.post('/v1/admin/settlements/:id/reconcile', { schema: { summary: 'Reconcile a paid settlement statement', tags: [T_SETTLE], params: idParams }, preHandler: requireRole('ACCOUNTING') }, async (req) => {
     const ctx = ctxFromRequest(req);
     const row = await withTx(pool, async (tx) => {
       const { row } = await SettlementFSM.transition(tx, ctx, { table: 'settlements', id: req.params.id, from: 'PAID', to: 'RECONCILED', reason: 'BANK_RECONCILED' });
@@ -464,7 +464,7 @@ export default async function financeModule(app: FastifyInstance) {
 
   r.post(
     '/v1/admin/settlements/:id/hold',
-    { schema: { tags: [T_SETTLE], params: idParams, body: z.object({ reason: z.string().min(3).max(300) }) }, preHandler: accounting },
+    { schema: { summary: 'Hold a settlement statement', tags: [T_SETTLE], params: idParams, body: z.object({ reason: z.string().min(3).max(300) }) }, preHandler: accounting },
     async (req) => {
       const ctx = ctxFromRequest(req);
       const row = await withTx(pool, async (tx) => {
@@ -478,7 +478,7 @@ export default async function financeModule(app: FastifyInstance) {
 
   r.post(
     '/v1/admin/settlements/:id/release',
-    { schema: { tags: [T_SETTLE], params: idParams, body: z.object({ reason: z.string().min(3).max(300) }) }, preHandler: accounting },
+    { schema: { summary: 'Release a held settlement statement', tags: [T_SETTLE], params: idParams, body: z.object({ reason: z.string().min(3).max(300) }) }, preHandler: accounting },
     async (req) => {
       const ctx = ctxFromRequest(req);
       const row = await withTx(pool, async (tx) => {
@@ -492,7 +492,7 @@ export default async function financeModule(app: FastifyInstance) {
   );
 
   // payee earnings statements (host / guide / supplier) — ledger-derived
-  r.get('/v1/provider/settlements', { schema: { tags: [T_SETTLE], querystring: pagination }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/provider/settlements', { schema: { summary: 'List settlement statements of the current payee', tags: [T_SETTLE], querystring: pagination }, preHandler: requireAuth }, async (req) => {
     const actor = getActor(req);
     const c = decodeCursor(req.query.cursor);
     const rows = await q<SettlementRow>(

@@ -71,7 +71,7 @@ export default async function cmsModule(app: FastifyInstance) {
   r.get(
     '/v1/admin/cms/entries',
     {
-      schema: {
+      schema: { summary: 'List CMS entries',
         tags: TAG,
         querystring: z.object({ type: z.enum(ENTRY_TYPES).optional(), status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).optional(), locale: locale.optional(), limit: z.coerce.number().int().min(1).max(200).default(50) }),
       },
@@ -80,20 +80,25 @@ export default async function cmsModule(app: FastifyInstance) {
     async (req) => ({ items: (await adminListEntries(pool, req.query)).map(toEntryDto) }),
   );
 
-  r.post('/v1/admin/cms/entries', { schema: { tags: TAG, body: entryBody }, preHandler: editor }, async (req, reply) => {
+  r.post('/v1/admin/cms/entries', { schema: { summary: 'Create a CMS entry', tags: TAG, body: entryBody }, preHandler: editor }, async (req, reply) => {
     return reply.status(201).send({ item: toEntryDto(await adminTx(req, 'cms.entry.created', (tx, ctx) => createEntry(tx, ctx, req.body), entryRes)) });
   });
 
   r.patch(
     '/v1/admin/cms/entries/:id',
-    { schema: { tags: TAG, params: z.object({ id: z.uuid() }), body: entryBody.omit({ type: true }).partial() }, preHandler: editor },
+    { schema: { summary: 'Update a CMS entry', tags: TAG, params: z.object({ id: z.uuid() }), body: entryBody.omit({ type: true }).partial() }, preHandler: editor },
     async (req) => ({ item: toEntryDto(await adminTx(req, 'cms.entry.updated', (tx, ctx) => updateEntry(tx, ctx, req.params.id, req.body), entryRes)) }),
   );
 
-  for (const [action, to] of [['publish', 'PUBLISHED'], ['unpublish', 'DRAFT'], ['archive', 'ARCHIVED'], ['restore', 'DRAFT']] as const) {
+  for (const [action, to, summary] of [
+    ['publish', 'PUBLISHED', 'Publish a CMS entry'],
+    ['unpublish', 'DRAFT', 'Unpublish a CMS entry'],
+    ['archive', 'ARCHIVED', 'Archive a CMS entry'],
+    ['restore', 'DRAFT', 'Restore an archived CMS entry to draft'],
+  ] as const) {
     r.post(
       `/v1/admin/cms/entries/:id/${action}`,
-      { schema: { tags: TAG, params: z.object({ id: z.uuid() }), body: z.object({ reason: z.string().max(500).optional() }).nullish() }, preHandler: editor },
+      { schema: { summary, tags: TAG, params: z.object({ id: z.uuid() }), body: z.object({ reason: z.string().max(500).optional() }).nullish() }, preHandler: editor },
       async (req) => ({
         item: toEntryDto(await adminTx(req, `cms.entry.${action}`, (tx, ctx) => transitionEntry(tx, ctx, req.params.id, to, req.body?.reason), entryRes)),
       }),
@@ -104,7 +109,7 @@ export default async function cmsModule(app: FastifyInstance) {
   r.get(
     '/v1/content/:type',
     {
-      schema: {
+      schema: { summary: 'List published content of a type',
         tags: TAG,
         params: z.object({ type: z.string().max(40) }),
         querystring: z.object({ locale: locale.default('ko-KR'), limit: z.coerce.number().int().min(1).max(100).default(50), cursor: z.string().max(200).optional() }),
@@ -117,19 +122,19 @@ export default async function cmsModule(app: FastifyInstance) {
   );
   r.get(
     '/v1/content/:type/:slug',
-    { schema: { tags: TAG, params: z.object({ type: z.string().max(40), slug: z.string().max(120) }), querystring: z.object({ locale: locale.default('ko-KR') }) } },
+    { schema: { summary: 'Get published content by slug', tags: TAG, params: z.object({ type: z.string().max(40), slug: z.string().max(120) }), querystring: z.object({ locale: locale.default('ko-KR') }) } },
     async (req) => ({ item: toPublicEntryDto(await getPublished(pool, parseEntryType(req.params.type), req.params.slug, req.query.locale), webUrl) }),
   );
 
   // ---- SEO redirects
-  r.get('/v1/seo/redirects', { schema: { tags: TAG, querystring: z.object({ path: z.string().min(1).max(2000) }) } }, async (req) => ({
+  r.get('/v1/seo/redirects', { schema: { summary: 'Public 301 redirect map', tags: TAG, querystring: z.object({ path: z.string().min(1).max(2000) }) } }, async (req) => ({
     item: await resolveRedirect(pool, req.query.path),
   }));
 
   r.get(
     '/v1/admin/seo/redirects',
     {
-      schema: {
+      schema: { summary: 'List 301 redirect mappings',
         tags: TAG,
         querystring: z.object({
           approved: z.enum(['true', 'false']).optional().transform((v) => (v === undefined ? undefined : v === 'true')),
@@ -148,14 +153,14 @@ export default async function cmsModule(app: FastifyInstance) {
     details: { source, inserted: out.inserted, updated: out.updated, errors: out.errors.length },
   });
 
-  r.put('/v1/admin/seo/redirects', { schema: { tags: TAG, body: redirectItem }, preHandler: editor }, async (req) => {
+  r.put('/v1/admin/seo/redirects', { schema: { summary: 'Create or replace a redirect mapping', tags: TAG, body: redirectItem }, preHandler: editor }, async (req) => {
     const canApprove = hasRole(getActor(req), 'ADMIN');
     return adminTx(req, 'seo.redirects.upserted', (tx, ctx) => upsertRedirects(tx, ctx, [req.body], { source: 'admin', canApprove }), redirectsRes('admin'));
   });
 
   r.post(
     '/v1/admin/seo/redirects/bulk',
-    { schema: { tags: TAG, body: z.object({ items: z.array(redirectItem).min(1).max(5000), source: z.string().max(50).optional() }) }, preHandler: editor },
+    { schema: { summary: 'Import redirect mappings in bulk', tags: TAG, body: z.object({ items: z.array(redirectItem).min(1).max(5000), source: z.string().max(50).optional() }) }, preHandler: editor },
     async (req) => {
       const canApprove = hasRole(getActor(req), 'ADMIN');
       const source = req.body.source ?? 'bulk';
@@ -165,7 +170,7 @@ export default async function cmsModule(app: FastifyInstance) {
 
   r.post(
     '/v1/admin/seo/redirects/approve',
-    { schema: { tags: TAG, body: z.object({ paths: z.array(z.string().max(2000)).min(1).max(5000), approved: z.boolean().default(true) }) }, preHandler: requireRole('ADMIN') },
+    { schema: { summary: 'Approve redirect mappings for cutover', tags: TAG, body: z.object({ paths: z.array(z.string().max(2000)).min(1).max(5000), approved: z.boolean().default(true) }) }, preHandler: requireRole('ADMIN') },
     async (req) =>
       adminTx(
         req,
@@ -175,7 +180,7 @@ export default async function cmsModule(app: FastifyInstance) {
       ),
   );
 
-  r.delete('/v1/admin/seo/redirects', { schema: { tags: TAG, querystring: z.object({ path: z.string().min(1).max(2000) }) }, preHandler: editor }, async (req) => ({
+  r.delete('/v1/admin/seo/redirects', { schema: { summary: 'Delete a redirect mapping', tags: TAG, querystring: z.object({ path: z.string().min(1).max(2000) }) }, preHandler: editor }, async (req) => ({
     item: await adminTx(req, 'seo.redirect.deleted', (tx, ctx) => deleteRedirect(tx, ctx, req.query.path), (row) => ({ type: 'seo_redirect', id: row.legacy_path })),
   }));
 
@@ -183,7 +188,7 @@ export default async function cmsModule(app: FastifyInstance) {
   r.get(
     '/v1/admin/cms/external-refs',
     {
-      schema: {
+      schema: { summary: 'List external references used by content',
         tags: TAG,
         querystring: z.object({
           system: z.enum(EXTERNAL_SYSTEMS).optional(),
@@ -198,7 +203,7 @@ export default async function cmsModule(app: FastifyInstance) {
     async (req) => ({ items: await listExternalRefs(pool, req.query) }),
   );
 
-  r.get('/v1/admin/cms/entries/:id/refs', { schema: { tags: TAG, params: z.object({ id: z.uuid() }) }, preHandler: editor }, async (req) => ({
+  r.get('/v1/admin/cms/entries/:id/refs', { schema: { summary: 'List external references of a CMS entry', tags: TAG, params: z.object({ id: z.uuid() }) }, preHandler: editor }, async (req) => ({
     items: await listExternalRefs(pool, { entryId: req.params.id, limit: 50, offset: 0 }),
   }));
 
@@ -251,5 +256,5 @@ export default async function cmsModule(app: FastifyInstance) {
     );
   });
 
-  r.get('/v1/seo/sitemap', { schema: { tags: TAG } }, async () => sitemap(pool, app.ctx.config.PUBLIC_WEB_URL));
+  r.get('/v1/seo/sitemap', { schema: { summary: 'Sitemap entries for published content', tags: TAG } }, async () => sitemap(pool, app.ctx.config.PUBLIC_WEB_URL));
 }

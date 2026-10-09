@@ -94,12 +94,12 @@ export default async function propertiesModule(app: FastifyInstance) {
     items: await listCancellationPolicies(app.ctx.pool),
   }));
 
-  r.post('/v1/properties', { schema: { tags, body: createBody }, preHandler: requireAuth }, async (req, reply) => {
+  r.post('/v1/properties', { schema: { summary: 'Create a property draft', tags, body: createBody }, preHandler: requireAuth }, async (req, reply) => {
     assertValidNights(req.body.minNights, req.body.maxNights);
     return reply.status(201).send({ item: await createProperty(ctxFromRequest(req), getActor(req), req.body as any) });
   });
 
-  r.patch('/v1/properties/:id', { schema: { tags, params: idParams, body: patchBody }, preHandler: requireAuth }, async (req) => {
+  r.patch('/v1/properties/:id', { schema: { summary: 'Update a property', tags, params: idParams, body: patchBody }, preHandler: requireAuth }, async (req) => {
     assertValidNights(req.body.minNights, req.body.maxNights);
     return { item: await updateProperty(ctxFromRequest(req), getActor(req), req.params.id, req.body as any) };
   });
@@ -115,7 +115,7 @@ export default async function propertiesModule(app: FastifyInstance) {
     item: await getPublicBySlug(app.ctx.pool, req.params.slug),
   }));
 
-  r.get('/v1/properties/:id', { schema: { tags, params: idParams } }, async (req) => ({
+  r.get('/v1/properties/:id', { schema: { summary: 'Get a property', tags, params: idParams } }, async (req) => ({
     item: await getProperty(ctxFromRequest(req), req.actor ?? null, req.params.id),
   }));
 
@@ -125,29 +125,29 @@ export default async function propertiesModule(app: FastifyInstance) {
   }, async (req) => ({ items: await listHostProperties(app.ctx.pool, getActor(req), req.query.status) }));
 
   r.put('/v1/properties/:id/amenities', {
-    schema: { tags, params: idParams, body: z.object({ codes: z.array(z.string().max(60)).max(100) }) },
+    schema: { summary: 'Replace the amenities of a property', tags, params: idParams, body: z.object({ codes: z.array(z.string().max(60)).max(100) }) },
     preHandler: requireAuth,
   }, async (req) => ({ items: await setAmenities(ctxFromRequest(req), getActor(req), req.params.id, req.body.codes) }));
 
-  r.post('/v1/properties/:id/publish', { schema: { tags, params: idParams }, preHandler: requireAuth }, async (req, reply) => {
+  r.post('/v1/properties/:id/publish', { schema: { summary: 'Publish a property', tags, params: idParams }, preHandler: requireAuth }, async (req, reply) => {
     const res = await publishProperty(ctxFromRequest(req), getActor(req), req.params.id);
     return reply.status(res.outcome === 'PUBLISHED' ? 200 : 202).send(res);
   });
-  r.post('/v1/properties/:id/unlist', { schema: { tags, params: idParams }, preHandler: requireAuth }, async (req) => ({
+  r.post('/v1/properties/:id/unlist', { schema: { summary: 'Unlist a published property', tags, params: idParams }, preHandler: requireAuth }, async (req) => ({
     item: await unlistProperty(ctxFromRequest(req), getActor(req), req.params.id),
   }));
   r.post('/v1/properties/:id/withdraw', { schema: { tags, params: idParams, summary: 'Withdraw an IN_REVIEW listing back to DRAFT' }, preHandler: requireAuth }, async (req) => ({
     item: await withdrawProperty(ctxFromRequest(req), getActor(req), req.params.id),
   }));
-  r.post('/v1/properties/:id/archive', { schema: { tags, params: idParams }, preHandler: requireAuth }, async (req) => ({
+  r.post('/v1/properties/:id/archive', { schema: { summary: 'Archive a property', tags, params: idParams }, preHandler: requireAuth }, async (req) => ({
     item: await archiveProperty(ctxFromRequest(req), getActor(req), req.params.id),
   }));
 
   const staff = requireRole('ADMIN', 'COMPLIANCE'); // staff-only → AAL2
-  r.post('/v1/admin/properties/:id/block', { schema: { tags: ['STAY-01', 'STAY-03'], params: idParams, body: reasonBody }, preHandler: staff }, async (req) => ({
+  r.post('/v1/admin/properties/:id/block', { schema: { summary: 'Block a property from public visibility', tags: ['STAY-01', 'STAY-03'], params: idParams, body: reasonBody }, preHandler: staff }, async (req) => ({
     item: await blockProperty(ctxFromRequest(req), req.params.id, req.body.reason),
   }));
-  r.post('/v1/admin/properties/:id/unblock', { schema: { tags: ['STAY-01', 'STAY-03'], params: idParams, body: reasonBody }, preHandler: staff }, async (req) => ({
+  r.post('/v1/admin/properties/:id/unblock', { schema: { summary: 'Unblock a property', tags: ['STAY-01', 'STAY-03'], params: idParams, body: reasonBody }, preHandler: staff }, async (req) => ({
     item: await unblockProperty(ctxFromRequest(req), req.params.id, req.body.reason),
   }));
 }

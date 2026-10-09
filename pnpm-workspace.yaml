@@ -3,3 +3,6 @@ packages:
   - "packages/*"
 onlyBuiltDependencies:
   - esbuild
+# Transitive-dependency pins (pnpm 10 reads `overrides` here, not from package.json).
+overrides:
+  postcss: ">=8.5.29"

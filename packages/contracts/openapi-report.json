@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-10-07T23:24:38.975Z",
-  "operations": 379,
-  "paths": 328,
+  "generatedAt": "2026-10-09T04:37:36.898Z",
+  "operations": 380,
+  "paths": 329,
   "moduleTags": {
     "AI-01": 1,
     "AI-02": 1,
@@ -19,7 +19,7 @@
     "EXCH-06": 3,
     "FIN-01": 4,
     "FIN-02": 14,
-    "FIN-03": 6,
+    "FIN-03": 7,
     "GUIDE-01": 10,
     "GUIDE-02": 2,
     "GUIDE-03": 1,

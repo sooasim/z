@@ -61,18 +61,18 @@ export default async function guideModule(app: FastifyInstance) {
   registerJob('guide.qualification-expiry', 3_600_000, runQualificationExpiry);
 
   // ------------------------------------------------------------ GUIDE-01 profile & type
-  r.post('/v1/guides/profile', { schema: { tags: ['GUIDE-01'], body: S.profileCreateBody }, preHandler: requireAuth }, async (req, reply) => {
+  r.post('/v1/guides/profile', { schema: { summary: 'Create the guide profile', tags: ['GUIDE-01'], body: S.profileCreateBody }, preHandler: requireAuth }, async (req, reply) => {
     const actor = getActor(req), ctx = ctxFromRequest(req);
     const item = await withTx(pool, (tx) => createProfile(tx, ctx, actor, req.body));
     return reply.status(201).send({ item });
   });
 
-  r.patch('/v1/guides/profile', { schema: { tags: ['GUIDE-01'], body: S.profilePatchBody }, preHandler: requireAuth }, async (req) => {
+  r.patch('/v1/guides/profile', { schema: { summary: 'Update the guide profile', tags: ['GUIDE-01'], body: S.profilePatchBody }, preHandler: requireAuth }, async (req) => {
     const actor = getActor(req), ctx = ctxFromRequest(req);
     return { item: await withTx(pool, (tx) => updateProfile(tx, ctx, actor, req.body)) };
   });
 
-  r.post('/v1/guides/profile/publish', { schema: { tags: ['GUIDE-01'] }, preHandler: requireAuth }, async (req) => {
+  r.post('/v1/guides/profile/publish', { schema: { summary: 'Publish the guide profile', tags: ['GUIDE-01'] }, preHandler: requireAuth }, async (req) => {
     const actor = getActor(req), ctx = ctxFromRequest(req);
     const res = await withTx(pool, (tx) => publishProfile(tx, ctx, actor));
     // the DENY compliance decision is committed above; respond 422 with the unmet predicates
@@ -80,22 +80,22 @@ export default async function guideModule(app: FastifyInstance) {
     return { item: res.profile, eligibility: res.eligibility };
   });
 
-  r.post('/v1/guides/profile/unpublish', { schema: { tags: ['GUIDE-01'] }, preHandler: requireAuth }, async (req) => {
+  r.post('/v1/guides/profile/unpublish', { schema: { summary: 'Unpublish the guide profile', tags: ['GUIDE-01'] }, preHandler: requireAuth }, async (req) => {
     const actor = getActor(req), ctx = ctxFromRequest(req);
     return { item: await withTx(pool, (tx) => unpublishProfile(tx, ctx, actor)) };
   });
 
-  r.get('/v1/guides/me', { schema: { tags: ['GUIDE-01'] }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/guides/me', { schema: { summary: 'Get the guide profile of the current user', tags: ['GUIDE-01'] }, preHandler: requireAuth }, async (req) => {
     const actor = getActor(req);
     const res = await getMyProfile(pool, actor);
     return { item: res.profile, qualifications: res.qualifications, eligibility: res.eligibility };
   });
 
-  r.get('/v1/guides/:id', { schema: { tags: ['GUIDE-01'], params: idParams } }, async (req) => {
+  r.get('/v1/guides/:id', { schema: { summary: 'Get a published guide profile', tags: ['GUIDE-01'], params: idParams } }, async (req) => {
     return { item: await getPublicProfile(pool, req.params.id) };
   });
 
-  r.post('/v1/guides/qualifications', { schema: { tags: ['GUIDE-01'], body: S.qualificationBody }, preHandler: requireAuth }, async (req, reply) => {
+  r.post('/v1/guides/qualifications', { schema: { summary: 'Submit a guide qualification for review', tags: ['GUIDE-01'], body: S.qualificationBody }, preHandler: requireAuth }, async (req, reply) => {
     const actor = getActor(req), ctx = ctxFromRequest(req);
     const item = await withTx(pool, (tx) => submitQualification(tx, ctx, actor, req.body));
     return reply.status(201).send({ item });
@@ -103,7 +103,7 @@ export default async function guideModule(app: FastifyInstance) {
 
   r.get(
     '/v1/admin/guide-qualifications',
-    { schema: { tags: ['GUIDE-01'], querystring: z.object({ status: z.enum(['PENDING', 'VERIFIED', 'REJECTED', 'EXPIRED']).default('PENDING'), limit: z.coerce.number().int().min(1).max(100).default(50) }) }, preHandler: requireRole('COMPLIANCE', 'ADMIN') },
+    { schema: { summary: 'List guide qualifications', tags: ['GUIDE-01'], querystring: z.object({ status: z.enum(['PENDING', 'VERIFIED', 'REJECTED', 'EXPIRED']).default('PENDING'), limit: z.coerce.number().int().min(1).max(100).default(50) }) }, preHandler: requireRole('COMPLIANCE', 'ADMIN') },
     async (req) => {
       const items = await q(
         pool,
@@ -116,10 +116,13 @@ export default async function guideModule(app: FastifyInstance) {
     },
   );
 
-  for (const [action, decision] of [['verify', 'VERIFIED'], ['reject', 'REJECTED']] as const) {
+  for (const [action, decision, summary] of [
+    ['verify', 'VERIFIED', 'Verify a guide qualification'],
+    ['reject', 'REJECTED', 'Reject a guide qualification'],
+  ] as const) {
     r.post(
       `/v1/admin/guide-qualifications/:id/${action}`,
-      { schema: { tags: ['GUIDE-01'], params: idParams, body: S.reviewDecisionBody.optional() }, preHandler: requireRole('COMPLIANCE', 'ADMIN') },
+      { schema: { summary, tags: ['GUIDE-01'], params: idParams, body: S.reviewDecisionBody.optional() }, preHandler: requireRole('COMPLIANCE', 'ADMIN') },
       async (req) => {
         const actor = getActor(req), ctx = ctxFromRequest(req);
         return { item: await withTx(pool, (tx) => decideQualification(tx, ctx, actor, req.params.id, decision, req.body?.reason)) };
@@ -128,12 +131,12 @@ export default async function guideModule(app: FastifyInstance) {
   }
 
   // ------------------------------------------------------------ GUIDE-02 availability
-  r.put('/v1/guides/me/availability', { schema: { tags: ['GUIDE-02'], body: S.availabilityBody }, preHandler: requireAuth }, async (req) => {
+  r.put('/v1/guides/me/availability', { schema: { summary: 'Replace the guide availability calendar', tags: ['GUIDE-02'], body: S.availabilityBody }, preHandler: requireAuth }, async (req) => {
     const actor = getActor(req), ctx = ctxFromRequest(req);
     return { item: await withTx(pool, (tx) => replaceAvailability(tx, ctx, actor.userId, req.body)) };
   });
 
-  r.get('/v1/guides/:id/availability', { schema: { tags: ['GUIDE-02'], params: idParams, querystring: S.availabilityQuery } }, async (req) => {
+  r.get('/v1/guides/:id/availability', { schema: { summary: 'Guide availability for a date range', tags: ['GUIDE-02'], params: idParams, querystring: S.availabilityQuery } }, async (req) => {
     const id = req.params.id;
     const visible = await maybeOne(pool, `SELECT 1 FROM guide_profiles WHERE user_id = $1 AND (status = 'PUBLISHED' OR user_id = $2)`, [id, req.actor?.userId ?? null]);
     if (!visible) throw notFound('Guide');
@@ -142,13 +145,13 @@ export default async function guideModule(app: FastifyInstance) {
   });
 
   // ------------------------------------------------------------ GUIDE-03 search & matching
-  r.get('/v1/search/guides', { schema: { tags: ['GUIDE-03'], querystring: S.searchQuery } }, async (req) => {
+  r.get('/v1/search/guides', { schema: { summary: 'Search guides', tags: ['GUIDE-03'], querystring: S.searchQuery } }, async (req) => {
     const items = await searchGuides(pool, { ...req.query, excludeUserId: req.actor?.userId });
     return { items, weights: RANK_WEIGHTS };
   });
 
   // ------------------------------------------------------------ GUIDE-04 request & offer
-  r.post('/v1/guide-requests', { schema: { tags: ['GUIDE-04'], body: S.requestCreateBody }, preHandler: requireAuth }, async (req, reply) => {
+  r.post('/v1/guide-requests', { schema: { summary: 'Request a guide', tags: ['GUIDE-04'], body: S.requestCreateBody }, preHandler: requireAuth }, async (req, reply) => {
     const actor = getActor(req), ctx = ctxFromRequest(req);
     const res = await withIdempotency(pool, `guide.request:${actor.userId}`, idempotencyKeyFrom(req, false), req.body, async (tx) => ({
       status: 201,
@@ -157,27 +160,27 @@ export default async function guideModule(app: FastifyInstance) {
     return reply.status(res.status).send(res.body);
   });
 
-  r.get('/v1/guide-requests', { schema: { tags: ['GUIDE-04'], querystring: S.requestListQuery }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/guide-requests', { schema: { summary: 'List guide requests', tags: ['GUIDE-04'], querystring: S.requestListQuery }, preHandler: requireAuth }, async (req) => {
     return listRequests(pool, getActor(req), req.query);
   });
 
-  r.get('/v1/guide-requests/:id', { schema: { tags: ['GUIDE-04'], params: idParams }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/guide-requests/:id', { schema: { summary: 'Get a guide request', tags: ['GUIDE-04'], params: idParams }, preHandler: requireAuth }, async (req) => {
     return { item: await getRequestFor(pool, getActor(req), req.params.id) };
   });
 
-  r.post('/v1/guide-requests/:id/offers', { schema: { tags: ['GUIDE-04'], params: idParams, body: S.offerBody }, preHandler: requireAuth }, async (req, reply) => {
+  r.post('/v1/guide-requests/:id/offers', { schema: { summary: 'Make an offer on a guide request', tags: ['GUIDE-04'], params: idParams, body: S.offerBody }, preHandler: requireAuth }, async (req, reply) => {
     const actor = getActor(req), ctx = ctxFromRequest(req);
     const res = await withTx(pool, (tx) => createOffer(tx, ctx, actor, req.params.id, req.body));
     return reply.status(201).send({ item: res.request, offer: res.offer });
   });
 
-  r.post('/v1/guide-requests/:id/counter', { schema: { tags: ['GUIDE-04'], params: idParams, body: S.counterBody }, preHandler: requireAuth }, async (req, reply) => {
+  r.post('/v1/guide-requests/:id/counter', { schema: { summary: 'Counter the current guide offer', tags: ['GUIDE-04'], params: idParams, body: S.counterBody }, preHandler: requireAuth }, async (req, reply) => {
     const actor = getActor(req), ctx = ctxFromRequest(req);
     const res = await withTx(pool, (tx) => counterOffer(tx, ctx, actor, req.params.id, req.body));
     return reply.status(201).send({ item: res.request, offer: res.offer });
   });
 
-  r.post('/v1/guide-requests/:id/accept', { schema: { tags: ['GUIDE-04', 'GUIDE-05'], params: idParams, body: S.acceptBody }, preHandler: requireAuth }, async (req, reply) => {
+  r.post('/v1/guide-requests/:id/accept', { schema: { summary: 'Accept the current guide offer', tags: ['GUIDE-04', 'GUIDE-05'], params: idParams, body: S.acceptBody }, preHandler: requireAuth }, async (req, reply) => {
     const actor = getActor(req), ctx = ctxFromRequest(req);
     const key = idempotencyKeyFrom(req); // guide booking creation requires Idempotency-Key
     const res = await withIdempotency(pool, `guide.accept:${actor.userId}`, key, { id: req.params.id, ...req.body }, async (tx) => {
@@ -187,36 +190,36 @@ export default async function guideModule(app: FastifyInstance) {
     return reply.status(res.status).send(res.body);
   });
 
-  r.post('/v1/guide-requests/:id/decline', { schema: { tags: ['GUIDE-04'], params: idParams, body: S.reasonBody.optional() }, preHandler: requireAuth }, async (req) => {
+  r.post('/v1/guide-requests/:id/decline', { schema: { summary: 'Decline a guide request', tags: ['GUIDE-04'], params: idParams, body: S.reasonBody.optional() }, preHandler: requireAuth }, async (req) => {
     const actor = getActor(req), ctx = ctxFromRequest(req);
     return { item: await withTx(pool, (tx) => declineRequest(tx, ctx, actor, req.params.id, req.body?.reason)) };
   });
 
-  r.post('/v1/guide-requests/:id/cancel', { schema: { tags: ['GUIDE-04'], params: idParams, body: S.reasonBody.optional() }, preHandler: requireAuth }, async (req) => {
+  r.post('/v1/guide-requests/:id/cancel', { schema: { summary: 'Cancel a guide request', tags: ['GUIDE-04'], params: idParams, body: S.reasonBody.optional() }, preHandler: requireAuth }, async (req) => {
     const actor = getActor(req), ctx = ctxFromRequest(req);
     return { item: await withTx(pool, (tx) => cancelRequest(tx, ctx, actor, req.params.id, req.body?.reason)) };
   });
 
   // ------------------------------------------------------------ GUIDE-05 booking FSM
-  r.get('/v1/guide-bookings', { schema: { tags: ['GUIDE-05'], querystring: S.bookingListQuery }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/guide-bookings', { schema: { summary: 'List guide bookings', tags: ['GUIDE-05'], querystring: S.bookingListQuery }, preHandler: requireAuth }, async (req) => {
     return listBookings(pool, getActor(req), req.query);
   });
 
-  r.get('/v1/guide-bookings/:id', { schema: { tags: ['GUIDE-05'], params: idParams }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/guide-bookings/:id', { schema: { summary: 'Get a guide booking', tags: ['GUIDE-05'], params: idParams }, preHandler: requireAuth }, async (req) => {
     return { item: await getBookingFor(pool, getActor(req), req.params.id) };
   });
 
-  r.post('/v1/guide-bookings/:id/start', { schema: { tags: ['GUIDE-05'], params: idParams }, preHandler: requireAuth }, async (req) => {
+  r.post('/v1/guide-bookings/:id/start', { schema: { summary: 'Start a guide booking', tags: ['GUIDE-05'], params: idParams }, preHandler: requireAuth }, async (req) => {
     const actor = getActor(req), ctx = ctxFromRequest(req);
     return { item: await withTx(pool, (tx) => startBooking(tx, ctx, actor, req.params.id)) };
   });
 
-  r.post('/v1/guide-bookings/:id/complete', { schema: { tags: ['GUIDE-05'], params: idParams }, preHandler: requireAuth }, async (req) => {
+  r.post('/v1/guide-bookings/:id/complete', { schema: { summary: 'Complete a guide booking', tags: ['GUIDE-05'], params: idParams }, preHandler: requireAuth }, async (req) => {
     const actor = getActor(req), ctx = ctxFromRequest(req);
     return { item: await withTx(pool, (tx) => completeBooking(tx, ctx, actor, req.params.id)) };
   });
 
-  r.post('/v1/guide-bookings/:id/cancel', { schema: { tags: ['GUIDE-05'], params: idParams, body: S.reasonBody.optional() }, preHandler: requireAuth }, async (req, reply) => {
+  r.post('/v1/guide-bookings/:id/cancel', { schema: { summary: 'Cancel a guide booking', tags: ['GUIDE-05'], params: idParams, body: S.reasonBody.optional() }, preHandler: requireAuth }, async (req, reply) => {
     const actor = getActor(req), ctx = ctxFromRequest(req);
     const key = idempotencyKeyFrom(req); // may create a refund request
     const res = await withIdempotency(pool, `guide.booking.cancel:${actor.userId}`, key, { id: req.params.id, ...(req.body ?? {}) }, async (tx) => {
@@ -226,7 +229,7 @@ export default async function guideModule(app: FastifyInstance) {
     return reply.status(res.status).send(res.body);
   });
 
-  r.post('/v1/guide-bookings/:id/dispute', { schema: { tags: ['GUIDE-05'], params: idParams, body: S.disputeBody }, preHandler: requireAuth }, async (req) => {
+  r.post('/v1/guide-bookings/:id/dispute', { schema: { summary: 'Open a dispute on a guide booking', tags: ['GUIDE-05'], params: idParams, body: S.disputeBody }, preHandler: requireAuth }, async (req) => {
     const actor = getActor(req), ctx = ctxFromRequest(req);
     const out = await withTx(pool, (tx) => disputeBooking(tx, ctx, actor, req.params.id, req.body.reason));
     return { item: out.booking, disputeId: out.disputeId };

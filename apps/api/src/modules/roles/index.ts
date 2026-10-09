@@ -26,7 +26,7 @@ export default async function rolesModule(app: FastifyInstance) {
   });
 
   // ---- admin: roles -----------------------------------------------------------------------------------------
-  r.get('/v1/admin/users/:id/roles', { schema: { tags: TAG, params: idParams }, preHandler: requireRole('ADMIN') }, async (req) => {
+  r.get('/v1/admin/users/:id/roles', { schema: { summary: 'List the roles of a user', tags: TAG, params: idParams }, preHandler: requireRole('ADMIN') }, async (req) => {
     const { roles, grants } = await svc.rolesOf(pool, req.params.id);
     const history = await q(pool, `SELECT id, role, action, actor_id, reason, created_at FROM role_grants WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100`, [req.params.id]);
     return { roles, grants, history };
@@ -54,12 +54,12 @@ export default async function rolesModule(app: FastifyInstance) {
   }, revokeHandler);
 
   // ---- admin: policy overrides ------------------------------------------------------------------------------
-  r.get('/v1/admin/users/:id/policy-overrides', { schema: { tags: TAG, params: idParams }, preHandler: requireRole('ADMIN') }, async (req) => ({
+  r.get('/v1/admin/users/:id/policy-overrides', { schema: { summary: 'List the policy overrides of a user', tags: TAG, params: idParams }, preHandler: requireRole('ADMIN') }, async (req) => ({
     items: await q(pool, `SELECT * FROM policy_overrides WHERE user_id = $1 ORDER BY created_at DESC`, [req.params.id]),
   }));
 
   r.post('/v1/admin/users/:id/policy-overrides', {
-    schema: {
+    schema: { summary: 'Grant a policy override to a user',
       tags: TAG,
       params: idParams,
       body: z.object({ permission: z.string().regex(/^[a-z_]+(\.[a-z_*]+)*$|^\*$/).max(100), effect: z.enum(['ALLOW', 'DENY']), reason, expiresAt: z.iso.datetime().optional() }),
@@ -79,7 +79,7 @@ export default async function rolesModule(app: FastifyInstance) {
     return reply.status(201).send({ item });
   });
 
-  r.delete('/v1/admin/policy-overrides/:id', { schema: { tags: TAG, params: idParams }, preHandler: requireRole('ADMIN') }, async (req, reply) => {
+  r.delete('/v1/admin/policy-overrides/:id', { schema: { summary: 'Revoke a policy override', tags: TAG, params: idParams }, preHandler: requireRole('ADMIN') }, async (req, reply) => {
     const ctx = ctxFromRequest(req);
     await withTx(pool, async (tx) => {
       const row = (await q(tx, `UPDATE policy_overrides SET expires_at = now() WHERE id = $1 AND (expires_at IS NULL OR expires_at > now()) RETURNING *`, [req.params.id]))[0];
@@ -99,7 +99,7 @@ export default async function rolesModule(app: FastifyInstance) {
     preHandler: requireRole('ADMIN', 'SUPPORT', 'COMPLIANCE'),
   }, async (req) => svc.searchUsers(pool, getActor(req), req.query));
 
-  r.get('/v1/admin/users/:id', { schema: { tags: TAG, params: idParams }, preHandler: requireRole('ADMIN', 'SUPPORT', 'COMPLIANCE') }, async (req) => ({
+  r.get('/v1/admin/users/:id', { schema: { summary: 'Get a user with roles and entitlements', tags: TAG, params: idParams }, preHandler: requireRole('ADMIN', 'SUPPORT', 'COMPLIANCE') }, async (req) => ({
     item: await svc.adminUserDetail(pool, getActor(req), req.params.id),
   }));
 

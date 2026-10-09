@@ -42,7 +42,7 @@ export default async function mediaModule(app: FastifyInstance) {
   }, async (req) => ({ item: await completeUpload(ctxFromRequest(req), getActor(req), req.params.id) }));
 
   r.get('/v1/media/:id', {
-    schema: { tags: ['STAY-02'], params: z.object({ id: z.uuid() }) },
+    schema: { summary: 'Get media metadata', tags: ['STAY-02'], params: z.object({ id: z.uuid() }) },
     preHandler: requireAuth,
   }, async (req) => ({ item: await getMedia(ctxFromRequest(req), getActor(req), req.params.id) }));
 

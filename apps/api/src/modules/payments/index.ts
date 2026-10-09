@@ -125,7 +125,7 @@ export default async function paymentsModule(app: FastifyInstance) {
 
   r.get(
     '/v1/payments',
-    { schema: { tags: [TAG_PAY], querystring: pagination.extend({ status: z.string().optional() }) }, preHandler: requireAuth },
+    { schema: { summary: 'List payments of the current user', tags: [TAG_PAY], querystring: pagination.extend({ status: z.string().optional() }) }, preHandler: requireAuth },
     async (req) => {
       const actor = getActor(req);
       const c = decodeCursor(req.query.cursor);
@@ -141,7 +141,7 @@ export default async function paymentsModule(app: FastifyInstance) {
     },
   );
 
-  r.get('/v1/payments/:id', { schema: { tags: [TAG_PAY], params: idParams }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/payments/:id', { schema: { summary: 'Get a payment', tags: [TAG_PAY], params: idParams }, preHandler: requireAuth }, async (req) => {
     const actor = getActor(req);
     const p = await maybeOne<PaymentRow>(app.ctx.pool, `SELECT * FROM payments WHERE id = $1`, [req.params.id]);
     if (!p) throw notFound('Payment');
@@ -151,7 +151,7 @@ export default async function paymentsModule(app: FastifyInstance) {
     return { item: { ...paymentDto(p), refunds: refunds.map(refundDto), refundableMinor: await refundableRemaining(app.ctx.pool, p) } };
   });
 
-  r.get('/v1/payments/:id/refunds', { schema: { tags: [TAG_REFUND], params: idParams }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/payments/:id/refunds', { schema: { summary: 'List the refunds of a payment', tags: [TAG_REFUND], params: idParams }, preHandler: requireAuth }, async (req) => {
     const actor = getActor(req);
     const p = await maybeOne<PaymentRow>(app.ctx.pool, `SELECT * FROM payments WHERE id = $1`, [req.params.id]);
     if (!p) throw notFound('Payment');
@@ -210,7 +210,7 @@ export default async function paymentsModule(app: FastifyInstance) {
   r.get(
     '/v1/admin/payments',
     {
-      schema: { tags: [TAG_PAY], querystring: pagination.extend({ status: z.string().optional(), subjectType: subjectType.optional(), subjectId: z.uuid().optional() }) },
+      schema: { summary: 'List payments', tags: [TAG_PAY], querystring: pagination.extend({ status: z.string().optional(), subjectType: subjectType.optional(), subjectId: z.uuid().optional() }) },
       preHandler: requireRole('ACCOUNTING', 'ADMIN', 'SUPPORT'),
     },
     async (req) => {
@@ -242,7 +242,7 @@ export default async function paymentsModule(app: FastifyInstance) {
 
   r.post(
     '/v1/admin/payments/:id/reconcile',
-    { schema: { tags: [TAG_PAY], params: idParams }, preHandler: requireRole('ACCOUNTING', 'ADMIN') },
+    { schema: { summary: 'Reconcile a payment against the provider', tags: [TAG_PAY], params: idParams }, preHandler: requireRole('ACCOUNTING', 'ADMIN') },
     async (req) => {
       const ctx = ctxFromRequest(req);
       const p0 = await maybeOne<PaymentRow>(app.ctx.pool, `SELECT * FROM payments WHERE id = $1`, [req.params.id]);

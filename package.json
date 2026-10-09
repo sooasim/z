@@ -17,14 +17,10 @@
     "dev:web": "pnpm --filter @jetpool/web dev",
     "contracts:generate": "pnpm --filter @jetpool/api contracts:export",
     "validate:spec": "node scripts/validate-spec.mjs",
-    "release:report": "node scripts/release-report.mjs"
+    "release:report": "node scripts/release-report.mjs",
+    "checklist": "node scripts/module-status.mjs --write"
   },
   "devDependencies": {
     "yaml": "^2.9.1"
-  },
-  "pnpm": {
-    "overrides": {
-      "postcss": ">=8.5.29"
-    }
   }
 }

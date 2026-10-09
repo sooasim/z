@@ -16,7 +16,7 @@ export default async function profileModule(app: FastifyInstance) {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const pool = app.ctx.pool;
 
-  r.get('/v1/me/profile', { schema: { tags: TAG }, preHandler: requireAuth }, async (req) => ({ item: await svc.getProfile(pool, getActor(req).userId) }));
+  r.get('/v1/me/profile', { schema: { summary: 'Get the profile of the current user', tags: TAG }, preHandler: requireAuth }, async (req) => ({ item: await svc.getProfile(pool, getActor(req).userId) }));
 
   r.patch('/v1/me/profile', {
     schema: {
@@ -43,10 +43,10 @@ export default async function profileModule(app: FastifyInstance) {
     preHandler: requireAuth,
   }, async (req) => ({ item: await svc.updateProfile(pool, ctxFromRequest(req), req.body) }));
 
-  r.get('/v1/me/preferences', { schema: { tags: TAG }, preHandler: requireAuth }, async (req) => ({ item: await svc.getPreferences(pool, getActor(req).userId) }));
+  r.get('/v1/me/preferences', { schema: { summary: 'Get locale and travel preferences', tags: TAG }, preHandler: requireAuth }, async (req) => ({ item: await svc.getPreferences(pool, getActor(req).userId) }));
 
   r.patch('/v1/me/preferences', {
-    schema: {
+    schema: { summary: 'Update locale and travel preferences',
       tags: TAG,
       body: z
         .object({

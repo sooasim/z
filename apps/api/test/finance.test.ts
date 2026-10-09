@@ -47,7 +47,7 @@ beforeAll(async () => {
 });
 afterAll(async () => t.close());
 
-describe('FIN-03 fee/tax rules', () => {
+describe('FIN-03 fee/tax rules (invariant 8: no hard-coded universal tax/legal rule)', () => {
   it('quoteFees returns 0 without an approved rule (no hard-coded rates)', async () => {
     expect(await quoteFees(t.pool, { domain: 'STAY', amountMinor: 100_000, currency: 'KRW' })).toEqual({ platformFeeMinor: 0, taxMinor: 0, hostFeeMinor: 0, rulesVersion: {} });
   });
@@ -168,7 +168,7 @@ describe('FIN-01 ledger', () => {
     expect(await c.reversed()).toEqual(credit);
   });
 
-  it('SUPPLIER merchant of record posts PASS_THROUGH + commission; trial balance is zero-sum; ledger is append-only', async () => {
+  it('SUPPLIER merchant of record posts PASS_THROUGH + commission; trial balance is zero-sum; ledger is append-only (invariant 11)', async () => {
     const { owner, productId } = await makeSupplier('SUPPLIER', 2000);
     const { payment } = await paidOrder(productId, 50_000);
     const rows = await t.pool.query(

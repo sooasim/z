@@ -87,7 +87,7 @@ export default async function privacyModule(app: FastifyInstance) {
     return reply.status(201).send({ items });
   });
 
-  r.get('/v1/consents', { schema: { tags: TAG }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/consents', { schema: { summary: 'List consent records of the current user', tags: TAG }, preHandler: requireAuth }, async (req) => {
     const userId = getActor(req).userId;
     return {
       current: await svc.consentState(pool, userId),
@@ -101,11 +101,11 @@ export default async function privacyModule(app: FastifyInstance) {
     return reply.status(201).send({ item });
   });
 
-  r.get('/v1/privacy/requests', { schema: { tags: TAG }, preHandler: requireAuth }, async (req) => ({
+  r.get('/v1/privacy/requests', { schema: { summary: 'List privacy requests of the current user', tags: TAG }, preHandler: requireAuth }, async (req) => ({
     items: await q(pool, `SELECT id, request_type, status, reason, requested_at, completed_at FROM privacy_requests WHERE user_id = $1 ORDER BY requested_at DESC`, [getActor(req).userId]),
   }));
 
-  r.get('/v1/privacy/requests/:id', { schema: { tags: TAG, params: idParams }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/privacy/requests/:id', { schema: { summary: 'Get a privacy request', tags: TAG, params: idParams }, preHandler: requireAuth }, async (req) => {
     const item = await maybeOne(pool, `SELECT * FROM privacy_requests WHERE id = $1 AND user_id = $2`, [req.params.id, getActor(req).userId]);
     if (!item) throw notFound('Privacy request');
     return { item };
@@ -160,7 +160,7 @@ export default async function privacyModule(app: FastifyInstance) {
 
   // staff view of privacy requests (DPO / compliance)
   r.get('/v1/admin/privacy/requests', {
-    schema: { tags: TAG, querystring: z.object({ status: z.enum(['REQUESTED', 'PROCESSING', 'COMPLETED', 'REJECTED']).optional(), userId: z.uuid().optional() }) },
+    schema: { summary: 'List privacy requests', tags: TAG, querystring: z.object({ status: z.enum(['REQUESTED', 'PROCESSING', 'COMPLETED', 'REJECTED']).optional(), userId: z.uuid().optional() }) },
     preHandler: requireRole('ADMIN', 'COMPLIANCE'),
   }, async (req) => ({
     items: await q(

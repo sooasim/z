@@ -3,6 +3,7 @@
 #
 #   bash scripts/oneclick.sh            # full run
 #   SKIP_WEB=1 SKIP_TESTS=1 bash scripts/oneclick.sh
+#   VITEST_WORKERS=4 bash scripts/oneclick.sh  # cap test parallelism (one DB per test file)
 #   RUN_LOAD=1 bash scripts/oneclick.sh # also start api+worker and run the k6 suite (needs k6)
 #
 # Steps: install → validate-spec (G0) → migrate --verify (G2) → typecheck → tests (G3/G4/G5-neg)
@@ -37,13 +38,15 @@ step "install (frozen lockfile)" pnpm install --frozen-lockfile
 step "G0 validate-spec" node scripts/validate-spec.mjs --json "$R/g0-spec.json"
 
 # ---------------------------------------------------------------- G2
-pg_ok() { node -e "const pg=require('$ROOT/packages/db/node_modules/pg');const c=new pg.Client({connectionString:process.env.DATABASE_URL.replace(/\/[^/]*$/,'/postgres')});c.connect().then(()=>c.end()).then(()=>process.exit(0),()=>process.exit(1))"; }
+# Run from packages/db so plain `require('pg')` resolves — `$ROOT` is an MSYS path on Windows, which Node
+# cannot resolve as a module id.
+pg_ok() { (cd packages/db && node -e "const pg=require('pg');const c=new pg.Client({connectionString:process.env.DATABASE_URL.replace(/\/[^/]*$/,'/postgres')});c.connect().then(()=>c.end()).then(()=>process.exit(0),()=>process.exit(1))"); }
 if pg_ok; then
   g2() {
     node packages/db/migrate.mjs --verify 2>&1 | tee "$R/g2-migrate-verify-local.log"
     [[ ${PIPESTATUS[0]} -eq 0 ]] || return 1
     # ensure target DB exists, then apply
-    node -e "const pg=require('$ROOT/packages/db/node_modules/pg');const u=new URL(process.env.DATABASE_URL);const db=u.pathname.slice(1);u.pathname='/postgres';const c=new pg.Client({connectionString:u.toString()});c.connect().then(()=>c.query('SELECT 1 FROM pg_database WHERE datname=\$1',[db])).then(r=>r.rowCount?null:c.query('CREATE DATABASE \"'+db+'\"')).then(()=>c.end())"
+    (cd packages/db && node -e "const pg=require('pg');const u=new URL(process.env.DATABASE_URL);const db=u.pathname.slice(1);u.pathname='/postgres';const c=new pg.Client({connectionString:u.toString()});c.connect().then(()=>c.query('SELECT 1 FROM pg_database WHERE datname=\$1',[db])).then(r=>r.rowCount?null:c.query('CREATE DATABASE \"'+db+'\"')).then(()=>c.end())")
     node packages/db/migrate.mjs
     echo '{"gate":"G2","pg":"local","status":"success"}' > "$R/g2-status-local.json"
     if [[ -f packages/db/seed-dev.mjs ]]; then
@@ -58,7 +61,10 @@ fi
 # ---------------------------------------------------------------- typecheck + tests
 step "api typecheck" pnpm --filter @jetpool/api typecheck
 if [[ -z "${SKIP_TESTS:-}" ]] && pg_ok; then
-  step "G3/G4 api tests (vitest)" bash -c "cd apps/api && npx vitest run --reporter=default --reporter=json --outputFile.json='$R/vitest-api.json'"
+  # Each test file gets its own database, so vitest's default fork count can exhaust memory / connections on a
+  # workstation. Cap it with VITEST_WORKERS=<n> (CI leaves it unset and uses the runner's default).
+  workers="${VITEST_WORKERS:+--maxWorkers=$VITEST_WORKERS}"
+  step "G3/G4 api tests (vitest)" bash -c "cd apps/api && npx vitest run $workers --reporter=default --reporter=json --outputFile.json='$R/vitest-api.json'"
 else skip "api tests"; fi
 
 # ---------------------------------------------------------------- G1

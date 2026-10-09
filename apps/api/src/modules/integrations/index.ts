@@ -41,11 +41,11 @@ export default async function integrationsModule(app: FastifyInstance) {
     return syncDueAccounts(a);
   });
 
-  r.get('/v1/integrations/accounts', { schema: { tags: TAG }, preHandler: [requireAuth, flagged] }, async (req) => ({ items: await listAccounts(pool, getActor(req).userId) }));
+  r.get('/v1/integrations/accounts', { schema: { summary: 'List PMS and supplier integration accounts', tags: TAG }, preHandler: [requireAuth, flagged] }, async (req) => ({ items: await listAccounts(pool, getActor(req).userId) }));
 
   r.post(
     '/v1/integrations/accounts',
-    { schema: { tags: TAG, body: z.object({ provider: z.enum(PROVIDERS), propertyId: z.uuid(), icalUrl: z.string().max(2000).optional() }) }, preHandler: [requireAuth, flagged] },
+    { schema: { summary: 'Connect an integration account', tags: TAG, body: z.object({ provider: z.enum(PROVIDERS), propertyId: z.uuid(), icalUrl: z.string().max(2000).optional() }) }, preHandler: [requireAuth, flagged] },
     async (req, reply) => {
       const ctx = ctxFromRequest(req);
       const res = await withTx(pool, (tx) => createAccount(tx, ctx, getActor(req).userId, req.body));
@@ -56,21 +56,21 @@ export default async function integrationsModule(app: FastifyInstance) {
 
   r.patch(
     '/v1/integrations/accounts/:id',
-    { schema: { tags: TAG, params: z.object({ id: z.uuid() }), body: z.object({ status: z.enum(['ACTIVE', 'PAUSED']).optional(), icalUrl: z.string().max(2000).optional() }) }, preHandler: [requireAuth, flagged] },
+    { schema: { summary: 'Update an integration account', tags: TAG, params: z.object({ id: z.uuid() }), body: z.object({ status: z.enum(['ACTIVE', 'PAUSED']).optional(), icalUrl: z.string().max(2000).optional() }) }, preHandler: [requireAuth, flagged] },
     async (req) => {
       const ctx = ctxFromRequest(req);
       return { item: await withTx(pool, (tx) => updateAccount(tx, ctx, getActor(req).userId, req.params.id, req.body)) };
     },
   );
 
-  r.post('/v1/integrations/accounts/:id/sync', { schema: { tags: TAG, params: z.object({ id: z.uuid() }) }, preHandler: [requireAuth, flagged] }, async (req) => {
+  r.post('/v1/integrations/accounts/:id/sync', { schema: { summary: 'Trigger a sync for an integration account', tags: TAG, params: z.object({ id: z.uuid() }) }, preHandler: [requireAuth, flagged] }, async (req) => {
     await getOwnedAccount(pool, req.params.id, getActor(req).userId);
     return syncIcalAccount(app.ctx, req.params.id, ctxFromRequest(req));
   });
 
   r.get(
     '/v1/integrations/accounts/:id/events',
-    { schema: { tags: TAG, params: z.object({ id: z.uuid() }), querystring: z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) }) }, preHandler: [requireAuth, flagged] },
+    { schema: { summary: 'List the sync events of an integration account', tags: TAG, params: z.object({ id: z.uuid() }), querystring: z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) }) }, preHandler: [requireAuth, flagged] },
     async (req) => {
       await getOwnedAccount(pool, req.params.id, getActor(req).userId);
       return { items: await listIntegrationEvents(pool, req.params.id, req.query.limit) };
@@ -79,7 +79,7 @@ export default async function integrationsModule(app: FastifyInstance) {
 
   r.post(
     '/v1/integrations/properties/:propertyId/ical-export-token',
-    { schema: { tags: TAG, params: z.object({ propertyId: z.uuid() }) }, preHandler: [requireAuth, flagged] },
+    { schema: { summary: 'Issue an iCal export token for a property', tags: TAG, params: z.object({ propertyId: z.uuid() }) }, preHandler: [requireAuth, flagged] },
     async (req, reply) => {
       const ctx = ctxFromRequest(req);
       return reply.status(201).send({ item: await withTx(pool, (tx) => issueExportToken(tx, ctx, getActor(req).userId, req.params.propertyId)) });
@@ -89,7 +89,7 @@ export default async function integrationsModule(app: FastifyInstance) {
   // Public, token-authenticated busy-dates feed (no guest PII).
   r.get(
     '/v1/integrations/ical/:file',
-    { schema: { tags: TAG, params: z.object({ file: z.string().max(60) }), querystring: z.object({ token: z.string().min(20).max(200) }) } },
+    { schema: { summary: 'Download an iCal calendar feed', tags: TAG, params: z.object({ file: z.string().max(60) }), querystring: z.object({ token: z.string().min(20).max(200) }) } },
     async (req, reply) => {
       const m = /^([0-9a-f-]{36})\.ics$/i.exec(req.params.file);
       if (!m) throw notFound('Calendar');
@@ -113,6 +113,7 @@ export default async function integrationsModule(app: FastifyInstance) {
       '/v1/integrations/webhooks/:accountId',
       {
         schema: {
+          summary: 'Receive a calendar webhook from an integration account',
           tags: TAG,
           params: z.object({ accountId: z.uuid() }),
           body: z.object({ eventId: z.string().min(1).max(200), type: z.enum(['BLOCK_UPSERT', 'BLOCK_DELETE']), externalId: z.string().min(1).max(255), start: isoDay.optional(), end: isoDay.optional() }),

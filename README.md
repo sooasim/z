@@ -41,7 +41,7 @@ apps/api      Fastify API + worker (outbox dispatcher, sweeps) — modules per b
 apps/web      Next.js customer / host / guide / supplier / admin UI
 packages/db   forward-only, checksummed SQL migrations + runner (migrate.mjs)
 infra/        Terraform (AWS Seoul), kustomize (k8s), Fly configs, Docker entrypoints, observability, deploy scripts
-scripts/      validate-spec (G0), release-report, oneclick pipeline, k6 load tests (G6), PAN/CVC guard
+scripts/      validate-spec (G0), module-status (CHECKLIST), release-report, oneclick pipeline, k6 load tests (G6), PAN/CVC guard
 docs/         PLAN, CONVENTIONS, CHECKLIST, ADRs, runbooks, SECURITY, OPERATIONS, RELEASE_REPORT
 dd/           product/spec source of truth (master spec, OpenAPI/AsyncAPI seeds, DB blueprint, traceability, gates)
 ```
@@ -117,6 +117,7 @@ pnpm --filter @jetpool/api typecheck
 pnpm --filter @jetpool/web typecheck && pnpm --filter @jetpool/web build
 node packages/db/migrate.mjs --verify            # G2: clean apply + idempotent re-run on a scratch DB
 node scripts/validate-spec.mjs                   # G0
+node scripts/module-status.mjs                   # per-module DoD vs the spec (pnpm checklist writes docs/CHECKLIST.md)
 node scripts/check-no-pan.mjs                    # G5: no card data columns
 BASE_URL=http://localhost:4000 bash scripts/load/run-all.sh reports   # G6 (needs k6, non-prod only)
 ```
@@ -125,6 +126,7 @@ BASE_URL=http://localhost:4000 bash scripts/load/run-all.sh reports   # G6 (need
 
 ```bash
 bash scripts/oneclick.sh          # install → validate-spec → migrate verify → typecheck → tests → contracts → web build → security → report
+VITEST_WORKERS=4 bash scripts/oneclick.sh   # cap test parallelism (each test file gets its own database)
 RUN_LOAD=1 bash scripts/oneclick.sh   # + k6 load / no-oversell
 ```
 It mirrors CI and writes `docs/RELEASE_REPORT.md` (+ evidence in `reports/`). **It never deploys.**

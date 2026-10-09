@@ -41,7 +41,7 @@ beforeAll(async () => {
 });
 afterAll(async () => t.close());
 
-describe('STAY-04 / PLAT-01 search', () => {
+describe('STAY-04 / PLAT-01 search (invariant 1: the projection is candidates-only, never authoritative)', () => {
   it('projects published properties via outbox events (fuzzed coordinates, candidates only)', async () => {
     const body = await search('limit=50');
     expect(body.total).toBe(5);

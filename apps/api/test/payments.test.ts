@@ -190,7 +190,7 @@ describe('PAY-01 prepare / confirm', () => {
   });
 });
 
-describe('PAY-01 webhook', () => {
+describe('PAY-01 webhook (invariant 3: the success URL never confirms — server confirm / webhook does)', () => {
   it('reconciles from the provider, dedupes replays and is processed once', async () => {
     const order = await newOrder();
     const p = await prepare(order.id);

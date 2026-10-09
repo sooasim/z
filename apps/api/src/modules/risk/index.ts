@@ -77,7 +77,7 @@ export default async function riskModule(app: FastifyInstance) {
     return reply.status(res.status).send(res.body);
   });
 
-  r.get('/v1/admin/risk/events/:id', { schema: { tags: TAG, params: idParams }, preHandler: responders }, async (req) => ({
+  r.get('/v1/admin/risk/events/:id', { schema: { summary: 'Get a risk event', tags: TAG, params: idParams }, preHandler: responders }, async (req) => ({
     item: await svc.getRiskEvent(pool, req.params.id),
   }));
 
@@ -131,7 +131,7 @@ export default async function riskModule(app: FastifyInstance) {
   });
 
   r.get('/v1/admin/security/incidents', {
-    schema: {
+    schema: { summary: 'List security incidents',
       tags: TAG,
       querystring: pagination.extend({
         status: z.enum(svc.INCIDENT_STATUSES).optional(),
@@ -142,7 +142,7 @@ export default async function riskModule(app: FastifyInstance) {
     preHandler: responders,
   }, async (req) => svc.listIncidents(pool, req.query));
 
-  r.get('/v1/admin/security/incidents/:id', { schema: { tags: TAG, params: idParams }, preHandler: responders }, async (req) =>
+  r.get('/v1/admin/security/incidents/:id', { schema: { summary: 'Get a security incident', tags: TAG, params: idParams }, preHandler: responders }, async (req) =>
     svc.getIncident(pool, req.params.id),
   );
 

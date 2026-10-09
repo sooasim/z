@@ -178,7 +178,7 @@ export default async function travelModule(app: FastifyInstance) {
   r.post(
     '/v1/suppliers',
     {
-      schema: {
+      schema: { summary: 'Apply as a travel supplier',
         tags: [T1],
         body: z.object({
           name: z.string().trim().min(2).max(200),
@@ -213,7 +213,7 @@ export default async function travelModule(app: FastifyInstance) {
     },
   );
 
-  r.get('/v1/suppliers/me', { schema: { tags: [T1] }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/suppliers/me', { schema: { summary: 'Get the supplier profile of the current user', tags: [T1] }, preHandler: requireAuth }, async (req) => {
     const s = await maybeOne(pool, `SELECT * FROM suppliers WHERE owner_user_id = $1 ORDER BY created_at DESC LIMIT 1`, [getActor(req).userId]);
     if (!s) throw notFound('Supplier');
     return { item: supplierDto(s) };
@@ -221,7 +221,7 @@ export default async function travelModule(app: FastifyInstance) {
 
   r.get(
     '/v1/admin/suppliers',
-    { schema: { tags: [T1], querystring: z.object({ status: z.enum(['PENDING', 'APPROVED', 'SUSPENDED', 'REJECTED']).optional() }) }, preHandler: requireRole('ADMIN', 'COMPLIANCE') },
+    { schema: { summary: 'List travel suppliers', tags: [T1], querystring: z.object({ status: z.enum(['PENDING', 'APPROVED', 'SUSPENDED', 'REJECTED']).optional() }) }, preHandler: requireRole('ADMIN', 'COMPLIANCE') },
     async (req) => {
       const rows = await q(pool, `SELECT * FROM suppliers WHERE ($1::text IS NULL OR status = $1) ORDER BY created_at DESC LIMIT 200`, [req.query.status ?? null]);
       return { items: rows.map(supplierDto) };
@@ -264,7 +264,7 @@ export default async function travelModule(app: FastifyInstance) {
 
   r.post(
     '/v1/admin/suppliers/:id/decision',
-    { schema: { tags: [T1], params: idParams, body: z.object({ decision: z.enum(['REJECTED', 'SUSPENDED']), reason: z.string().min(3).max(500) }) }, preHandler: requireRole('ADMIN') },
+    { schema: { summary: 'Approve or reject a supplier application', tags: [T1], params: idParams, body: z.object({ decision: z.enum(['REJECTED', 'SUSPENDED']), reason: z.string().min(3).max(500) }) }, preHandler: requireRole('ADMIN') },
     async (req) => {
       const ctx = ctxFromRequest(req);
       const row = await withTx(pool, async (tx) => {
@@ -284,13 +284,13 @@ export default async function travelModule(app: FastifyInstance) {
   // ------------------------------------------------------------------ TRAVEL-01 supplier extranet
   const supplierOnly = requireRole('SUPPLIER');
 
-  r.get('/v1/supplier/products', { schema: { tags: [T1], querystring: z.object({ status: z.string().optional() }) }, preHandler: supplierOnly }, async (req) => {
+  r.get('/v1/supplier/products', { schema: { summary: 'List the travel products of the supplier', tags: [T1], querystring: z.object({ status: z.string().optional() }) }, preHandler: supplierOnly }, async (req) => {
     const s = await supplierOf(pool, getActor(req).userId, { allowPending: true });
     const rows = await q(pool, `SELECT * FROM travel_products WHERE supplier_id = $1 AND ($2::text IS NULL OR status = $2) ORDER BY created_at DESC LIMIT 500`, [s.id, req.query.status ?? null]);
     return { items: rows.map((p) => productDto(p)) };
   });
 
-  r.post('/v1/supplier/products', { schema: { tags: [T1], body: z.object(productBase) }, preHandler: supplierOnly }, async (req, reply) => {
+  r.post('/v1/supplier/products', { schema: { summary: 'Create a travel product draft', tags: [T1], body: z.object(productBase) }, preHandler: supplierOnly }, async (req, reply) => {
     const ctx = ctxFromRequest(req);
     const b = req.body;
     const id = await withTx(pool, async (tx) => {
@@ -311,7 +311,7 @@ export default async function travelModule(app: FastifyInstance) {
 
   r.patch(
     '/v1/supplier/products/:id',
-    { schema: { tags: [T1], params: idParams, body: z.object(productBase).partial().omit({ type: true }) }, preHandler: supplierOnly },
+    { schema: { summary: 'Update a travel product', tags: [T1], params: idParams, body: z.object(productBase).partial().omit({ type: true }) }, preHandler: supplierOnly },
     async (req) => {
       const b = req.body;
       const ctx = ctxFromRequest(req);
@@ -361,7 +361,7 @@ export default async function travelModule(app: FastifyInstance) {
     },
   );
 
-  r.post('/v1/supplier/products/:id/submit', { schema: { tags: [T1], params: idParams }, preHandler: supplierOnly }, async (req) => {
+  r.post('/v1/supplier/products/:id/submit', { schema: { summary: 'Submit a travel product for review', tags: [T1], params: idParams }, preHandler: supplierOnly }, async (req) => {
     const ctx = ctxFromRequest(req);
     const row = await withTx(pool, async (tx) => {
       const s = await supplierOf(tx, getActor(req).userId);
@@ -375,7 +375,7 @@ export default async function travelModule(app: FastifyInstance) {
   // ------------------------------------------------------------------ TRAVEL-01 admin review
   r.get(
     '/v1/admin/travel-products',
-    { schema: { tags: [T1], querystring: z.object({ status: z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'PAUSED', 'ARCHIVED']).optional() }) }, preHandler: requireRole('ADMIN', 'EDITOR', 'COMPLIANCE') },
+    { schema: { summary: 'List travel products', tags: [T1], querystring: z.object({ status: z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'PAUSED', 'ARCHIVED']).optional() }) }, preHandler: requireRole('ADMIN', 'EDITOR', 'COMPLIANCE') },
     async (req) => {
       const rows = await q(
         pool,
@@ -389,7 +389,7 @@ export default async function travelModule(app: FastifyInstance) {
 
   r.post(
     '/v1/admin/travel-products/:id/publish',
-    { schema: { tags: [T1], params: idParams, body: z.object({ note: z.string().max(1000).optional() }).optional() }, preHandler: requireRole('ADMIN', 'EDITOR') },
+    { schema: { summary: 'Publish a travel product', tags: [T1], params: idParams, body: z.object({ note: z.string().max(1000).optional() }).optional() }, preHandler: requireRole('ADMIN', 'EDITOR') },
     async (req) => {
       const ctx = ctxFromRequest(req);
       const row = await withTx(pool, async (tx) => {
@@ -412,7 +412,7 @@ export default async function travelModule(app: FastifyInstance) {
 
   r.post(
     '/v1/admin/travel-products/:id/reject',
-    { schema: { tags: [T1], params: idParams, body: z.object({ reason: z.string().min(3).max(1000), to: z.enum(['DRAFT', 'PAUSED', 'ARCHIVED']).default('DRAFT') }) }, preHandler: requireRole('ADMIN', 'EDITOR') },
+    { schema: { summary: 'Reject a travel product', tags: [T1], params: idParams, body: z.object({ reason: z.string().min(3).max(1000), to: z.enum(['DRAFT', 'PAUSED', 'ARCHIVED']).default('DRAFT') }) }, preHandler: requireRole('ADMIN', 'EDITOR') },
     async (req) => {
       const ctx = ctxFromRequest(req);
       const row = await withTx(pool, async (tx) => {
@@ -428,7 +428,7 @@ export default async function travelModule(app: FastifyInstance) {
   r.get(
     '/v1/travel-products',
     {
-      schema: {
+      schema: { summary: 'Browse published travel products',
         tags: [T1],
         querystring: pagination.extend({
           type: productType.optional(),
@@ -482,7 +482,7 @@ export default async function travelModule(app: FastifyInstance) {
     },
   );
 
-  r.get('/v1/travel-products/:id', { schema: { tags: [T1], params: idParams } }, async (req) => {
+  r.get('/v1/travel-products/:id', { schema: { summary: 'Get a published travel product', tags: [T1], params: idParams } }, async (req) => {
     const out = await productWithOptions(pool, req.params.id);
     if (!out) throw notFound('Product');
     const actor = req.actor;
@@ -497,7 +497,7 @@ export default async function travelModule(app: FastifyInstance) {
   // ------------------------------------------------------------------ TRAVEL-02 departures
   r.get(
     '/v1/travel-products/:id/departures',
-    { schema: { tags: [T2], params: idParams, querystring: z.object({ from: isoDate.optional(), to: isoDate.optional(), includePast: z.enum(['true', 'false']).default('false') }) } },
+    { schema: { summary: 'List the departures of a travel product', tags: [T2], params: idParams, querystring: z.object({ from: isoDate.optional(), to: isoDate.optional(), includePast: z.enum(['true', 'false']).default('false') }) } },
     async (req) => {
       const p = await maybeOne(pool, `SELECT p.status, s.status AS supplier_status, s.owner_user_id FROM travel_products p JOIN suppliers s ON s.id = p.supplier_id WHERE p.id = $1`, [req.params.id]);
       if (!p) throw notFound('Product');
@@ -518,7 +518,7 @@ export default async function travelModule(app: FastifyInstance) {
   r.post(
     '/v1/travel-products/:id/departures',
     {
-      schema: {
+      schema: { summary: 'Create a departure for a travel product',
         tags: [T2],
         params: idParams,
         body: z
@@ -560,7 +560,7 @@ export default async function travelModule(app: FastifyInstance) {
 
   r.patch(
     '/v1/supplier/departures/:id',
-    { schema: { tags: [T2], params: idParams, body: z.object({ capacity: z.number().int().min(0).max(100000).optional(), status: z.enum(['OPEN', 'CLOSED']).optional() }) }, preHandler: supplierOnly },
+    { schema: { summary: 'Update a departure', tags: [T2], params: idParams, body: z.object({ capacity: z.number().int().min(0).max(100000).optional(), status: z.enum(['OPEN', 'CLOSED']).optional() }) }, preHandler: supplierOnly },
     async (req) => {
       const ctx = ctxFromRequest(req);
       const row = await withTx(pool, async (tx) => {
@@ -581,7 +581,7 @@ export default async function travelModule(app: FastifyInstance) {
 
   r.post(
     '/v1/supplier/departures/:id/cancel',
-    { schema: { tags: [T2], params: idParams, body: z.object({ reason: z.string().min(3).max(500) }) }, preHandler: supplierOnly },
+    { schema: { summary: 'Cancel a departure', tags: [T2], params: idParams, body: z.object({ reason: z.string().min(3).max(500) }) }, preHandler: supplierOnly },
     async (req) => {
       const ctx = ctxFromRequest(req);
       const n = await withTx(pool, async (tx) => {
@@ -630,7 +630,7 @@ export default async function travelModule(app: FastifyInstance) {
     await emit(tx, ctx, { aggregateType: 'itinerary', aggregateId: id, eventType: 'itinerary.updated', payload: { itineraryId: id, version: row.version, change } });
   }
 
-  r.post('/v1/itineraries', { schema: { tags: [T3], body: itineraryBody.refine((b) => !b.startDate || !b.endDate || b.endDate >= b.startDate, { message: 'endDate must not precede startDate' }) }, preHandler: requireAuth }, async (req, reply) => {
+  r.post('/v1/itineraries', { schema: { summary: 'Create an itinerary', tags: [T3], body: itineraryBody.refine((b) => !b.startDate || !b.endDate || b.endDate >= b.startDate, { message: 'endDate must not precede startDate' }) }, preHandler: requireAuth }, async (req, reply) => {
     const ctx = ctxFromRequest(req);
     const id = await withTx(pool, async (tx) => {
       const it = await one(tx, `INSERT INTO itineraries(owner_id, title, start_date, end_date, visibility) VALUES ($1,$2,$3,$4,$5) RETURNING id`, [
@@ -646,17 +646,17 @@ export default async function travelModule(app: FastifyInstance) {
     return reply.status(201).send({ item: await itineraryOut(pool, id) });
   });
 
-  r.get('/v1/itineraries', { schema: { tags: [T3] }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/itineraries', { schema: { summary: 'List itineraries', tags: [T3] }, preHandler: requireAuth }, async (req) => {
     const rows = await q(pool, `SELECT id FROM itineraries WHERE owner_id = $1 ORDER BY updated_at DESC LIMIT 100`, [getActor(req).userId]);
     return { items: await Promise.all(rows.map((r0: any) => itineraryOut(pool, r0.id))) };
   });
 
-  r.get('/v1/itineraries/:id', { schema: { tags: [T3], params: idParams }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/itineraries/:id', { schema: { summary: 'Get an itinerary with its days and activities', tags: [T3], params: idParams }, preHandler: requireAuth }, async (req) => {
     await itineraryFor(pool, req.params.id, getActor(req).userId, false);
     return { item: await itineraryOut(pool, req.params.id) };
   });
 
-  r.patch('/v1/itineraries/:id', { schema: { tags: [T3], params: idParams, body: itineraryBody.partial().extend({ version: z.number().int().positive().optional() }) }, preHandler: requireAuth }, async (req) => {
+  r.patch('/v1/itineraries/:id', { schema: { summary: 'Update an itinerary', tags: [T3], params: idParams, body: itineraryBody.partial().extend({ version: z.number().int().positive().optional() }) }, preHandler: requireAuth }, async (req) => {
     const ctx = ctxFromRequest(req);
     await withTx(pool, async (tx) => {
       const it = await itineraryFor(tx, req.params.id, getActor(req).userId, true);
@@ -673,7 +673,7 @@ export default async function travelModule(app: FastifyInstance) {
   r.post(
     '/v1/itineraries/:id/items',
     {
-      schema: {
+      schema: { summary: 'Add an activity to an itinerary',
         tags: [T3],
         params: idParams,
         body: z.object({
@@ -718,7 +718,7 @@ export default async function travelModule(app: FastifyInstance) {
   r.post(
     '/v1/itineraries/:id/items/reorder',
     {
-      schema: { tags: [T3], params: idParams, body: z.object({ items: z.array(z.object({ id: z.uuid(), dayIndex: z.number().int().min(0).max(365), sortOrder: z.number().int().min(0).max(10000) })).min(1).max(500) }) },
+      schema: { summary: 'Reorder the activities of an itinerary', tags: [T3], params: idParams, body: z.object({ items: z.array(z.object({ id: z.uuid(), dayIndex: z.number().int().min(0).max(365), sortOrder: z.number().int().min(0).max(10000) })).min(1).max(500) }) },
       preHandler: requireAuth,
     },
     async (req) => {
@@ -735,7 +735,7 @@ export default async function travelModule(app: FastifyInstance) {
     },
   );
 
-  r.delete('/v1/itineraries/:id/items/:itemId', { schema: { tags: [T3], params: z.object({ id: z.uuid(), itemId: z.uuid() }) }, preHandler: requireAuth }, async (req) => {
+  r.delete('/v1/itineraries/:id/items/:itemId', { schema: { summary: 'Remove an activity from an itinerary', tags: [T3], params: z.object({ id: z.uuid(), itemId: z.uuid() }) }, preHandler: requireAuth }, async (req) => {
     const ctx = ctxFromRequest(req);
     await withTx(pool, async (tx) => {
       const it = await itineraryFor(tx, req.params.id, getActor(req).userId, true);
@@ -767,7 +767,7 @@ export default async function travelModule(app: FastifyInstance) {
     },
   );
 
-  r.get('/v1/orders', { schema: { tags: [T4], querystring: pagination.extend({ status: z.string().optional() }) }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/orders', { schema: { summary: 'List orders of the current user', tags: [T4], querystring: pagination.extend({ status: z.string().optional() }) }, preHandler: requireAuth }, async (req) => {
     const c = decodeCursor(req.query.cursor);
     const rows = await q(
       pool,
@@ -779,7 +779,7 @@ export default async function travelModule(app: FastifyInstance) {
     return { items: pg.items.map((o: any) => orderDto(o)), nextCursor: pg.nextCursor };
   });
 
-  r.get('/v1/orders/:id', { schema: { tags: [T4], params: idParams }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/orders/:id', { schema: { summary: 'Get an order', tags: [T4], params: idParams }, preHandler: requireAuth }, async (req) => {
     const actor = getActor(req);
     const out = await loadOrder(pool, req.params.id);
     if (!out) throw notFound('Order');
@@ -798,7 +798,7 @@ export default async function travelModule(app: FastifyInstance) {
 
   r.post(
     '/v1/orders/:id/cancel',
-    { schema: { tags: [T4], params: idParams, body: z.object({ reason: z.string().trim().min(2).max(300).default('BUYER_REQUEST') }) }, preHandler: requireAuth },
+    { schema: { summary: 'Cancel an order', tags: [T4], params: idParams, body: z.object({ reason: z.string().trim().min(2).max(300).default('BUYER_REQUEST') }) }, preHandler: requireAuth },
     async (req, reply) => {
       const actor = getActor(req);
       const ctx = ctxFromRequest(req);
@@ -815,7 +815,7 @@ export default async function travelModule(app: FastifyInstance) {
     },
   );
 
-  r.get('/v1/supplier/orders', { schema: { tags: [T4], querystring: pagination.extend({ status: z.string().optional() }) }, preHandler: supplierOnly }, async (req) => {
+  r.get('/v1/supplier/orders', { schema: { summary: 'List orders for the products of the supplier', tags: [T4], querystring: pagination.extend({ status: z.string().optional() }) }, preHandler: supplierOnly }, async (req) => {
     const s = await supplierOf(pool, getActor(req).userId, { allowPending: true });
     const c = decodeCursor(req.query.cursor);
     const rows = await q(

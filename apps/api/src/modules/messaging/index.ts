@@ -149,14 +149,14 @@ export default async function messagingModule(app: FastifyInstance) {
     });
   }
 
-  r.get('/v1/conversations', { schema: { tags: TAG, querystring: pageQuery }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/conversations', { schema: { summary: 'List conversations', tags: TAG, querystring: pageQuery }, preHandler: requireAuth }, async (req) => {
     return listMyConversations(pool, getActor(req).userId, req.query);
   });
 
   r.post(
     '/v1/conversations',
     {
-      schema: {
+      schema: { summary: 'Start a conversation',
         tags: TAG,
         body: z.object({
           contextType: z.literal('INQUIRY').default('INQUIRY'),
@@ -181,14 +181,14 @@ export default async function messagingModule(app: FastifyInstance) {
 
   r.get(
     '/v1/conversations/:id/messages',
-    { schema: { tags: TAG, params: z.object({ id: z.uuid() }), querystring: pageQuery }, preHandler: requireAuth },
+    { schema: { summary: 'List the messages of a conversation', tags: TAG, params: z.object({ id: z.uuid() }), querystring: pageQuery }, preHandler: requireAuth },
     async (req) => listMessagesAsMember(pool, req.params.id, getActor(req).userId, req.query),
   );
 
   r.post(
     '/v1/conversations/:id/messages',
     {
-      schema: {
+      schema: { summary: 'Send a message',
         tags: TAG,
         params: z.object({ id: z.uuid() }),
         body: z.object({
@@ -212,13 +212,13 @@ export default async function messagingModule(app: FastifyInstance) {
 
   r.post(
     '/v1/conversations/:id/read',
-    { schema: { tags: TAG, params: z.object({ id: z.uuid() }) }, preHandler: requireAuth },
+    { schema: { summary: 'Mark a conversation as read', tags: TAG, params: z.object({ id: z.uuid() }) }, preHandler: requireAuth },
     async (req) => ({ item: await markRead(pool, req.params.id, getActor(req).userId) }),
   );
 
   r.post(
     '/v1/messages/:id/report',
-    { schema: { tags: TAG, params: z.object({ id: z.uuid() }), body: z.object({ reason: z.string().min(3).max(1000) }) }, preHandler: requireAuth },
+    { schema: { summary: 'Report a message', tags: TAG, params: z.object({ id: z.uuid() }), body: z.object({ reason: z.string().min(3).max(1000) }) }, preHandler: requireAuth },
     async (req, reply) => {
       const actor = getActor(req);
       const ctx = ctxFromRequest(req);
@@ -230,7 +230,7 @@ export default async function messagingModule(app: FastifyInstance) {
   // Staff read: invariant 10 — case-scoped, time-limited, audited elevation only.
   r.get(
     '/v1/admin/conversations/:id/messages',
-    { schema: { tags: TAG, params: z.object({ id: z.uuid() }), querystring: pageQuery }, preHandler: requireRole('ADMIN', 'SUPPORT', 'COMPLIANCE') },
+    { schema: { summary: 'Read conversation messages under elevated access', tags: TAG, params: z.object({ id: z.uuid() }), querystring: pageQuery }, preHandler: requireRole('ADMIN', 'SUPPORT', 'COMPLIANCE') },
     async (req) => readAsStaff(pool, ctxFromRequest(req), req.params.id, req.query),
   );
 
@@ -240,7 +240,7 @@ export default async function messagingModule(app: FastifyInstance) {
   // when the access token expires — clients reconnect with a fresh token (CORE-03: revocation is immediate).
   r.get(
     '/v1/realtime/stream',
-    { schema: { tags: TAG, querystring: z.object({ token: z.string().max(4000).optional() }) } },
+    { schema: { summary: 'Realtime event stream', tags: TAG, querystring: z.object({ token: z.string().max(4000).optional() }) } },
     async (req, reply) => {
       let actor = req.actor;
       let bearer = actor ? req.headers.authorization : undefined;

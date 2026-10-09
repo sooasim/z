@@ -46,6 +46,7 @@ export const STATES: Record<string, [Tone, string, string]> = {
   PARTIAL: ['warn', '일부 완료', 'Partial'],
   PAYOUT_PENDING: ['warn', '지급 대기', 'Payout pending'],
   PAID_OUT: ['ok', '지급 완료', 'Paid out'],
+  CARRIED_FORWARD: ['neutral', '차기 이월', 'Carried forward'],
   RELEASED: ['ok', '해제됨', 'Released'],
   SETTLED: ['ok', '정산 완료', 'Settled'],
   CALCULATED: ['info', '산정됨', 'Calculated'],

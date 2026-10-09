@@ -42,7 +42,7 @@ export default async function supportModule(app: FastifyInstance) {
 
   // ---- requester -----------------------------------------------------------------------------------------------
   r.post('/v1/support/cases', {
-    schema: {
+    schema: { summary: 'Open a support case',
       tags: TAG,
       body: z.object({
         category: z.enum(CATEGORIES),
@@ -60,7 +60,7 @@ export default async function supportModule(app: FastifyInstance) {
     return reply.status(201).send({ item: svc.presentCase(c, ctx) });
   });
 
-  r.get('/v1/support/cases', { schema: { tags: TAG, querystring: pagination.extend({ status: z.enum(STATUSES).optional() }) }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/support/cases', { schema: { summary: 'List support cases of the current user', tags: TAG, querystring: pagination.extend({ status: z.enum(STATUSES).optional() }) }, preHandler: requireAuth }, async (req) => {
     const ctx = ctxFromRequest(req);
     const c = decodeCursor(req.query.cursor);
     const rows = await q(
@@ -73,14 +73,14 @@ export default async function supportModule(app: FastifyInstance) {
     return { items: p.items.map((x) => svc.presentCase(x, ctx)), nextCursor: p.nextCursor };
   });
 
-  r.get('/v1/support/cases/:id', { schema: { tags: TAG, params: idParams }, preHandler: requireAuth }, async (req) => ({ item: await svc.caseDetail(pool, ctxFromRequest(req), req.params.id) }));
+  r.get('/v1/support/cases/:id', { schema: { summary: 'Get a support case', tags: TAG, params: idParams }, preHandler: requireAuth }, async (req) => ({ item: await svc.caseDetail(pool, ctxFromRequest(req), req.params.id) }));
 
   r.post('/v1/support/cases/:id/comments', {
-    schema: { tags: TAG, params: idParams, body: z.object({ body: z.string().trim().min(1).max(10_000) }) },
+    schema: { summary: 'Comment on a support case', tags: TAG, params: idParams, body: z.object({ body: z.string().trim().min(1).max(10_000) }) },
     preHandler: requireAuth,
   }, async (req, reply) => reply.status(201).send({ item: await withTx(pool, (tx) => svc.comment(tx, ctxFromRequest(req), req.params.id, req.body.body)) }));
 
-  r.post('/v1/support/cases/:id/close', { schema: { tags: TAG, params: idParams }, preHandler: requireAuth }, async (req) => {
+  r.post('/v1/support/cases/:id/close', { schema: { summary: 'Close a support case', tags: TAG, params: idParams }, preHandler: requireAuth }, async (req) => {
     const ctx = ctxFromRequest(req);
     return {
       item: svc.presentCase(
@@ -131,9 +131,9 @@ export default async function supportModule(app: FastifyInstance) {
     return { items: rows.map((x) => svc.presentCase(x, ctx)) };
   });
 
-  r.get('/v1/admin/support/cases/:id', { schema: { tags: TAG, params: idParams }, preHandler: staff }, async (req) => ({ item: await svc.caseDetail(pool, ctxFromRequest(req), req.params.id) }));
+  r.get('/v1/admin/support/cases/:id', { schema: { summary: 'Get a support case with its internal history', tags: TAG, params: idParams }, preHandler: staff }, async (req) => ({ item: await svc.caseDetail(pool, ctxFromRequest(req), req.params.id) }));
 
-  r.post('/v1/admin/support/cases/:id/assign', { schema: { tags: TAG, params: idParams, body: z.object({ assigneeId: z.uuid().optional() }).nullish() }, preHandler: staff }, async (req) => {
+  r.post('/v1/admin/support/cases/:id/assign', { schema: { summary: 'Assign a support case to an agent', tags: TAG, params: idParams, body: z.object({ assigneeId: z.uuid().optional() }).nullish() }, preHandler: staff }, async (req) => {
     const ctx = ctxFromRequest(req);
     const assigneeId = req.body?.assigneeId ?? ctx.actor!.userId;
     return { item: svc.presentCase(await staffTx(req, 'support.case.assigned', (tx) => svc.assign(tx, ctx, req.params.id, assigneeId), () => ({ assigneeId })), ctx) };
@@ -145,25 +145,25 @@ export default async function supportModule(app: FastifyInstance) {
   }, async (req, reply) => reply.status(201).send({ item: await staffTx(req, 'support.case.internal_note', (tx, ctx) => svc.internalNote(tx, ctx, req.params.id, req.body.body), (ev) => ({ eventId: ev.id })) }));
 
   r.post('/v1/admin/support/cases/:id/comments', {
-    schema: { tags: TAG, params: idParams, body: z.object({ body: z.string().trim().min(1).max(10_000) }) },
+    schema: { summary: 'Add a comment to a support case', tags: TAG, params: idParams, body: z.object({ body: z.string().trim().min(1).max(10_000) }) },
     preHandler: staff,
   }, async (req, reply) => reply.status(201).send({ item: await staffTx(req, 'support.case.replied', (tx, ctx) => svc.comment(tx, ctx, req.params.id, req.body.body), (ev) => ({ eventId: ev.id })) }));
 
   r.post('/v1/admin/support/cases/:id/status', {
-    schema: { tags: TAG, params: idParams, body: z.object({ to: z.enum(['IN_PROGRESS', 'PENDING_CUSTOMER', 'RESOLVED', 'CLOSED']), note: z.string().max(2000).optional() }) },
+    schema: { summary: 'Change the status of a support case', tags: TAG, params: idParams, body: z.object({ to: z.enum(['IN_PROGRESS', 'PENDING_CUSTOMER', 'RESOLVED', 'CLOSED']), note: z.string().max(2000).optional() }) },
     preHandler: staff,
   }, async (req) => {
     const ctx = ctxFromRequest(req);
     return { item: svc.presentCase(await staffTx(req, 'support.case.status_changed', (tx) => svc.changeStatus(tx, ctx, req.params.id, req.body.to, req.body.note), () => ({ to: req.body.to })), ctx) };
   });
 
-  r.post('/v1/admin/support/cases/:id/priority', { schema: { tags: TAG, params: idParams, body: z.object({ priority: z.enum(PRIORITIES) }) }, preHandler: staff }, async (req) => {
+  r.post('/v1/admin/support/cases/:id/priority', { schema: { summary: 'Change the priority of a support case', tags: TAG, params: idParams, body: z.object({ priority: z.enum(PRIORITIES) }) }, preHandler: staff }, async (req) => {
     const ctx = ctxFromRequest(req);
     return { item: svc.presentCase(await staffTx(req, 'support.case.priority_changed', (tx) => svc.setPriority(tx, ctx, req.params.id, req.body.priority), () => ({ priority: req.body.priority })), ctx) };
   });
 
   r.post('/v1/admin/support/cases/:id/elevated-access', {
-    schema: { tags: TAG, params: idParams, body: z.object({ conversationId: z.uuid(), reason: z.string().trim().min(10).max(1000), durationMinutes: z.number().int().min(1).max(1440).optional() }) },
+    schema: { summary: 'Grant audited elevated access for a support case', tags: TAG, params: idParams, body: z.object({ conversationId: z.uuid(), reason: z.string().trim().min(10).max(1000), durationMinutes: z.number().int().min(1).max(1440).optional() }) },
     preHandler: staff,
   }, async (req, reply) => {
     const item = await staffTx(
@@ -178,7 +178,7 @@ export default async function supportModule(app: FastifyInstance) {
   // ---- context links (support_case_links) ---------------------------------------------------------------------
   const linkBody = z.object({ linkType: z.enum(svc.LINK_TYPES), linkId: z.uuid() });
 
-  r.get('/v1/admin/support/cases/:id/links', { schema: { tags: TAG, params: idParams }, preHandler: staff }, async (req) => {
+  r.get('/v1/admin/support/cases/:id/links', { schema: { summary: 'List the records linked to a support case', tags: TAG, params: idParams }, preHandler: staff }, async (req) => {
     const { c } = await svc.loadCase(pool, ctxFromRequest(req), req.params.id);
     return { items: await svc.listLinks(pool, req.params.id, c.requester_id) };
   });
@@ -197,7 +197,7 @@ export default async function supportModule(app: FastifyInstance) {
   });
 
   r.delete('/v1/admin/support/cases/:id/links/:linkType/:linkId', {
-    schema: { tags: TAG, params: z.object({ id: z.uuid(), linkType: z.enum(svc.LINK_TYPES), linkId: z.uuid() }) },
+    schema: { summary: 'Unlink a record from a support case', tags: TAG, params: z.object({ id: z.uuid(), linkType: z.enum(svc.LINK_TYPES), linkId: z.uuid() }) },
     preHandler: staff,
   }, async (req) => ({
     item: await staffTx(req, 'support.case.unlinked', (tx, ctx) => svc.unlinkCase(tx, ctx, req.params.id, { linkType: req.params.linkType, linkId: req.params.linkId }), () => ({

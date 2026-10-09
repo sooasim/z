@@ -33,7 +33,7 @@ export default async function bookingModule(app: FastifyInstance) {
 
   // ------------------------------------------------------------ STAY-06 availability & calendar
   r.put('/v1/properties/:id/availability', {
-    schema: {
+    schema: { summary: 'Replace availability for a date range',
       tags: ['STAY-06'],
       params: idParams,
       body: z.object({
@@ -55,7 +55,7 @@ export default async function bookingModule(app: FastifyInstance) {
   });
 
   r.post('/v1/properties/:id/blocks', {
-    schema: { tags: ['STAY-06'], params: idParams, body: z.object({ start: date, end: date, note: z.string().max(500).optional() }) },
+    schema: { summary: 'Block dates on a property calendar', tags: ['STAY-06'], params: idParams, body: z.object({ start: date, end: date, note: z.string().max(500).optional() }) },
     preHandler: requireAuth,
   }, async (req, reply) => {
     const ctx = ctxFromRequest(req);
@@ -64,7 +64,7 @@ export default async function bookingModule(app: FastifyInstance) {
   });
 
   r.delete('/v1/properties/:id/blocks/:blockId', {
-    schema: { tags: ['STAY-06'], params: z.object({ id: z.uuid(), blockId: z.uuid() }) },
+    schema: { summary: 'Remove a calendar block', tags: ['STAY-06'], params: z.object({ id: z.uuid(), blockId: z.uuid() }) },
     preHandler: requireAuth,
   }, async (req, reply) => {
     const ctx = ctxFromRequest(req);
@@ -73,17 +73,17 @@ export default async function bookingModule(app: FastifyInstance) {
   });
 
   r.get('/v1/properties/:id/calendar', {
-    schema: { tags: ['STAY-06'], params: idParams, querystring: rangeQuery },
+    schema: { summary: 'Property calendar with availability and blocks', tags: ['STAY-06'], params: idParams, querystring: rangeQuery },
   }, async (req) => ({ item: await publicCalendar(pool(), req.actor ?? null, req.params.id, req.query.from, req.query.to) }));
 
   r.get('/v1/host/calendar', {
-    schema: { tags: ['STAY-06'], querystring: rangeQuery.extend({ propertyId: z.uuid() }) },
+    schema: { summary: 'Calendar across every property of the host', tags: ['STAY-06'], querystring: rangeQuery.extend({ propertyId: z.uuid() }) },
     preHandler: requireAuth,
   }, async (req) => ({ item: await hostCalendar(pool(), getActor(req), req.query.propertyId, req.query.from, req.query.to, ctxFromRequest(req)) }));
 
   // ------------------------------------------------------------ STAY-07 quote
   r.post('/v1/booking/quotes', {
-    schema: {
+    schema: { summary: 'Create a priced stay quote',
       tags: ['STAY-07'],
       body: z.object({ propertyId: z.uuid(), checkIn: date, checkOut: date, guests: z.number().int().min(1).max(50) }),
     },
@@ -96,7 +96,7 @@ export default async function bookingModule(app: FastifyInstance) {
   });
 
   r.get('/v1/booking/quotes/:id', {
-    schema: { tags: ['STAY-07'], params: idParams },
+    schema: { summary: 'Get a stay quote', tags: ['STAY-07'], params: idParams },
     preHandler: requireAuth,
   }, async (req) => {
     const actor = getActor(req);
@@ -113,7 +113,7 @@ export default async function bookingModule(app: FastifyInstance) {
 
   // ------------------------------------------------------------ STAY-08 hold
   r.post('/v1/booking/holds', {
-    schema: { tags: ['STAY-08'], body: z.object({ quoteId: z.uuid() }) },
+    schema: { summary: 'Hold dates before payment', tags: ['STAY-08'], body: z.object({ quoteId: z.uuid() }) },
     preHandler: requireAuth,
   }, async (req, reply) => {
     const ctx = ctxFromRequest(req);
@@ -128,7 +128,7 @@ export default async function bookingModule(app: FastifyInstance) {
   });
 
   r.delete('/v1/booking/holds/:id', {
-    schema: { tags: ['STAY-08'], params: idParams },
+    schema: { summary: 'Release a date hold', tags: ['STAY-08'], params: idParams },
     preHandler: requireAuth,
   }, async (req, reply) => {
     const ctx = ctxFromRequest(req);
@@ -138,12 +138,12 @@ export default async function bookingModule(app: FastifyInstance) {
 
   // ------------------------------------------------------------ STAY-09 reservations
   r.get('/v1/reservations', {
-    schema: { tags: ['STAY-09'], querystring: z.object({ status: z.enum(STATUSES).optional(), limit: z.coerce.number().int().min(1).max(100).default(50) }) },
+    schema: { summary: 'List reservations of the current user', tags: ['STAY-09'], querystring: z.object({ status: z.enum(STATUSES).optional(), limit: z.coerce.number().int().min(1).max(100).default(50) }) },
     preHandler: requireAuth,
   }, async (req) => ({ items: await listGuestReservations(pool(), getActor(req), req.query), nextCursor: null }));
 
   r.get('/v1/host/reservations', {
-    schema: {
+    schema: { summary: 'List reservations for the properties of the host',
       tags: ['STAY-09'],
       querystring: z.object({
         filter: z.enum(['upcoming', 'current', 'completed', 'cancelled']).optional(),
@@ -155,26 +155,26 @@ export default async function bookingModule(app: FastifyInstance) {
   }, async (req) => ({ items: await listHostReservations(pool(), getActor(req), req.query), nextCursor: null }));
 
   r.get('/v1/reservations/:id', {
-    schema: { tags: ['STAY-09'], params: idParams },
+    schema: { summary: 'Get a reservation', tags: ['STAY-09'], params: idParams },
     preHandler: requireAuth,
   }, async (req) => ({ item: await getReservation(pool(), getActor(req), req.params.id, ctxFromRequest(req)) }));
 
-  const lifecycle = (path: string, tag: string, fn: (tx: Tx, ctx: Ctx, id: string, reason?: string) => Promise<any>) =>
+  const lifecycle = (path: string, tag: string, summary: string, fn: (tx: Tx, ctx: Ctx, id: string, reason?: string) => Promise<any>) =>
     r.post(path, {
-      schema: { tags: [tag], params: idParams, body: z.object({ reason: z.string().min(1).max(500).optional() }).nullish() },
+      schema: { summary, tags: [tag], params: idParams, body: z.object({ reason: z.string().min(1).max(500).optional() }).nullish() },
       preHandler: requireAuth,
     }, async (req) => {
       const ctx = ctxFromRequest(req);
       const row = await withTx(pool(), (tx) => fn(tx, ctx, req.params.id, req.body?.reason));
       return { item: reservationDto(row) };
     });
-  lifecycle('/v1/reservations/:id/check-in', 'STAY-10', (tx, ctx, id, reason) => checkIn(tx, ctx, id, reason));
-  lifecycle('/v1/reservations/:id/complete', 'STAY-09', (tx, ctx, id, reason) => completeStay(tx, ctx, id, reason));
-  lifecycle('/v1/reservations/:id/no-show', 'STAY-10', (tx, ctx, id, reason) => markNoShow(tx, ctx, id, reason));
+  lifecycle('/v1/reservations/:id/check-in', 'STAY-10', 'Check in a reservation', (tx, ctx, id, reason) => checkIn(tx, ctx, id, reason));
+  lifecycle('/v1/reservations/:id/complete', 'STAY-09', 'Complete a stay', (tx, ctx, id, reason) => completeStay(tx, ctx, id, reason));
+  lifecycle('/v1/reservations/:id/no-show', 'STAY-10', 'Mark a reservation as a no-show', (tx, ctx, id, reason) => markNoShow(tx, ctx, id, reason));
 
   // ------------------------------------------------------------ STAY-10 cancellation
   r.get('/v1/reservations/:id/cancellation-preview', {
-    schema: { tags: ['STAY-10'], params: idParams },
+    schema: { summary: 'Preview the refund for cancelling a reservation', tags: ['STAY-10'], params: idParams },
     preHandler: requireAuth,
   }, async (req) => {
     getActor(req);
@@ -182,7 +182,7 @@ export default async function bookingModule(app: FastifyInstance) {
   });
 
   r.post('/v1/reservations/:id/cancel', {
-    schema: { tags: ['STAY-10'], params: idParams, body: z.object({ reason: z.string().min(1).max(500) }) },
+    schema: { summary: 'Cancel a reservation', tags: ['STAY-10'], params: idParams, body: z.object({ reason: z.string().min(1).max(500) }) },
     preHandler: requireAuth,
   }, async (req, reply) => {
     const ctx = ctxFromRequest(req);

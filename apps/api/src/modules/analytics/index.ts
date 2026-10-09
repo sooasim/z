@@ -15,20 +15,20 @@ export default async function analyticsModule(app: FastifyInstance) {
 
   // Anonymous or authenticated; PII is stripped server-side before persistence.
   // unauthenticated: own body cap (50 events x 8 KB properties fits) and a tighter per-IP rate limit than the global one
-  r.post('/v1/analytics/events', { schema: { tags: TAG, body: analyticsBatchSchema }, bodyLimit: 512 * 1024, config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (req, reply) => {
+  r.post('/v1/analytics/events', { schema: { summary: 'Record client analytics events', tags: TAG, body: analyticsBatchSchema }, bodyLimit: 512 * 1024, config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (req, reply) => {
     const res = await ingestEvents(pool, { userId: req.actor?.userId ?? null, batch: req.body });
     return reply.status(202).send(res);
   });
 
-  r.get('/v1/admin/analytics/funnel', { schema: { tags: TAG, querystring: rangeQuery }, preHandler: requireRole('ADMIN', 'ACCOUNTING') }, async (req) =>
+  r.get('/v1/admin/analytics/funnel', { schema: { summary: 'Conversion funnel report', tags: TAG, querystring: rangeQuery }, preHandler: requireRole('ADMIN', 'ACCOUNTING') }, async (req) =>
     funnel(pool, parseRange(req.query.from, req.query.to)),
   );
 
-  r.get('/v1/admin/analytics/kpis', { schema: { tags: TAG, querystring: rangeQuery }, preHandler: requireRole('ADMIN', 'ACCOUNTING') }, async (req) =>
+  r.get('/v1/admin/analytics/kpis', { schema: { summary: 'Operational KPI summary', tags: TAG, querystring: rangeQuery }, preHandler: requireRole('ADMIN', 'ACCOUNTING') }, async (req) =>
     kpis(pool, parseRange(req.query.from, req.query.to)),
   );
 
-  r.get('/v1/admin/audit-logs', { schema: { tags: TAG, querystring: auditQuerySchema }, preHandler: requireRole('ADMIN', 'ACCOUNTING') }, async (req) =>
+  r.get('/v1/admin/audit-logs', { schema: { summary: 'Search the append-only audit log', tags: TAG, querystring: auditQuerySchema }, preHandler: requireRole('ADMIN', 'ACCOUNTING') }, async (req) =>
     readAuditLogs(pool, ctxFromRequest(req), req.query),
   );
 }

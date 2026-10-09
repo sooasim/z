@@ -78,9 +78,9 @@ export default async function identityModule(app: FastifyInstance) {
     revoked: await svc.logout(pool, ctxFromRequest(req), true),
   }));
 
-  r.get('/v1/auth/sessions', { schema: { tags: TAG }, preHandler: requireAuth }, async (req) => ({ items: await svc.listSessions(pool, getActor(req)) }));
+  r.get('/v1/auth/sessions', { schema: { summary: 'List active sessions', tags: TAG }, preHandler: requireAuth }, async (req) => ({ items: await svc.listSessions(pool, getActor(req)) }));
 
-  r.delete('/v1/auth/sessions/:id', { schema: { tags: TAG, params: z.object({ id: z.uuid() }) }, preHandler: requireAuth }, async (req, reply) => {
+  r.delete('/v1/auth/sessions/:id', { schema: { summary: 'Revoke a session', tags: TAG, params: z.object({ id: z.uuid() }) }, preHandler: requireAuth }, async (req, reply) => {
     await svc.revokeOwnSession(pool, ctxFromRequest(req), req.params.id);
     return reply.status(204).send();
   });
@@ -103,7 +103,7 @@ export default async function identityModule(app: FastifyInstance) {
   });
 
   r.post('/v1/auth/password/change', {
-    schema: { tags: TAG, body: z.object({ currentPassword: password.optional(), newPassword: password }) },
+    schema: { summary: 'Change the account password', tags: TAG, body: z.object({ currentPassword: password.optional(), newPassword: password }) },
     preHandler: requireAuth,
   }, async (req, reply) => {
     await svc.changePassword(pool, ctxFromRequest(req), req.body);
@@ -111,12 +111,12 @@ export default async function identityModule(app: FastifyInstance) {
   });
 
   // ---- email verification ---------------------------------------------------------------------------------
-  r.post('/v1/auth/email/verify/request', { schema: { tags: TAG }, preHandler: requireAuth, config: authLimit }, async (req, reply) => {
+  r.post('/v1/auth/email/verify/request', { schema: { summary: 'Send an email verification code', tags: TAG }, preHandler: requireAuth, config: authLimit }, async (req, reply) => {
     await svc.requestEmailVerification(pool, ctxFromRequest(req), getActor(req).userId);
     return reply.status(202).send({ accepted: true });
   });
   r.post('/v1/auth/email/verify/confirm', {
-    schema: { tags: TAG, body: z.object({ code: z.string().regex(/^\d{6}$/) }) },
+    schema: { summary: 'Confirm an email verification code', tags: TAG, body: z.object({ code: z.string().regex(/^\d{6}$/) }) },
     preHandler: requireAuth,
   }, async (req) => {
     await svc.confirmEmailVerification(pool, ctxFromRequest(req), getActor(req).userId, req.body.code);
@@ -124,7 +124,7 @@ export default async function identityModule(app: FastifyInstance) {
   });
 
   // ---- MFA (TOTP) -----------------------------------------------------------------------------------------
-  r.get('/v1/auth/mfa', { schema: { tags: TAG }, preHandler: requireAuth }, async (req) => svc.mfaStatus(pool, getActor(req).userId));
+  r.get('/v1/auth/mfa', { schema: { summary: 'List MFA factors', tags: TAG }, preHandler: requireAuth }, async (req) => svc.mfaStatus(pool, getActor(req).userId));
 
   r.post('/v1/auth/mfa/totp/enroll', { schema: { tags: TAG, summary: 'Start TOTP enrollment (secret shown once)' }, preHandler: requireAuth }, async (req, reply) =>
     reply.status(201).send(await svc.enrollTotp(pool, ctxFromRequest(req))),
@@ -187,9 +187,9 @@ export default async function identityModule(app: FastifyInstance) {
     return reply.status(res.status).send(res.body);
   });
 
-  r.get('/v1/me/identities', { schema: { tags: TAG }, preHandler: requireAuth }, async (req) => ({ items: await svc.listIdentities(pool, getActor(req).userId) }));
+  r.get('/v1/me/identities', { schema: { summary: 'List linked social identities', tags: TAG }, preHandler: requireAuth }, async (req) => ({ items: await svc.listIdentities(pool, getActor(req).userId) }));
 
-  r.delete('/v1/me/identities/:provider', { schema: { tags: TAG, params: providerParams }, preHandler: requireAuth }, async (req, reply) => {
+  r.delete('/v1/me/identities/:provider', { schema: { summary: 'Unlink a social identity', tags: TAG, params: providerParams }, preHandler: requireAuth }, async (req, reply) => {
     await svc.unlinkProvider(pool, ctxFromRequest(req), req.params.provider);
     return reply.status(204).send();
   });

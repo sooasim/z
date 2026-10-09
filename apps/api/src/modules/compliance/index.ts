@@ -21,7 +21,7 @@ export default async function complianceModule(app: FastifyInstance) {
   const reasonBody = z.object({ reason: z.string().trim().max(1000).nullish() }).default({});
 
   r.post('/v1/properties/:id/permits', {
-    schema: {
+    schema: { summary: 'Register an accommodation permit',
       tags: ['STAY-03'], params: id,
       body: z.object({
         permitType: z.string().trim().min(2).max(80),
@@ -35,29 +35,33 @@ export default async function complianceModule(app: FastifyInstance) {
     preHandler: requireAuth,
   }, async (req, reply) => reply.status(201).send({ item: await submitPermit(ctxFromRequest(req), getActor(req), req.params.id, req.body) }));
 
-  r.get('/v1/properties/:id/permits', { schema: { tags: ['STAY-03'], params: id }, preHandler: requireAuth }, async (req) => ({
+  r.get('/v1/properties/:id/permits', { schema: { summary: 'List the permits of a property', tags: ['STAY-03'], params: id }, preHandler: requireAuth }, async (req) => ({
     items: await listPermits(ctxFromRequest(req), getActor(req), req.params.id),
   }));
 
   r.get('/v1/admin/permits', {
-    schema: { tags: ['STAY-03'], querystring: z.object({ status: z.enum(['PENDING', 'VERIFIED', 'REJECTED', 'EXPIRED', 'REVOKED']).default('PENDING') }) },
+    schema: { summary: 'List accommodation permits', tags: ['STAY-03'], querystring: z.object({ status: z.enum(['PENDING', 'VERIFIED', 'REJECTED', 'EXPIRED', 'REVOKED']).default('PENDING') }) },
     preHandler: staff,
   }, async (req) => ({ items: await listPermitQueue(app.ctx.pool, req.query.status) }));
 
-  for (const [action, to] of [['verify', 'VERIFIED'], ['reject', 'REJECTED'], ['revoke', 'REVOKED']] as const) {
-    r.post(`/v1/admin/permits/:id/${action}`, { schema: { tags: ['STAY-03'], params: id, body: reasonBody }, preHandler: staff }, async (req) => {
+  for (const [action, to, summary] of [
+    ['verify', 'VERIFIED', 'Verify an accommodation permit'],
+    ['reject', 'REJECTED', 'Reject an accommodation permit'],
+    ['revoke', 'REVOKED', 'Revoke a verified accommodation permit'],
+  ] as const) {
+    r.post(`/v1/admin/permits/:id/${action}`, { schema: { summary, tags: ['STAY-03'], params: id, body: reasonBody }, preHandler: staff }, async (req) => {
       if (to !== 'VERIFIED' && !req.body?.reason) throw badRequest('REASON_REQUIRED', 'A reason is required');
       return decidePermit(ctxFromRequest(req), req.params.id, to, req.body?.reason ?? null);
     });
   }
 
   r.get('/v1/admin/compliance/rules', {
-    schema: { tags: ['STAY-03'], querystring: z.object({ status: z.enum(['DRAFT', 'APPROVED', 'RETIRED']).optional(), jurisdiction: z.string().optional() }) },
+    schema: { summary: 'List effective-dated compliance rules', tags: ['STAY-03'], querystring: z.object({ status: z.enum(['DRAFT', 'APPROVED', 'RETIRED']).optional(), jurisdiction: z.string().optional() }) },
     preHandler: staff,
   }, async (req) => ({ items: await listRules(app.ctx.pool, req.query) }));
 
   r.post('/v1/admin/compliance/rules', {
-    schema: {
+    schema: { summary: 'Propose a compliance rule version',
       tags: ['STAY-03'],
       body: z.object({
         ruleKey: z.string().trim().min(2).max(120),
@@ -74,10 +78,10 @@ export default async function complianceModule(app: FastifyInstance) {
     preHandler: staff,
   }, async (req, reply) => reply.status(201).send({ item: await createRule(ctxFromRequest(req), req.body as any) }));
 
-  r.post('/v1/admin/compliance/rules/:id/approve', { schema: { tags: ['STAY-03'], params: id, body: reasonBody }, preHandler: staff }, async (req) => ({
+  r.post('/v1/admin/compliance/rules/:id/approve', { schema: { summary: 'Approve a compliance rule version', tags: ['STAY-03'], params: id, body: reasonBody }, preHandler: staff }, async (req) => ({
     item: await approveRule(ctxFromRequest(req), req.params.id, req.body?.reason ?? null),
   }));
-  r.post('/v1/admin/compliance/rules/:id/retire', { schema: { tags: ['STAY-03'], params: id, body: reasonBody }, preHandler: staff }, async (req) => ({
+  r.post('/v1/admin/compliance/rules/:id/retire', { schema: { summary: 'Retire a compliance rule version', tags: ['STAY-03'], params: id, body: reasonBody }, preHandler: staff }, async (req) => ({
     item: await retireRule(ctxFromRequest(req), req.params.id, req.body?.reason ?? null),
   }));
 

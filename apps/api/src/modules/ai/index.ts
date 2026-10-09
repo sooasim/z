@@ -20,7 +20,7 @@ export default async function aiModule(app: FastifyInstance) {
   r.post(
     '/v1/ai/travel-assistant',
     {
-      schema: { tags: ['AI-01'], body: z.object({ message: z.string().trim().min(1).max(2000), sessionId: z.uuid().optional() }) },
+      schema: { summary: 'Ask the AI travel assistant', tags: ['AI-01'], body: z.object({ message: z.string().trim().min(1).max(2000), sessionId: z.uuid().optional() }) },
       preHandler: requireAuth,
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
     },
@@ -46,7 +46,7 @@ export default async function aiModule(app: FastifyInstance) {
   r.get(
     '/v1/recommendations',
     {
-      schema: {
+      schema: { summary: 'Personalized recommendations',
         tags: ['AI-02'],
         querystring: z.object({ surface: z.enum(['home', 'stay', 'exchange', 'guide', 'travel']).default('home'), limit: z.coerce.number().int().min(1).max(50).default(12) }),
       },

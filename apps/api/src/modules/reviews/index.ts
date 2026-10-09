@@ -55,7 +55,7 @@ export default async function reviewsModule(app: FastifyInstance) {
     return { items: p.items.map(svc.presentReview), nextCursor: p.nextCursor, summary: { reviewCount: rep?.review_count ?? 0, ratingAvg: rep?.rating_avg ?? null } };
   });
 
-  r.get('/v1/reviews/:id', { schema: { tags: TAG, params: idParams } }, async (req) => {
+  r.get('/v1/reviews/:id', { schema: { summary: 'Get a review', tags: TAG, params: idParams } }, async (req) => {
     const row = await maybeOne(pool, `${SELECT} WHERE r.id = $1 AND r.status = 'PUBLISHED'`, [req.params.id]);
     if (!row) throw notFound('Review');
     return { item: svc.presentReview(row) };
@@ -73,14 +73,14 @@ export default async function reviewsModule(app: FastifyInstance) {
   }, async (req, reply) => reply.status(201).send({ item: await withTx(pool, (tx) => svc.respond(tx, ctxFromRequest(req), req.params.id, req.body.body)) }));
 
   r.post('/v1/reviews/:id/report', {
-    schema: { tags: TAG, params: idParams, body: z.object({ reason: z.string().trim().min(3).max(1000) }) },
+    schema: { summary: 'Report a review', tags: TAG, params: idParams, body: z.object({ reason: z.string().trim().min(3).max(1000) }) },
     preHandler: requireAuth,
   }, async (req, reply) => reply.status(201).send({ item: await withTx(pool, (tx) => svc.report(tx, ctxFromRequest(req), req.params.id, req.body.reason)) }));
 
   // ---- moderation (ADMIN / SUPPORT, AAL2) ----------------------------------------------------------------------
   const mod = requireRole('ADMIN', 'SUPPORT');
   r.get('/v1/admin/review-reports', {
-    schema: { tags: TAG, querystring: z.object({ status: z.enum(['OPEN', 'UPHELD', 'DISMISSED']).default('OPEN') }) },
+    schema: { summary: 'List review reports', tags: TAG, querystring: z.object({ status: z.enum(['OPEN', 'UPHELD', 'DISMISSED']).default('OPEN') }) },
     preHandler: mod,
   }, async (req) => ({
     items: await q(
@@ -92,11 +92,11 @@ export default async function reviewsModule(app: FastifyInstance) {
   }));
 
   r.post('/v1/admin/reviews/:id/moderate', {
-    schema: { tags: TAG, params: idParams, body: z.object({ action: z.enum(['HIDE', 'REMOVE', 'RESTORE']), reason: z.string().trim().min(3).max(1000) }) },
+    schema: { summary: 'Moderate a review', tags: TAG, params: idParams, body: z.object({ action: z.enum(['HIDE', 'REMOVE', 'RESTORE']), reason: z.string().trim().min(3).max(1000) }) },
     preHandler: mod,
   }, async (req) => ({ item: svc.presentReview(await withTx(pool, (tx) => svc.moderate(tx, ctxFromRequest(req), req.params.id, req.body))) }));
 
-  r.post('/v1/admin/review-reports/:id/dismiss', { schema: { tags: TAG, params: idParams }, preHandler: mod }, async (req) => ({
+  r.post('/v1/admin/review-reports/:id/dismiss', { schema: { summary: 'Dismiss a review report', tags: TAG, params: idParams }, preHandler: mod }, async (req) => ({
     item: await withTx(pool, (tx) => svc.dismissReport(tx, ctxFromRequest(req), req.params.id)),
   }));
 }

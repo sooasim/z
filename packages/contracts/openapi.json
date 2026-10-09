@@ -112,6 +112,7 @@
     },
     "/v1/admin/analytics/funnel": {
       "get": {
+        "summary": "Conversion funnel report",
         "tags": [
           "OPS-04"
         ],
@@ -146,6 +147,7 @@
     },
     "/v1/admin/analytics/kpis": {
       "get": {
+        "summary": "Operational KPI summary",
         "tags": [
           "OPS-04"
         ],
@@ -180,6 +182,7 @@
     },
     "/v1/admin/audit-logs": {
       "get": {
+        "summary": "Search the append-only audit log",
         "tags": [
           "OPS-04"
         ],
@@ -289,6 +292,7 @@
     },
     "/v1/admin/charter/requests": {
       "get": {
+        "summary": "List charter enquiries",
         "tags": [
           "JET-01"
         ],
@@ -336,6 +340,7 @@
     },
     "/v1/admin/charter/requests/{id}": {
       "patch": {
+        "summary": "Update a charter enquiry",
         "tags": [
           "JET-01"
         ],
@@ -396,6 +401,7 @@
     },
     "/v1/admin/cms/entries": {
       "get": {
+        "summary": "List CMS entries",
         "tags": [
           "OPS-03"
         ],
@@ -458,6 +464,7 @@
         }
       },
       "post": {
+        "summary": "Create a CMS entry",
         "tags": [
           "OPS-03"
         ],
@@ -613,6 +620,7 @@
     },
     "/v1/admin/cms/entries/{id}": {
       "patch": {
+        "summary": "Update a CMS entry",
         "tags": [
           "OPS-03"
         ],
@@ -763,6 +771,7 @@
     },
     "/v1/admin/cms/entries/{id}/archive": {
       "post": {
+        "summary": "Archive a CMS entry",
         "tags": [
           "OPS-03"
         ],
@@ -810,6 +819,7 @@
     },
     "/v1/admin/cms/entries/{id}/publish": {
       "post": {
+        "summary": "Publish a CMS entry",
         "tags": [
           "OPS-03"
         ],
@@ -857,6 +867,7 @@
     },
     "/v1/admin/cms/entries/{id}/refs": {
       "get": {
+        "summary": "List external references of a CMS entry",
         "tags": [
           "OPS-03"
         ],
@@ -944,6 +955,7 @@
     },
     "/v1/admin/cms/entries/{id}/restore": {
       "post": {
+        "summary": "Restore an archived CMS entry to draft",
         "tags": [
           "OPS-03"
         ],
@@ -991,6 +1003,7 @@
     },
     "/v1/admin/cms/entries/{id}/unpublish": {
       "post": {
+        "summary": "Unpublish a CMS entry",
         "tags": [
           "OPS-03"
         ],
@@ -1038,6 +1051,7 @@
     },
     "/v1/admin/cms/external-refs": {
       "get": {
+        "summary": "List external references used by content",
         "tags": [
           "OPS-03"
         ],
@@ -1107,6 +1121,7 @@
     },
     "/v1/admin/compliance/rules": {
       "get": {
+        "summary": "List effective-dated compliance rules",
         "tags": [
           "STAY-03"
         ],
@@ -1140,6 +1155,7 @@
         }
       },
       "post": {
+        "summary": "Propose a compliance rule version",
         "tags": [
           "STAY-03"
         ],
@@ -1249,6 +1265,7 @@
     },
     "/v1/admin/compliance/rules/{id}/approve": {
       "post": {
+        "summary": "Approve a compliance rule version",
         "tags": [
           "STAY-03"
         ],
@@ -1297,6 +1314,7 @@
     },
     "/v1/admin/compliance/rules/{id}/retire": {
       "post": {
+        "summary": "Retire a compliance rule version",
         "tags": [
           "STAY-03"
         ],
@@ -1345,6 +1363,7 @@
     },
     "/v1/admin/config": {
       "get": {
+        "summary": "List effective-dated configuration values",
         "tags": [
           "PLAT-06"
         ],
@@ -1366,6 +1385,7 @@
         }
       },
       "post": {
+        "summary": "Propose a configuration value change",
         "tags": [
           "PLAT-06"
         ],
@@ -1380,9 +1400,7 @@
                     "type": "string",
                     "maxLength": 100
                   },
-                  "value": {
-                    "$ref": "#/components/schemas/schema0"
-                  },
+                  "value": {},
                   "effectiveFrom": {
                     "type": "string",
                     "format": "date-time",
@@ -1415,6 +1433,7 @@
     },
     "/v1/admin/config/approve": {
       "post": {
+        "summary": "Approve a proposed configuration change",
         "tags": [
           "PLAT-06"
         ],
@@ -1458,6 +1477,7 @@
     },
     "/v1/admin/conversations/{id}/messages": {
       "get": {
+        "summary": "Read conversation messages under elevated access",
         "tags": [
           "COMMS-01"
         ],
@@ -1502,6 +1522,7 @@
     },
     "/v1/admin/disputes": {
       "get": {
+        "summary": "List disputes",
         "tags": [
           "TRUST-03"
         ],
@@ -1583,6 +1604,7 @@
     },
     "/v1/admin/disputes/{id}": {
       "get": {
+        "summary": "Get a dispute with its case history",
         "tags": [
           "TRUST-03"
         ],
@@ -1607,6 +1629,7 @@
     },
     "/v1/admin/disputes/{id}/assign": {
       "post": {
+        "summary": "Assign a dispute to an agent",
         "tags": [
           "TRUST-03"
         ],
@@ -1711,6 +1734,7 @@
     },
     "/v1/admin/disputes/{id}/escalate": {
       "post": {
+        "summary": "Escalate a dispute",
         "tags": [
           "TRUST-03"
         ],
@@ -1762,6 +1786,7 @@
     },
     "/v1/admin/disputes/{id}/evidence": {
       "post": {
+        "summary": "Attach evidence to a dispute",
         "tags": [
           "TRUST-03"
         ],
@@ -1824,6 +1849,7 @@
     },
     "/v1/admin/disputes/{id}/notes": {
       "post": {
+        "summary": "Add an internal note to a dispute",
         "tags": [
           "TRUST-03"
         ],
@@ -1868,6 +1894,7 @@
     },
     "/v1/admin/disputes/{id}/resolve": {
       "post": {
+        "summary": "Resolve a dispute",
         "tags": [
           "TRUST-03"
         ],
@@ -1927,6 +1954,7 @@
     },
     "/v1/admin/disputes/{id}/status": {
       "post": {
+        "summary": "Change the status of a dispute",
         "tags": [
           "TRUST-03"
         ],
@@ -1977,6 +2005,7 @@
     },
     "/v1/admin/elevated-access": {
       "get": {
+        "summary": "List active elevated-access grants",
         "tags": [
           "TRUST-03"
         ],
@@ -1989,6 +2018,7 @@
     },
     "/v1/admin/elevated-access/{id}": {
       "delete": {
+        "summary": "Revoke an elevated-access grant",
         "tags": [
           "TRUST-03"
         ],
@@ -2108,6 +2138,7 @@
     },
     "/v1/admin/feature-flags": {
       "get": {
+        "summary": "List feature flags",
         "tags": [
           "PLAT-06"
         ],
@@ -2118,6 +2149,7 @@
         }
       },
       "patch": {
+        "summary": "Turn feature flags on or off",
         "tags": [
           "PLAT-06"
         ],
@@ -2303,6 +2335,7 @@
     },
     "/v1/admin/guide-qualifications": {
       "get": {
+        "summary": "List guide qualifications",
         "tags": [
           "GUIDE-01"
         ],
@@ -2343,6 +2376,7 @@
     },
     "/v1/admin/guide-qualifications/{id}/reject": {
       "post": {
+        "summary": "Reject a guide qualification",
         "tags": [
           "GUIDE-01"
         ],
@@ -2384,6 +2418,7 @@
     },
     "/v1/admin/guide-qualifications/{id}/verify": {
       "post": {
+        "summary": "Verify a guide qualification",
         "tags": [
           "GUIDE-01"
         ],
@@ -2425,6 +2460,7 @@
     },
     "/v1/admin/host-applications": {
       "get": {
+        "summary": "List host applications",
         "tags": [
           "HOST-01"
         ],
@@ -2473,6 +2509,7 @@
     },
     "/v1/admin/host-applications/{id}/approve": {
       "post": {
+        "summary": "Approve a host application",
         "tags": [
           "HOST-01"
         ],
@@ -2520,6 +2557,7 @@
     },
     "/v1/admin/host-applications/{id}/reject": {
       "post": {
+        "summary": "Reject a host application",
         "tags": [
           "HOST-01"
         ],
@@ -2564,6 +2602,7 @@
     },
     "/v1/admin/ledger/accounts": {
       "get": {
+        "summary": "List ledger accounts",
         "tags": [
           "FIN-01"
         ],
@@ -2645,6 +2684,7 @@
     },
     "/v1/admin/ledger/transactions": {
       "get": {
+        "summary": "List double-entry ledger transactions",
         "tags": [
           "FIN-01"
         ],
@@ -2704,6 +2744,7 @@
     },
     "/v1/admin/ledger/trial-balance": {
       "get": {
+        "summary": "Trial balance per currency",
         "tags": [
           "FIN-01"
         ],
@@ -2845,6 +2886,7 @@
     },
     "/v1/admin/outbox/dead-letters": {
       "get": {
+        "summary": "List dead-lettered outbox events",
         "tags": [
           "OPS-02"
         ],
@@ -2870,6 +2912,7 @@
     },
     "/v1/admin/outbox/dead-letters/{id}/retry": {
       "post": {
+        "summary": "Retry a dead-lettered outbox event",
         "tags": [
           "OPS-02"
         ],
@@ -2914,6 +2957,7 @@
     },
     "/v1/admin/overview": {
       "get": {
+        "summary": "Backoffice overview counters",
         "tags": [
           "OPS-02"
         ],
@@ -2926,6 +2970,7 @@
     },
     "/v1/admin/payments": {
       "get": {
+        "summary": "List payments",
         "tags": [
           "PAY-01"
         ],
@@ -2990,6 +3035,7 @@
     },
     "/v1/admin/payments/{id}/reconcile": {
       "post": {
+        "summary": "Reconcile a payment against the provider",
         "tags": [
           "PAY-01"
         ],
@@ -3053,6 +3099,7 @@
     },
     "/v1/admin/payout-accounts/{id}/verify": {
       "post": {
+        "summary": "Verify a payout account",
         "tags": [
           "FIN-02"
         ],
@@ -3098,6 +3145,7 @@
     },
     "/v1/admin/permits": {
       "get": {
+        "summary": "List accommodation permits",
         "tags": [
           "STAY-03"
         ],
@@ -3128,6 +3176,7 @@
     },
     "/v1/admin/permits/{id}/reject": {
       "post": {
+        "summary": "Reject an accommodation permit",
         "tags": [
           "STAY-03"
         ],
@@ -3176,6 +3225,7 @@
     },
     "/v1/admin/permits/{id}/revoke": {
       "post": {
+        "summary": "Revoke a verified accommodation permit",
         "tags": [
           "STAY-03"
         ],
@@ -3224,6 +3274,7 @@
     },
     "/v1/admin/permits/{id}/verify": {
       "post": {
+        "summary": "Verify an accommodation permit",
         "tags": [
           "STAY-03"
         ],
@@ -3272,6 +3323,7 @@
     },
     "/v1/admin/policy-overrides/{id}": {
       "delete": {
+        "summary": "Revoke a policy override",
         "tags": [
           "CORE-03"
         ],
@@ -3296,6 +3348,7 @@
     },
     "/v1/admin/privacy/requests": {
       "get": {
+        "summary": "List privacy requests",
         "tags": [
           "CORE-04"
         ],
@@ -3334,6 +3387,7 @@
     },
     "/v1/admin/properties/{id}/block": {
       "post": {
+        "summary": "Block a property from public visibility",
         "tags": [
           "STAY-01",
           "STAY-03"
@@ -3379,6 +3433,7 @@
     },
     "/v1/admin/properties/{id}/unblock": {
       "post": {
+        "summary": "Unblock a property",
         "tags": [
           "STAY-01",
           "STAY-03"
@@ -3529,6 +3584,7 @@
     },
     "/v1/admin/review-reports": {
       "get": {
+        "summary": "List review reports",
         "tags": [
           "TRUST-02"
         ],
@@ -3557,6 +3613,7 @@
     },
     "/v1/admin/review-reports/{id}/dismiss": {
       "post": {
+        "summary": "Dismiss a review report",
         "tags": [
           "TRUST-02"
         ],
@@ -3581,6 +3638,7 @@
     },
     "/v1/admin/reviews/{id}/moderate": {
       "post": {
+        "summary": "Moderate a review",
         "tags": [
           "TRUST-02"
         ],
@@ -3816,6 +3874,7 @@
     },
     "/v1/admin/risk/events/{id}": {
       "get": {
+        "summary": "Get a risk event",
         "tags": [
           "PLAT-05"
         ],
@@ -3946,6 +4005,7 @@
     },
     "/v1/admin/safety-reports": {
       "get": {
+        "summary": "List safety reports",
         "tags": [
           "TRUST-03"
         ],
@@ -3982,6 +4042,7 @@
     },
     "/v1/admin/safety-reports/{id}": {
       "get": {
+        "summary": "Get a safety report",
         "tags": [
           "TRUST-03"
         ],
@@ -4006,6 +4067,7 @@
     },
     "/v1/admin/safety-reports/{id}/elevated-access": {
       "post": {
+        "summary": "Grant audited elevated access for a safety report",
         "tags": [
           "TRUST-03"
         ],
@@ -4061,6 +4123,7 @@
     },
     "/v1/admin/safety-reports/{id}/status": {
       "post": {
+        "summary": "Change the status of a safety report",
         "tags": [
           "TRUST-03"
         ],
@@ -4170,6 +4233,7 @@
         }
       },
       "get": {
+        "summary": "List sanctions",
         "tags": [
           "TRUST-03"
         ],
@@ -4202,6 +4266,7 @@
     },
     "/v1/admin/sanctions/{id}/lift": {
       "post": {
+        "summary": "Lift a sanction",
         "tags": [
           "TRUST-03"
         ],
@@ -4246,6 +4311,7 @@
     },
     "/v1/admin/saved-views": {
       "get": {
+        "summary": "List saved backoffice views",
         "tags": [
           "OPS-02"
         ],
@@ -4293,6 +4359,7 @@
         }
       },
       "post": {
+        "summary": "Create a saved backoffice view",
         "tags": [
           "OPS-02"
         ],
@@ -4423,6 +4490,7 @@
     },
     "/v1/admin/saved-views/{id}": {
       "get": {
+        "summary": "Get a saved backoffice view",
         "tags": [
           "OPS-02"
         ],
@@ -4445,6 +4513,7 @@
         }
       },
       "patch": {
+        "summary": "Update a saved backoffice view",
         "tags": [
           "OPS-02"
         ],
@@ -4559,6 +4628,7 @@
         }
       },
       "delete": {
+        "summary": "Delete a saved backoffice view",
         "tags": [
           "OPS-02"
         ],
@@ -4674,6 +4744,7 @@
         }
       },
       "get": {
+        "summary": "List security incidents",
         "tags": [
           "PLAT-05"
         ],
@@ -4748,6 +4819,7 @@
     },
     "/v1/admin/security/incidents/{id}": {
       "get": {
+        "summary": "Get a security incident",
         "tags": [
           "PLAT-05"
         ],
@@ -4947,6 +5019,7 @@
     },
     "/v1/admin/seo/redirects": {
       "get": {
+        "summary": "List 301 redirect mappings",
         "tags": [
           "OPS-03"
         ],
@@ -5002,6 +5075,7 @@
         }
       },
       "put": {
+        "summary": "Create or replace a redirect mapping",
         "tags": [
           "OPS-03"
         ],
@@ -5069,6 +5143,7 @@
         }
       },
       "delete": {
+        "summary": "Delete a redirect mapping",
         "tags": [
           "OPS-03"
         ],
@@ -5093,6 +5168,7 @@
     },
     "/v1/admin/seo/redirects/approve": {
       "post": {
+        "summary": "Approve redirect mappings for cutover",
         "tags": [
           "OPS-03"
         ],
@@ -5133,6 +5209,7 @@
     },
     "/v1/admin/seo/redirects/bulk": {
       "post": {
+        "summary": "Import redirect mappings in bulk",
         "tags": [
           "OPS-03"
         ],
@@ -5219,6 +5296,7 @@
     },
     "/v1/admin/settlements": {
       "get": {
+        "summary": "List settlement statements",
         "tags": [
           "FIN-02"
         ],
@@ -5270,6 +5348,7 @@
     },
     "/v1/admin/settlements/{id}": {
       "get": {
+        "summary": "Get a settlement statement with its lines",
         "tags": [
           "FIN-02"
         ],
@@ -5294,6 +5373,7 @@
     },
     "/v1/admin/settlements/{id}/approve": {
       "post": {
+        "summary": "Approve a settlement statement",
         "tags": [
           "FIN-02"
         ],
@@ -5318,6 +5398,7 @@
     },
     "/v1/admin/settlements/{id}/hold": {
       "post": {
+        "summary": "Hold a settlement statement",
         "tags": [
           "FIN-02"
         ],
@@ -5362,6 +5443,7 @@
     },
     "/v1/admin/settlements/{id}/mark-paid": {
       "post": {
+        "summary": "Mark a settlement statement as paid",
         "tags": [
           "FIN-02"
         ],
@@ -5406,6 +5488,7 @@
     },
     "/v1/admin/settlements/{id}/payout": {
       "post": {
+        "summary": "Start the payout for a settlement statement",
         "tags": [
           "FIN-02"
         ],
@@ -5430,6 +5513,7 @@
     },
     "/v1/admin/settlements/{id}/reconcile": {
       "post": {
+        "summary": "Reconcile a paid settlement statement",
         "tags": [
           "FIN-02"
         ],
@@ -5454,6 +5538,7 @@
     },
     "/v1/admin/settlements/{id}/release": {
       "post": {
+        "summary": "Release a held settlement statement",
         "tags": [
           "FIN-02"
         ],
@@ -5498,6 +5583,7 @@
     },
     "/v1/admin/settlements/generate": {
       "post": {
+        "summary": "Generate settlement statements for a period",
         "tags": [
           "FIN-02"
         ],
@@ -5547,6 +5633,7 @@
     },
     "/v1/admin/suppliers": {
       "get": {
+        "summary": "List travel suppliers",
         "tags": [
           "TRAVEL-01"
         ],
@@ -5632,6 +5719,7 @@
     },
     "/v1/admin/suppliers/{id}/decision": {
       "post": {
+        "summary": "Approve or reject a supplier application",
         "tags": [
           "TRAVEL-01"
         ],
@@ -5793,6 +5881,7 @@
     },
     "/v1/admin/support/cases/{id}": {
       "get": {
+        "summary": "Get a support case with its internal history",
         "tags": [
           "OPS-01"
         ],
@@ -5817,6 +5906,7 @@
     },
     "/v1/admin/support/cases/{id}/assign": {
       "post": {
+        "summary": "Assign a support case to an agent",
         "tags": [
           "OPS-01"
         ],
@@ -5865,6 +5955,7 @@
     },
     "/v1/admin/support/cases/{id}/comments": {
       "post": {
+        "summary": "Add a comment to a support case",
         "tags": [
           "OPS-01"
         ],
@@ -5909,6 +6000,7 @@
     },
     "/v1/admin/support/cases/{id}/elevated-access": {
       "post": {
+        "summary": "Grant audited elevated access for a support case",
         "tags": [
           "OPS-01"
         ],
@@ -5964,6 +6056,7 @@
     },
     "/v1/admin/support/cases/{id}/links": {
       "get": {
+        "summary": "List the records linked to a support case",
         "tags": [
           "OPS-01"
         ],
@@ -6045,6 +6138,7 @@
     },
     "/v1/admin/support/cases/{id}/links/{linkType}/{linkId}": {
       "delete": {
+        "summary": "Unlink a record from a support case",
         "tags": [
           "OPS-01"
         ],
@@ -6142,6 +6236,7 @@
     },
     "/v1/admin/support/cases/{id}/priority": {
       "post": {
+        "summary": "Change the priority of a support case",
         "tags": [
           "OPS-01"
         ],
@@ -6190,6 +6285,7 @@
     },
     "/v1/admin/support/cases/{id}/status": {
       "post": {
+        "summary": "Change the status of a support case",
         "tags": [
           "OPS-01"
         ],
@@ -6242,6 +6338,7 @@
     },
     "/v1/admin/travel-products": {
       "get": {
+        "summary": "List travel products",
         "tags": [
           "TRAVEL-01"
         ],
@@ -6271,6 +6368,7 @@
     },
     "/v1/admin/travel-products/{id}/publish": {
       "post": {
+        "summary": "Publish a travel product",
         "tags": [
           "TRAVEL-01"
         ],
@@ -6311,6 +6409,7 @@
     },
     "/v1/admin/travel-products/{id}/reject": {
       "post": {
+        "summary": "Reject a travel product",
         "tags": [
           "TRAVEL-01"
         ],
@@ -6442,6 +6541,7 @@
     },
     "/v1/admin/users/{id}": {
       "get": {
+        "summary": "Get a user with roles and entitlements",
         "tags": [
           "CORE-03"
         ],
@@ -6466,6 +6566,7 @@
     },
     "/v1/admin/users/{id}/policy-overrides": {
       "get": {
+        "summary": "List the policy overrides of a user",
         "tags": [
           "CORE-03"
         ],
@@ -6488,6 +6589,7 @@
         }
       },
       "post": {
+        "summary": "Grant a policy override to a user",
         "tags": [
           "CORE-03"
         ],
@@ -6596,6 +6698,7 @@
     },
     "/v1/admin/users/{id}/roles": {
       "get": {
+        "summary": "List the roles of a user",
         "tags": [
           "CORE-03"
         ],
@@ -6836,6 +6939,7 @@
     },
     "/v1/admin/verifications": {
       "get": {
+        "summary": "List verification cases",
         "tags": [
           "TRUST-01"
         ],
@@ -6901,6 +7005,7 @@
     },
     "/v1/admin/verifications/{id}": {
       "get": {
+        "summary": "Get a verification case with its evidence",
         "tags": [
           "TRUST-01"
         ],
@@ -6925,6 +7030,7 @@
     },
     "/v1/admin/verifications/{id}/approve": {
       "post": {
+        "summary": "Approve a verification case",
         "tags": [
           "TRUST-01"
         ],
@@ -6977,6 +7083,7 @@
     },
     "/v1/admin/verifications/{id}/reject": {
       "post": {
+        "summary": "Reject a verification case",
         "tags": [
           "TRUST-01"
         ],
@@ -7021,6 +7128,7 @@
     },
     "/v1/admin/verifications/{id}/start-review": {
       "post": {
+        "summary": "Start reviewing a verification case",
         "tags": [
           "TRUST-01"
         ],
@@ -7045,6 +7153,7 @@
     },
     "/v1/ai/travel-assistant": {
       "post": {
+        "summary": "Ask the AI travel assistant",
         "tags": [
           "AI-01"
         ],
@@ -7095,6 +7204,7 @@
     },
     "/v1/analytics/events": {
       "post": {
+        "summary": "Record client analytics events",
         "tags": [
           "OPS-04"
         ],
@@ -7248,6 +7358,7 @@
     },
     "/v1/auth/email/verify/confirm": {
       "post": {
+        "summary": "Confirm an email verification code",
         "tags": [
           "CORE-01"
         ],
@@ -7279,6 +7390,7 @@
     },
     "/v1/auth/email/verify/request": {
       "post": {
+        "summary": "Send an email verification code",
         "tags": [
           "CORE-01"
         ],
@@ -7357,6 +7469,7 @@
     },
     "/v1/auth/mfa": {
       "get": {
+        "summary": "List MFA factors",
         "tags": [
           "CORE-01"
         ],
@@ -7778,6 +7891,7 @@
     },
     "/v1/auth/password/change": {
       "post": {
+        "summary": "Change the account password",
         "tags": [
           "CORE-01"
         ],
@@ -7975,6 +8089,7 @@
     },
     "/v1/auth/sessions": {
       "get": {
+        "summary": "List active sessions",
         "tags": [
           "CORE-01"
         ],
@@ -7987,6 +8102,7 @@
     },
     "/v1/auth/sessions/{id}": {
       "delete": {
+        "summary": "Revoke a session",
         "tags": [
           "CORE-01"
         ],
@@ -8146,6 +8262,7 @@
     },
     "/v1/booking/holds": {
       "post": {
+        "summary": "Hold dates before payment",
         "tags": [
           "STAY-08"
         ],
@@ -8178,6 +8295,7 @@
     },
     "/v1/booking/holds/{id}": {
       "delete": {
+        "summary": "Release a date hold",
         "tags": [
           "STAY-08"
         ],
@@ -8202,6 +8320,7 @@
     },
     "/v1/booking/quotes": {
       "post": {
+        "summary": "Create a priced stay quote",
         "tags": [
           "STAY-07"
         ],
@@ -8250,6 +8369,7 @@
     },
     "/v1/booking/quotes/{id}": {
       "get": {
+        "summary": "Get a stay quote",
         "tags": [
           "STAY-07"
         ],
@@ -8274,6 +8394,7 @@
     },
     "/v1/business-profiles": {
       "post": {
+        "summary": "Create a business profile",
         "tags": [
           "TRUST-01"
         ],
@@ -8326,6 +8447,7 @@
         }
       },
       "get": {
+        "summary": "List business profiles of the current user",
         "tags": [
           "TRUST-01"
         ],
@@ -8338,6 +8460,7 @@
     },
     "/v1/business-profiles/{id}": {
       "get": {
+        "summary": "Get a business profile",
         "tags": [
           "TRUST-01"
         ],
@@ -8360,6 +8483,7 @@
         }
       },
       "patch": {
+        "summary": "Update a business profile",
         "tags": [
           "TRUST-01"
         ],
@@ -8561,6 +8685,7 @@
     },
     "/v1/charter/requests/mine": {
       "get": {
+        "summary": "List charter enquiries of the current user",
         "tags": [
           "JET-01"
         ],
@@ -8870,6 +8995,7 @@
     },
     "/v1/collections": {
       "post": {
+        "summary": "Create a collection",
         "tags": [
           "STAY-05"
         ],
@@ -8909,6 +9035,7 @@
         }
       },
       "get": {
+        "summary": "List collections",
         "tags": [
           "STAY-05"
         ],
@@ -8921,6 +9048,7 @@
     },
     "/v1/collections/{id}": {
       "get": {
+        "summary": "Get a collection with its items",
         "tags": [
           "STAY-05"
         ],
@@ -8943,6 +9071,7 @@
         }
       },
       "patch": {
+        "summary": "Update a collection",
         "tags": [
           "STAY-05"
         ],
@@ -8993,6 +9122,7 @@
         }
       },
       "delete": {
+        "summary": "Delete a collection",
         "tags": [
           "STAY-05"
         ],
@@ -9017,6 +9147,7 @@
     },
     "/v1/collections/{id}/items": {
       "post": {
+        "summary": "Add an item to a collection",
         "tags": [
           "STAY-05"
         ],
@@ -9081,6 +9212,7 @@
     },
     "/v1/collections/{id}/items/{targetType}/{targetId}": {
       "delete": {
+        "summary": "Remove an item from a collection",
         "tags": [
           "STAY-05"
         ],
@@ -9186,6 +9318,7 @@
     },
     "/v1/config/public": {
       "get": {
+        "summary": "Public runtime configuration for clients",
         "tags": [
           "PLAT-06"
         ],
@@ -9293,6 +9426,7 @@
         }
       },
       "get": {
+        "summary": "List consent records of the current user",
         "tags": [
           "CORE-04"
         ],
@@ -9305,6 +9439,7 @@
     },
     "/v1/content/{type}": {
       "get": {
+        "summary": "List published content of a type",
         "tags": [
           "OPS-03"
         ],
@@ -9333,6 +9468,15 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 200
+            },
+            "in": "query",
+            "name": "cursor",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
               "maxLength": 40
             },
             "in": "path",
@@ -9349,6 +9493,7 @@
     },
     "/v1/content/{type}/{slug}": {
       "get": {
+        "summary": "Get published content by slug",
         "tags": [
           "OPS-03"
         ],
@@ -9391,6 +9536,7 @@
     },
     "/v1/content/charter": {
       "get": {
+        "summary": "Published charter and flight-share content",
         "tags": [
           "JET-01"
         ],
@@ -9415,6 +9561,7 @@
     },
     "/v1/conversations": {
       "get": {
+        "summary": "List conversations",
         "tags": [
           "COMMS-01"
         ],
@@ -9447,6 +9594,7 @@
         }
       },
       "post": {
+        "summary": "Start a conversation",
         "tags": [
           "COMMS-01"
         ],
@@ -9503,6 +9651,7 @@
     },
     "/v1/conversations/{id}/messages": {
       "get": {
+        "summary": "List the messages of a conversation",
         "tags": [
           "COMMS-01"
         ],
@@ -9545,6 +9694,7 @@
         }
       },
       "post": {
+        "summary": "Send a message",
         "tags": [
           "COMMS-01"
         ],
@@ -9596,6 +9746,7 @@
     },
     "/v1/conversations/{id}/read": {
       "post": {
+        "summary": "Mark a conversation as read",
         "tags": [
           "COMMS-01"
         ],
@@ -9688,6 +9839,7 @@
         }
       },
       "get": {
+        "summary": "List disputes of the current user",
         "tags": [
           "TRUST-03"
         ],
@@ -9721,6 +9873,7 @@
     },
     "/v1/disputes/{id}": {
       "get": {
+        "summary": "Get a dispute",
         "tags": [
           "TRUST-03"
         ],
@@ -9808,6 +9961,7 @@
     },
     "/v1/exchange/eligibility": {
       "get": {
+        "summary": "Home exchange eligibility of the current user",
         "tags": [
           "EXCH-01"
         ],
@@ -9820,6 +9974,7 @@
     },
     "/v1/exchange/homes": {
       "get": {
+        "summary": "Browse homes open to exchange",
         "tags": [
           "EXCH-01"
         ],
@@ -9883,6 +10038,7 @@
     },
     "/v1/exchange/profile": {
       "put": {
+        "summary": "Create or update the exchange profile",
         "tags": [
           "EXCH-01"
         ],
@@ -9930,6 +10086,7 @@
     },
     "/v1/exchanges": {
       "post": {
+        "summary": "Request a home exchange",
         "tags": [
           "EXCH-02"
         ],
@@ -10032,6 +10189,7 @@
         }
       },
       "get": {
+        "summary": "List home exchanges of the current user",
         "tags": [
           "EXCH-02"
         ],
@@ -10089,6 +10247,7 @@
     },
     "/v1/exchanges/{id}": {
       "get": {
+        "summary": "Get a home exchange",
         "tags": [
           "EXCH-02"
         ],
@@ -10113,6 +10272,7 @@
     },
     "/v1/exchanges/{id}/accept": {
       "post": {
+        "summary": "Accept the current exchange offer",
         "tags": [
           "EXCH-02"
         ],
@@ -10157,6 +10317,7 @@
     },
     "/v1/exchanges/{id}/agreement": {
       "get": {
+        "summary": "Get the exchange agreement and its terms version",
         "tags": [
           "EXCH-04"
         ],
@@ -10181,6 +10342,7 @@
     },
     "/v1/exchanges/{id}/agreement/sign": {
       "post": {
+        "summary": "Sign the exchange agreement",
         "tags": [
           "EXCH-04"
         ],
@@ -10224,6 +10386,7 @@
     },
     "/v1/exchanges/{id}/cancel": {
       "post": {
+        "summary": "Cancel a confirmed exchange",
         "tags": [
           "EXCH-05"
         ],
@@ -10268,6 +10431,7 @@
     },
     "/v1/exchanges/{id}/complete": {
       "post": {
+        "summary": "Complete an exchange and unlock reviews",
         "tags": [
           "EXCH-06"
         ],
@@ -10292,6 +10456,7 @@
     },
     "/v1/exchanges/{id}/confirm": {
       "post": {
+        "summary": "Confirm the exchange and lock both calendars",
         "tags": [
           "EXCH-05"
         ],
@@ -10316,6 +10481,7 @@
     },
     "/v1/exchanges/{id}/counter": {
       "post": {
+        "summary": "Counter the current exchange offer",
         "tags": [
           "EXCH-02"
         ],
@@ -10422,6 +10588,7 @@
     },
     "/v1/exchanges/{id}/decline": {
       "post": {
+        "summary": "Decline a home exchange request",
         "tags": [
           "EXCH-02"
         ],
@@ -10470,6 +10637,7 @@
     },
     "/v1/exchanges/{id}/dispute": {
       "post": {
+        "summary": "Open a dispute on an exchange",
         "tags": [
           "EXCH-06"
         ],
@@ -10534,6 +10702,7 @@
     },
     "/v1/exchanges/{id}/safety-ack": {
       "post": {
+        "summary": "Acknowledge the exchange safety rules",
         "tags": [
           "EXCH-03"
         ],
@@ -10579,6 +10748,7 @@
     },
     "/v1/exchanges/{id}/verify": {
       "post": {
+        "summary": "Submit the exchange verification gate",
         "tags": [
           "EXCH-03"
         ],
@@ -10603,6 +10773,7 @@
     },
     "/v1/exchanges/{id}/withdraw": {
       "post": {
+        "summary": "Withdraw a home exchange request",
         "tags": [
           "EXCH-02"
         ],
@@ -10651,6 +10822,7 @@
     },
     "/v1/favorites": {
       "post": {
+        "summary": "Add a favorite",
         "tags": [
           "STAY-05"
         ],
@@ -10690,6 +10862,7 @@
         }
       },
       "delete": {
+        "summary": "Remove a favorite",
         "tags": [
           "STAY-05"
         ],
@@ -10725,6 +10898,7 @@
         }
       },
       "get": {
+        "summary": "List favorites",
         "tags": [
           "STAY-05"
         ],
@@ -10752,6 +10926,7 @@
     },
     "/v1/favorites/{targetType}/{targetId}": {
       "delete": {
+        "summary": "Remove a favorite by target",
         "tags": [
           "STAY-05"
         ],
@@ -10843,6 +11018,7 @@
     },
     "/v1/finance/rules": {
       "get": {
+        "summary": "List effective-dated fee and tax rules",
         "tags": [
           "FIN-03"
         ],
@@ -10884,6 +11060,7 @@
         }
       },
       "post": {
+        "summary": "Propose a fee or tax rule version",
         "tags": [
           "FIN-03"
         ],
@@ -10967,6 +11144,7 @@
     },
     "/v1/finance/rules/{id}/approve": {
       "post": {
+        "summary": "Approve a fee or tax rule version",
         "tags": [
           "FIN-03"
         ],
@@ -10991,6 +11169,7 @@
     },
     "/v1/finance/rules/{id}/retire": {
       "post": {
+        "summary": "Retire a fee or tax rule version",
         "tags": [
           "FIN-03"
         ],
@@ -11014,6 +11193,31 @@
             }
           }
         },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/finance/rules/{id}/retire/cancel": {
+      "post": {
+        "summary": "Withdraw a pending retire request of an APPROVED rule",
+        "tags": [
+          "FIN-03"
+        ],
         "parameters": [
           {
             "schema": {
@@ -11106,6 +11310,7 @@
     },
     "/v1/guide-bookings": {
       "get": {
+        "summary": "List guide bookings",
         "tags": [
           "GUIDE-05"
         ],
@@ -11159,6 +11364,7 @@
     },
     "/v1/guide-bookings/{id}": {
       "get": {
+        "summary": "Get a guide booking",
         "tags": [
           "GUIDE-05"
         ],
@@ -11183,6 +11389,7 @@
     },
     "/v1/guide-bookings/{id}/cancel": {
       "post": {
+        "summary": "Cancel a guide booking",
         "tags": [
           "GUIDE-05"
         ],
@@ -11224,6 +11431,7 @@
     },
     "/v1/guide-bookings/{id}/complete": {
       "post": {
+        "summary": "Complete a guide booking",
         "tags": [
           "GUIDE-05"
         ],
@@ -11248,6 +11456,7 @@
     },
     "/v1/guide-bookings/{id}/dispute": {
       "post": {
+        "summary": "Open a dispute on a guide booking",
         "tags": [
           "GUIDE-05"
         ],
@@ -11292,6 +11501,7 @@
     },
     "/v1/guide-bookings/{id}/start": {
       "post": {
+        "summary": "Start a guide booking",
         "tags": [
           "GUIDE-05"
         ],
@@ -11316,6 +11526,7 @@
     },
     "/v1/guide-requests": {
       "post": {
+        "summary": "Request a guide",
         "tags": [
           "GUIDE-04"
         ],
@@ -11399,6 +11610,7 @@
         }
       },
       "get": {
+        "summary": "List guide requests",
         "tags": [
           "GUIDE-04"
         ],
@@ -11445,6 +11657,7 @@
     },
     "/v1/guide-requests/{id}": {
       "get": {
+        "summary": "Get a guide request",
         "tags": [
           "GUIDE-04"
         ],
@@ -11469,6 +11682,7 @@
     },
     "/v1/guide-requests/{id}/accept": {
       "post": {
+        "summary": "Accept the current guide offer",
         "tags": [
           "GUIDE-04",
           "GUIDE-05"
@@ -11514,6 +11728,7 @@
     },
     "/v1/guide-requests/{id}/cancel": {
       "post": {
+        "summary": "Cancel a guide request",
         "tags": [
           "GUIDE-04"
         ],
@@ -11555,6 +11770,7 @@
     },
     "/v1/guide-requests/{id}/counter": {
       "post": {
+        "summary": "Counter the current guide offer",
         "tags": [
           "GUIDE-04"
         ],
@@ -11615,6 +11831,7 @@
     },
     "/v1/guide-requests/{id}/decline": {
       "post": {
+        "summary": "Decline a guide request",
         "tags": [
           "GUIDE-04"
         ],
@@ -11656,6 +11873,7 @@
     },
     "/v1/guide-requests/{id}/offers": {
       "post": {
+        "summary": "Make an offer on a guide request",
         "tags": [
           "GUIDE-04"
         ],
@@ -11720,6 +11938,7 @@
     },
     "/v1/guides/{id}": {
       "get": {
+        "summary": "Get a published guide profile",
         "tags": [
           "GUIDE-01"
         ],
@@ -11744,6 +11963,7 @@
     },
     "/v1/guides/{id}/availability": {
       "get": {
+        "summary": "Guide availability for a date range",
         "tags": [
           "GUIDE-02"
         ],
@@ -11788,6 +12008,7 @@
     },
     "/v1/guides/me": {
       "get": {
+        "summary": "Get the guide profile of the current user",
         "tags": [
           "GUIDE-01"
         ],
@@ -11800,6 +12021,7 @@
     },
     "/v1/guides/me/availability": {
       "put": {
+        "summary": "Replace the guide availability calendar",
         "tags": [
           "GUIDE-02"
         ],
@@ -11918,6 +12140,7 @@
     },
     "/v1/guides/profile": {
       "post": {
+        "summary": "Create the guide profile",
         "tags": [
           "GUIDE-01"
         ],
@@ -12042,6 +12265,7 @@
         }
       },
       "patch": {
+        "summary": "Update the guide profile",
         "tags": [
           "GUIDE-01"
         ],
@@ -12194,6 +12418,7 @@
     },
     "/v1/guides/profile/publish": {
       "post": {
+        "summary": "Publish the guide profile",
         "tags": [
           "GUIDE-01"
         ],
@@ -12206,6 +12431,7 @@
     },
     "/v1/guides/profile/unpublish": {
       "post": {
+        "summary": "Unpublish the guide profile",
         "tags": [
           "GUIDE-01"
         ],
@@ -12218,6 +12444,7 @@
     },
     "/v1/guides/qualifications": {
       "post": {
+        "summary": "Submit a guide qualification for review",
         "tags": [
           "GUIDE-01"
         ],
@@ -12301,6 +12528,7 @@
         }
       },
       "get": {
+        "summary": "List host applications of the current user",
         "tags": [
           "HOST-01"
         ],
@@ -12313,6 +12541,7 @@
     },
     "/v1/host-applications/{id}": {
       "get": {
+        "summary": "Get a host application",
         "tags": [
           "HOST-01"
         ],
@@ -12337,6 +12566,7 @@
     },
     "/v1/host-applications/{id}/withdraw": {
       "post": {
+        "summary": "Withdraw a host application",
         "tags": [
           "HOST-01"
         ],
@@ -12361,6 +12591,7 @@
     },
     "/v1/host/calendar": {
       "get": {
+        "summary": "Calendar across every property of the host",
         "tags": [
           "STAY-06"
         ],
@@ -12447,6 +12678,7 @@
     },
     "/v1/host/reservations": {
       "get": {
+        "summary": "List reservations for the properties of the host",
         "tags": [
           "STAY-09"
         ],
@@ -12521,6 +12753,7 @@
     },
     "/v1/integrations/accounts": {
       "get": {
+        "summary": "List PMS and supplier integration accounts",
         "tags": [
           "INT-01"
         ],
@@ -12531,6 +12764,7 @@
         }
       },
       "post": {
+        "summary": "Connect an integration account",
         "tags": [
           "INT-01"
         ],
@@ -12576,6 +12810,7 @@
     },
     "/v1/integrations/accounts/{id}": {
       "patch": {
+        "summary": "Update an integration account",
         "tags": [
           "INT-01"
         ],
@@ -12623,6 +12858,7 @@
     },
     "/v1/integrations/accounts/{id}/events": {
       "get": {
+        "summary": "List the sync events of an integration account",
         "tags": [
           "INT-01"
         ],
@@ -12658,6 +12894,7 @@
     },
     "/v1/integrations/accounts/{id}/sync": {
       "post": {
+        "summary": "Trigger a sync for an integration account",
         "tags": [
           "INT-01"
         ],
@@ -12682,6 +12919,7 @@
     },
     "/v1/integrations/ical/{file}": {
       "get": {
+        "summary": "Download an iCal calendar feed",
         "tags": [
           "INT-01"
         ],
@@ -12715,6 +12953,7 @@
     },
     "/v1/integrations/properties/{propertyId}/ical-export-token": {
       "post": {
+        "summary": "Issue an iCal export token for a property",
         "tags": [
           "INT-01"
         ],
@@ -12739,6 +12978,7 @@
     },
     "/v1/integrations/webhooks/{accountId}": {
       "post": {
+        "summary": "Receive a calendar webhook from an integration account",
         "tags": [
           "INT-01"
         ],
@@ -12805,6 +13045,7 @@
     },
     "/v1/itineraries": {
       "post": {
+        "summary": "Create an itinerary",
         "tags": [
           "TRAVEL-03"
         ],
@@ -12865,6 +13106,7 @@
         }
       },
       "get": {
+        "summary": "List itineraries",
         "tags": [
           "TRAVEL-03"
         ],
@@ -12877,6 +13119,7 @@
     },
     "/v1/itineraries/{id}": {
       "get": {
+        "summary": "Get an itinerary with its days and activities",
         "tags": [
           "TRAVEL-03"
         ],
@@ -12899,6 +13142,7 @@
         }
       },
       "patch": {
+        "summary": "Update an itinerary",
         "tags": [
           "TRAVEL-03"
         ],
@@ -12975,6 +13219,7 @@
     },
     "/v1/itineraries/{id}/items": {
       "post": {
+        "summary": "Add an activity to an itinerary",
         "tags": [
           "TRAVEL-03"
         ],
@@ -13027,7 +13272,7 @@
                     "anyOf": [
                       {
                         "type": "string",
-                        "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$"
+                        "pattern": "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d)?$"
                       },
                       {
                         "type": "null"
@@ -13038,7 +13283,7 @@
                     "anyOf": [
                       {
                         "type": "string",
-                        "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$"
+                        "pattern": "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d)?$"
                       },
                       {
                         "type": "null"
@@ -13087,6 +13332,7 @@
     },
     "/v1/itineraries/{id}/items/{itemId}": {
       "delete": {
+        "summary": "Remove an activity from an itinerary",
         "tags": [
           "TRAVEL-03"
         ],
@@ -13121,6 +13367,7 @@
     },
     "/v1/itineraries/{id}/items/reorder": {
       "post": {
+        "summary": "Reorder the activities of an itinerary",
         "tags": [
           "TRAVEL-03"
         ],
@@ -13203,6 +13450,7 @@
     },
     "/v1/me/identities": {
       "get": {
+        "summary": "List linked social identities",
         "tags": [
           "CORE-01"
         ],
@@ -13215,6 +13463,7 @@
     },
     "/v1/me/identities/{provider}": {
       "delete": {
+        "summary": "Unlink a social identity",
         "tags": [
           "CORE-01"
         ],
@@ -13242,6 +13491,7 @@
     },
     "/v1/me/preferences": {
       "get": {
+        "summary": "Get locale and travel preferences",
         "tags": [
           "CORE-02"
         ],
@@ -13252,6 +13502,7 @@
         }
       },
       "patch": {
+        "summary": "Update locale and travel preferences",
         "tags": [
           "CORE-02"
         ],
@@ -13317,6 +13568,7 @@
     },
     "/v1/me/profile": {
       "get": {
+        "summary": "Get the profile of the current user",
         "tags": [
           "CORE-02"
         ],
@@ -13499,6 +13751,7 @@
     },
     "/v1/media/{id}": {
       "get": {
+        "summary": "Get media metadata",
         "tags": [
           "STAY-02"
         ],
@@ -13605,6 +13858,7 @@
     },
     "/v1/messages/{id}/report": {
       "post": {
+        "summary": "Report a message",
         "tags": [
           "COMMS-01"
         ],
@@ -13649,6 +13903,7 @@
     },
     "/v1/notification-preferences": {
       "get": {
+        "summary": "Get notification preferences",
         "tags": [
           "COMMS-02"
         ],
@@ -13659,6 +13914,7 @@
         }
       },
       "patch": {
+        "summary": "Update notification preferences",
         "tags": [
           "COMMS-02"
         ],
@@ -13723,6 +13979,7 @@
     },
     "/v1/notifications": {
       "get": {
+        "summary": "List notifications",
         "tags": [
           "COMMS-02"
         ],
@@ -13769,6 +14026,7 @@
     },
     "/v1/notifications/{id}/read": {
       "post": {
+        "summary": "Mark a notification as read",
         "tags": [
           "COMMS-02"
         ],
@@ -13793,6 +14051,7 @@
     },
     "/v1/notifications/read-all": {
       "post": {
+        "summary": "Mark every notification as read",
         "tags": [
           "COMMS-02"
         ],
@@ -13864,6 +14123,7 @@
         }
       },
       "get": {
+        "summary": "List orders of the current user",
         "tags": [
           "TRAVEL-04"
         ],
@@ -13905,6 +14165,7 @@
     },
     "/v1/orders/{id}": {
       "get": {
+        "summary": "Get an order",
         "tags": [
           "TRAVEL-04"
         ],
@@ -13929,6 +14190,7 @@
     },
     "/v1/orders/{id}/cancel": {
       "post": {
+        "summary": "Cancel an order",
         "tags": [
           "TRAVEL-04"
         ],
@@ -13971,6 +14233,7 @@
     },
     "/v1/payments": {
       "get": {
+        "summary": "List payments of the current user",
         "tags": [
           "PAY-01"
         ],
@@ -14012,6 +14275,7 @@
     },
     "/v1/payments/{id}": {
       "get": {
+        "summary": "Get a payment",
         "tags": [
           "PAY-01"
         ],
@@ -14036,6 +14300,7 @@
     },
     "/v1/payments/{id}/refunds": {
       "get": {
+        "summary": "List the refunds of a payment",
         "tags": [
           "PAY-02"
         ],
@@ -14246,6 +14511,7 @@
         }
       },
       "get": {
+        "summary": "List payout accounts of the current user",
         "tags": [
           "FIN-02"
         ],
@@ -14326,6 +14592,7 @@
     },
     "/v1/privacy/requests": {
       "get": {
+        "summary": "List privacy requests of the current user",
         "tags": [
           "CORE-04"
         ],
@@ -14338,6 +14605,7 @@
     },
     "/v1/privacy/requests/{id}": {
       "get": {
+        "summary": "Get a privacy request",
         "tags": [
           "CORE-04"
         ],
@@ -14362,6 +14630,7 @@
     },
     "/v1/properties": {
       "post": {
+        "summary": "Create a property draft",
         "tags": [
           "STAY-01"
         ],
@@ -14766,6 +15035,7 @@
     },
     "/v1/properties/{id}": {
       "patch": {
+        "summary": "Update a property",
         "tags": [
           "STAY-01"
         ],
@@ -15122,6 +15392,7 @@
         }
       },
       "get": {
+        "summary": "Get a property",
         "tags": [
           "STAY-01"
         ],
@@ -15146,6 +15417,7 @@
     },
     "/v1/properties/{id}/amenities": {
       "put": {
+        "summary": "Replace the amenities of a property",
         "tags": [
           "STAY-01"
         ],
@@ -15193,6 +15465,7 @@
     },
     "/v1/properties/{id}/archive": {
       "post": {
+        "summary": "Archive a property",
         "tags": [
           "STAY-01"
         ],
@@ -15217,6 +15490,7 @@
     },
     "/v1/properties/{id}/availability": {
       "put": {
+        "summary": "Replace availability for a date range",
         "tags": [
           "STAY-06"
         ],
@@ -15320,6 +15594,7 @@
     },
     "/v1/properties/{id}/blocks": {
       "post": {
+        "summary": "Block dates on a property calendar",
         "tags": [
           "STAY-06"
         ],
@@ -15372,6 +15647,7 @@
     },
     "/v1/properties/{id}/blocks/{blockId}": {
       "delete": {
+        "summary": "Remove a calendar block",
         "tags": [
           "STAY-06"
         ],
@@ -15406,6 +15682,7 @@
     },
     "/v1/properties/{id}/calendar": {
       "get": {
+        "summary": "Property calendar with availability and blocks",
         "tags": [
           "STAY-06"
         ],
@@ -15517,6 +15794,7 @@
     },
     "/v1/properties/{id}/permits": {
       "post": {
+        "summary": "Register an accommodation permit",
         "tags": [
           "STAY-03"
         ],
@@ -15609,6 +15887,7 @@
         }
       },
       "get": {
+        "summary": "List the permits of a property",
         "tags": [
           "STAY-03"
         ],
@@ -15633,6 +15912,7 @@
     },
     "/v1/properties/{id}/publish": {
       "post": {
+        "summary": "Publish a property",
         "tags": [
           "STAY-01"
         ],
@@ -15657,6 +15937,7 @@
     },
     "/v1/properties/{id}/unlist": {
       "post": {
+        "summary": "Unlist a published property",
         "tags": [
           "STAY-01"
         ],
@@ -15744,6 +16025,7 @@
     },
     "/v1/provider/settlements": {
       "get": {
+        "summary": "List settlement statements of the current payee",
         "tags": [
           "FIN-02"
         ],
@@ -15777,6 +16059,7 @@
     },
     "/v1/realtime/stream": {
       "get": {
+        "summary": "Realtime event stream",
         "tags": [
           "COMMS-01"
         ],
@@ -15800,6 +16083,7 @@
     },
     "/v1/receipts": {
       "get": {
+        "summary": "List receipts of the current user",
         "tags": [
           "FIN-03"
         ],
@@ -15833,6 +16117,7 @@
     },
     "/v1/recommendations": {
       "get": {
+        "summary": "Personalized recommendations",
         "tags": [
           "AI-02"
         ],
@@ -15874,6 +16159,7 @@
     },
     "/v1/reservations": {
       "get": {
+        "summary": "List reservations of the current user",
         "tags": [
           "STAY-09"
         ],
@@ -15924,6 +16210,7 @@
     },
     "/v1/reservations/{id}": {
       "get": {
+        "summary": "Get a reservation",
         "tags": [
           "STAY-09"
         ],
@@ -15948,6 +16235,7 @@
     },
     "/v1/reservations/{id}/cancel": {
       "post": {
+        "summary": "Cancel a reservation",
         "tags": [
           "STAY-10"
         ],
@@ -15992,6 +16280,7 @@
     },
     "/v1/reservations/{id}/cancellation-preview": {
       "get": {
+        "summary": "Preview the refund for cancelling a reservation",
         "tags": [
           "STAY-10"
         ],
@@ -16016,6 +16305,7 @@
     },
     "/v1/reservations/{id}/check-in": {
       "post": {
+        "summary": "Check in a reservation",
         "tags": [
           "STAY-10"
         ],
@@ -16064,6 +16354,7 @@
     },
     "/v1/reservations/{id}/complete": {
       "post": {
+        "summary": "Complete a stay",
         "tags": [
           "STAY-09"
         ],
@@ -16112,6 +16403,7 @@
     },
     "/v1/reservations/{id}/no-show": {
       "post": {
+        "summary": "Mark a reservation as a no-show",
         "tags": [
           "STAY-10"
         ],
@@ -16303,6 +16595,7 @@
     },
     "/v1/reviews/{id}": {
       "get": {
+        "summary": "Get a review",
         "tags": [
           "TRUST-02"
         ],
@@ -16327,6 +16620,7 @@
     },
     "/v1/reviews/{id}/report": {
       "post": {
+        "summary": "Report a review",
         "tags": [
           "TRUST-02"
         ],
@@ -16486,6 +16780,7 @@
         }
       },
       "get": {
+        "summary": "List safety reports filed by the current user",
         "tags": [
           "TRUST-03"
         ],
@@ -16498,6 +16793,7 @@
     },
     "/v1/search/guides": {
       "get": {
+        "summary": "Search guides",
         "tags": [
           "GUIDE-03"
         ],
@@ -16888,6 +17184,7 @@
     },
     "/v1/seo/redirects": {
       "get": {
+        "summary": "Public 301 redirect map",
         "tags": [
           "OPS-03"
         ],
@@ -16912,6 +17209,7 @@
     },
     "/v1/seo/sitemap": {
       "get": {
+        "summary": "Sitemap entries for published content",
         "tags": [
           "OPS-03"
         ],
@@ -16924,6 +17222,7 @@
     },
     "/v1/supplier/departures/{id}": {
       "patch": {
+        "summary": "Update a departure",
         "tags": [
           "TRAVEL-02"
         ],
@@ -16972,6 +17271,7 @@
     },
     "/v1/supplier/departures/{id}/cancel": {
       "post": {
+        "summary": "Cancel a departure",
         "tags": [
           "TRAVEL-02"
         ],
@@ -17016,6 +17316,7 @@
     },
     "/v1/supplier/orders": {
       "get": {
+        "summary": "List orders for the products of the supplier",
         "tags": [
           "TRAVEL-04"
         ],
@@ -17057,6 +17358,7 @@
     },
     "/v1/supplier/products": {
       "get": {
+        "summary": "List the travel products of the supplier",
         "tags": [
           "TRAVEL-01"
         ],
@@ -17077,6 +17379,7 @@
         }
       },
       "post": {
+        "summary": "Create a travel product draft",
         "tags": [
           "TRAVEL-01"
         ],
@@ -17265,6 +17568,7 @@
     },
     "/v1/supplier/products/{id}": {
       "patch": {
+        "summary": "Update a travel product",
         "tags": [
           "TRAVEL-01"
         ],
@@ -17452,6 +17756,7 @@
     },
     "/v1/supplier/products/{id}/submit": {
       "post": {
+        "summary": "Submit a travel product for review",
         "tags": [
           "TRAVEL-01"
         ],
@@ -17476,6 +17781,7 @@
     },
     "/v1/suppliers": {
       "post": {
+        "summary": "Apply as a travel supplier",
         "tags": [
           "TRAVEL-01"
         ],
@@ -17525,6 +17831,7 @@
     },
     "/v1/suppliers/me": {
       "get": {
+        "summary": "Get the supplier profile of the current user",
         "tags": [
           "TRAVEL-01"
         ],
@@ -17537,6 +17844,7 @@
     },
     "/v1/support/cases": {
       "post": {
+        "summary": "Open a support case",
         "tags": [
           "OPS-01"
         ],
@@ -17615,6 +17923,7 @@
         }
       },
       "get": {
+        "summary": "List support cases of the current user",
         "tags": [
           "OPS-01"
         ],
@@ -17663,6 +17972,7 @@
     },
     "/v1/support/cases/{id}": {
       "get": {
+        "summary": "Get a support case",
         "tags": [
           "OPS-01"
         ],
@@ -17687,6 +17997,7 @@
     },
     "/v1/support/cases/{id}/close": {
       "post": {
+        "summary": "Close a support case",
         "tags": [
           "OPS-01"
         ],
@@ -17711,6 +18022,7 @@
     },
     "/v1/support/cases/{id}/comments": {
       "post": {
+        "summary": "Comment on a support case",
         "tags": [
           "OPS-01"
         ],
@@ -17755,6 +18067,7 @@
     },
     "/v1/travel-products": {
       "get": {
+        "summary": "Browse published travel products",
         "tags": [
           "TRAVEL-01"
         ],
@@ -17867,6 +18180,7 @@
     },
     "/v1/travel-products/{id}": {
       "get": {
+        "summary": "Get a published travel product",
         "tags": [
           "TRAVEL-01"
         ],
@@ -17891,6 +18205,7 @@
     },
     "/v1/travel-products/{id}/departures": {
       "get": {
+        "summary": "List the departures of a travel product",
         "tags": [
           "TRAVEL-02"
         ],
@@ -17944,6 +18259,7 @@
         }
       },
       "post": {
+        "summary": "Create a departure for a travel product",
         "tags": [
           "TRAVEL-02"
         ],
@@ -18112,6 +18428,7 @@
         }
       },
       "get": {
+        "summary": "List verification cases of the current user",
         "tags": [
           "TRUST-01"
         ],
@@ -18124,6 +18441,7 @@
     },
     "/v1/verifications/{id}": {
       "get": {
+        "summary": "Get a verification case",
         "tags": [
           "TRUST-01"
         ],

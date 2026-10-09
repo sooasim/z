@@ -42,7 +42,7 @@ export default async function disputesModule(app: FastifyInstance) {
     return reply.status(201).send({ item });
   });
 
-  r.get('/v1/disputes', { schema: { tags: TAG, querystring: pagination }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/disputes', { schema: { summary: 'List disputes of the current user', tags: TAG, querystring: pagination }, preHandler: requireAuth }, async (req) => {
     const uid = getActor(req).userId;
     const c = decodeCursor(req.query.cursor);
     const rows = await q(
@@ -56,7 +56,7 @@ export default async function disputesModule(app: FastifyInstance) {
     return page(rows, req.query.limit);
   });
 
-  r.get('/v1/disputes/:id', { schema: { tags: TAG, params: idParams }, preHandler: requireAuth }, async (req) => ({ item: await svc.disputeDetail(pool, ctxFromRequest(req), req.params.id) }));
+  r.get('/v1/disputes/:id', { schema: { summary: 'Get a dispute', tags: TAG, params: idParams }, preHandler: requireAuth }, async (req) => ({ item: await svc.disputeDetail(pool, ctxFromRequest(req), req.params.id) }));
 
   r.post('/v1/disputes/:id/evidence', {
     schema: {
@@ -94,7 +94,7 @@ export default async function disputesModule(app: FastifyInstance) {
     return reply.status(201).send({ item });
   });
 
-  r.get('/v1/safety-reports', { schema: { tags: TAG }, preHandler: requireAuth }, async (req) => ({
+  r.get('/v1/safety-reports', { schema: { summary: 'List safety reports filed by the current user', tags: TAG }, preHandler: requireAuth }, async (req) => ({
     items: await q(pool, `SELECT id, subject_type, subject_id, category, urgent, status, created_at FROM safety_reports WHERE reporter_id = $1 ORDER BY created_at DESC LIMIT 200`, [getActor(req).userId]),
   }));
 
@@ -103,7 +103,7 @@ export default async function disputesModule(app: FastifyInstance) {
   const staffWrite = requireRole('ADMIN', 'SUPPORT');
 
   r.get('/v1/admin/disputes', {
-    schema: {
+    schema: { summary: 'List disputes',
       tags: TAG,
       querystring: pagination.extend({
         status: z.enum(['OPEN', 'IN_REVIEW', 'AWAITING_PARTY', 'RESOLVED', 'REJECTED', 'ESCALATED']).optional(),
@@ -129,24 +129,24 @@ export default async function disputesModule(app: FastifyInstance) {
     return page(rows, f.limit);
   });
 
-  r.get('/v1/admin/disputes/:id', { schema: { tags: TAG, params: idParams }, preHandler: staffRead }, async (req) => ({ item: await svc.disputeDetail(pool, ctxFromRequest(req), req.params.id) }));
+  r.get('/v1/admin/disputes/:id', { schema: { summary: 'Get a dispute with its case history', tags: TAG, params: idParams }, preHandler: staffRead }, async (req) => ({ item: await svc.disputeDetail(pool, ctxFromRequest(req), req.params.id) }));
 
-  r.post('/v1/admin/disputes/:id/assign', { schema: { tags: TAG, params: idParams, body: z.object({ assigneeId: z.uuid().optional() }).nullish() }, preHandler: staffWrite }, async (req) => ({
+  r.post('/v1/admin/disputes/:id/assign', { schema: { summary: 'Assign a dispute to an agent', tags: TAG, params: idParams, body: z.object({ assigneeId: z.uuid().optional() }).nullish() }, preHandler: staffWrite }, async (req) => ({
     item: await withTx(pool, (tx) => svc.assignDispute(tx, ctxFromRequest(req), req.params.id, req.body?.assigneeId ?? getActor(req).userId)),
   }));
 
   r.post('/v1/admin/disputes/:id/status', {
-    schema: { tags: TAG, params: idParams, body: z.object({ to: z.enum(['IN_REVIEW', 'AWAITING_PARTY']), note: z.string().max(2000).optional() }) },
+    schema: { summary: 'Change the status of a dispute', tags: TAG, params: idParams, body: z.object({ to: z.enum(['IN_REVIEW', 'AWAITING_PARTY']), note: z.string().max(2000).optional() }) },
     preHandler: staffWrite,
   }, async (req) => ({ item: await withTx(pool, (tx) => svc.changeDisputeStatus(tx, ctxFromRequest(req), req.params.id, req.body.to, req.body.note)) }));
 
   r.post('/v1/admin/disputes/:id/escalate', {
-    schema: { tags: TAG, params: idParams, body: z.object({ reason, severity: z.enum(['HIGH', 'CRITICAL']).optional() }) },
+    schema: { summary: 'Escalate a dispute', tags: TAG, params: idParams, body: z.object({ reason, severity: z.enum(['HIGH', 'CRITICAL']).optional() }) },
     preHandler: staffWrite,
   }, async (req) => ({ item: await withTx(pool, (tx) => svc.escalateDispute(tx, ctxFromRequest(req), req.params.id, req.body)) }));
 
   r.post('/v1/admin/disputes/:id/resolve', {
-    schema: {
+    schema: { summary: 'Resolve a dispute',
       tags: TAG,
       params: idParams,
       body: z.object({ outcome: z.enum(['RESOLVED', 'REJECTED']), resolution: reason, detail: z.record(z.string(), z.unknown()).optional() }),
@@ -154,13 +154,13 @@ export default async function disputesModule(app: FastifyInstance) {
     preHandler: staffWrite,
   }, async (req) => ({ item: await withTx(pool, (tx) => svc.resolveDispute(tx, ctxFromRequest(req), req.params.id, req.body)) }));
 
-  r.post('/v1/admin/disputes/:id/notes', { schema: { tags: TAG, params: idParams, body: z.object({ note: z.string().trim().min(1).max(5000) }) }, preHandler: staffWrite }, async (req, reply) => {
+  r.post('/v1/admin/disputes/:id/notes', { schema: { summary: 'Add an internal note to a dispute', tags: TAG, params: idParams, body: z.object({ note: z.string().trim().min(1).max(5000) }) }, preHandler: staffWrite }, async (req, reply) => {
     await withTx(pool, (tx) => svc.addInternalNote(tx, ctxFromRequest(req), req.params.id, req.body.note));
     return reply.status(201).send({ ok: true });
   });
 
   r.post('/v1/admin/disputes/:id/evidence', {
-    schema: { tags: TAG, params: idParams, body: z.object({ evidenceType: z.enum(['TEXT', 'MEDIA', 'MESSAGE_REF', 'DOCUMENT']), content: z.string().min(1).max(10_000).optional(), mediaId: z.uuid().optional(), sha256: z.string().regex(/^[0-9a-fA-F]{64}$/).optional() }) },
+    schema: { summary: 'Attach evidence to a dispute', tags: TAG, params: idParams, body: z.object({ evidenceType: z.enum(['TEXT', 'MEDIA', 'MESSAGE_REF', 'DOCUMENT']), content: z.string().min(1).max(10_000).optional(), mediaId: z.uuid().optional(), sha256: z.string().regex(/^[0-9a-fA-F]{64}$/).optional() }) },
     preHandler: staffWrite,
   }, async (req, reply) => reply.status(201).send({ item: await withTx(pool, (tx) => svc.addEvidence(tx, ctxFromRequest(req), req.params.id, req.body)) }));
 
@@ -174,18 +174,18 @@ export default async function disputesModule(app: FastifyInstance) {
   });
 
   r.post('/v1/admin/safety-reports/:id/elevated-access', {
-    schema: { tags: TAG, params: idParams, body: elevatedBody },
+    schema: { summary: 'Grant audited elevated access for a safety report', tags: TAG, params: idParams, body: elevatedBody },
     preHandler: staffWrite,
   }, async (req, reply) => {
     const item = await withTx(pool, (tx) => svc.grantElevatedAccess(tx, ctxFromRequest(req), { caseType: 'SAFETY_REPORT', caseId: req.params.id, ...req.body }));
     return reply.status(201).send({ item });
   });
 
-  r.get('/v1/admin/elevated-access', { schema: { tags: TAG }, preHandler: staffWrite }, async (req) => ({
+  r.get('/v1/admin/elevated-access', { schema: { summary: 'List active elevated-access grants', tags: TAG }, preHandler: staffWrite }, async (req) => ({
     items: await q(pool, `SELECT * FROM elevated_access_grants WHERE admin_id = $1 AND revoked_at IS NULL AND expires_at > now() ORDER BY expires_at`, [getActor(req).userId]),
   }));
 
-  r.delete('/v1/admin/elevated-access/:id', { schema: { tags: TAG, params: idParams }, preHandler: staffWrite }, async (req, reply) => {
+  r.delete('/v1/admin/elevated-access/:id', { schema: { summary: 'Revoke an elevated-access grant', tags: TAG, params: idParams }, preHandler: staffWrite }, async (req, reply) => {
     await withTx(pool, (tx) => svc.revokeElevatedAccess(tx, ctxFromRequest(req), req.params.id));
     return reply.status(204).send();
   });
@@ -201,12 +201,12 @@ export default async function disputesModule(app: FastifyInstance) {
     preHandler: sanctionStaff,
   }, async (req, reply) => reply.status(201).send({ item: await withTx(pool, (tx) => svc.applySanction(tx, ctxFromRequest(req), req.body)) }));
 
-  r.post('/v1/admin/sanctions/:id/lift', { schema: { tags: TAG, params: idParams, body: z.object({ reason }) }, preHandler: requireRole('ADMIN', 'COMPLIANCE') }, async (req) => ({
+  r.post('/v1/admin/sanctions/:id/lift', { schema: { summary: 'Lift a sanction', tags: TAG, params: idParams, body: z.object({ reason }) }, preHandler: requireRole('ADMIN', 'COMPLIANCE') }, async (req) => ({
     item: await withTx(pool, (tx) => svc.liftSanction(tx, ctxFromRequest(req), req.params.id, req.body.reason)),
   }));
 
   r.get('/v1/admin/sanctions', {
-    schema: { tags: TAG, querystring: z.object({ userId: z.uuid().optional(), active: z.coerce.boolean().optional() }) },
+    schema: { summary: 'List sanctions', tags: TAG, querystring: z.object({ userId: z.uuid().optional(), active: z.coerce.boolean().optional() }) },
     preHandler: sanctionStaff,
   }, async (req) => ({
     items: await q(
@@ -219,7 +219,7 @@ export default async function disputesModule(app: FastifyInstance) {
 
   // ---- safety queue ------------------------------------------------------------------------------------------
   r.get('/v1/admin/safety-reports', {
-    schema: { tags: TAG, querystring: z.object({ status: z.enum(['OPEN', 'TRIAGED', 'ACTIONED', 'CLOSED']).optional(), urgent: z.coerce.boolean().optional() }) },
+    schema: { summary: 'List safety reports', tags: TAG, querystring: z.object({ status: z.enum(['OPEN', 'TRIAGED', 'ACTIONED', 'CLOSED']).optional(), urgent: z.coerce.boolean().optional() }) },
     preHandler: staffRead,
   }, async (req) => ({
     items: await q(
@@ -230,14 +230,14 @@ export default async function disputesModule(app: FastifyInstance) {
     ),
   }));
 
-  r.get('/v1/admin/safety-reports/:id', { schema: { tags: TAG, params: idParams }, preHandler: staffRead }, async (req) => {
+  r.get('/v1/admin/safety-reports/:id', { schema: { summary: 'Get a safety report', tags: TAG, params: idParams }, preHandler: staffRead }, async (req) => {
     const item = await maybeOne(pool, `SELECT * FROM safety_reports WHERE id = $1`, [req.params.id]);
     if (!item) throw notFound('Safety report');
     return { item };
   });
 
   r.post('/v1/admin/safety-reports/:id/status', {
-    schema: { tags: TAG, params: idParams, body: z.object({ to: z.enum(['TRIAGED', 'ACTIONED', 'CLOSED']), note: z.string().max(2000).optional() }) },
+    schema: { summary: 'Change the status of a safety report', tags: TAG, params: idParams, body: z.object({ to: z.enum(['TRIAGED', 'ACTIONED', 'CLOSED']), note: z.string().max(2000).optional() }) },
     preHandler: staffWrite,
   }, async (req) => ({ item: await withTx(pool, (tx) => svc.changeSafetyStatus(tx, ctxFromRequest(req), req.params.id, req.body.to, req.body.note)) }));
 }

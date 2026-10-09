@@ -379,7 +379,7 @@ describe('PLAT config booleans (r1)', () => {
   });
 });
 
-describe('PLAT outbox dispatch isolation (r1)', () => {
+describe('PLAT-03 outbox dispatch isolation (r1)', () => {
   it('commits each event before the next one is handled (locks and rollback scope are per event)', async () => {
     const order: string[] = [];
     let firstPublishedSeenByOthers: unknown = 'unset';

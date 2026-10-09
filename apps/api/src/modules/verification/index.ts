@@ -56,7 +56,7 @@ export default async function verificationModule(app: FastifyInstance) {
     return reply.status(201).send({ item });
   });
 
-  r.get('/v1/verifications', { schema: { tags: TAG }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/verifications', { schema: { summary: 'List verification cases of the current user', tags: TAG }, preHandler: requireAuth }, async (req) => {
     const userId = getActor(req).userId;
     return {
       items: await q(pool, `SELECT id, subject_type, subject_id, status, decision_reason, submitted_at, decided_at, expires_at FROM verification_cases WHERE user_id = $1 ORDER BY submitted_at DESC`, [userId]),
@@ -64,12 +64,12 @@ export default async function verificationModule(app: FastifyInstance) {
     };
   });
 
-  r.get('/v1/verifications/:id', { schema: { tags: TAG, params: idParams }, preHandler: requireAuth }, async (req) => ({
+  r.get('/v1/verifications/:id', { schema: { summary: 'Get a verification case', tags: TAG, params: idParams }, preHandler: requireAuth }, async (req) => ({
     item: await svc.getCase(pool, ctxFromRequest(req), req.params.id),
   }));
 
   // ---- business profiles -------------------------------------------------------------------------------------
-  r.post('/v1/business-profiles', { schema: { tags: TAG, body: businessBody }, preHandler: requireAuth }, async (req, reply) => {
+  r.post('/v1/business-profiles', { schema: { summary: 'Create a business profile', tags: TAG, body: businessBody }, preHandler: requireAuth }, async (req, reply) => {
     const ctx = ctxFromRequest(req);
     const b = req.body;
     if (b.businessType !== 'INDIVIDUAL' && (!b.businessName || !b.registrationNo)) throw unprocessable('BUSINESS_DETAILS_REQUIRED', 'Business name and registration number are required');
@@ -85,11 +85,11 @@ export default async function verificationModule(app: FastifyInstance) {
     return reply.status(201).send({ item });
   });
 
-  r.get('/v1/business-profiles', { schema: { tags: TAG }, preHandler: requireAuth }, async (req) => ({
+  r.get('/v1/business-profiles', { schema: { summary: 'List business profiles of the current user', tags: TAG }, preHandler: requireAuth }, async (req) => ({
     items: await q(pool, `SELECT * FROM business_profiles WHERE user_id = $1 ORDER BY created_at DESC`, [getActor(req).userId]),
   }));
 
-  r.get('/v1/business-profiles/:id', { schema: { tags: TAG, params: idParams }, preHandler: requireAuth }, async (req) => {
+  r.get('/v1/business-profiles/:id', { schema: { summary: 'Get a business profile', tags: TAG, params: idParams }, preHandler: requireAuth }, async (req) => {
     const actor = getActor(req);
     const item = await maybeOne(pool, `SELECT * FROM business_profiles WHERE id = $1`, [req.params.id]);
     const staff = actor.aal === 'aal2' && (actor.roles.includes('ADMIN') || actor.roles.includes('COMPLIANCE'));
@@ -97,7 +97,7 @@ export default async function verificationModule(app: FastifyInstance) {
     return { item };
   });
 
-  r.patch('/v1/business-profiles/:id', { schema: { tags: TAG, params: idParams, body: businessBody.partial().strict() }, preHandler: requireAuth }, async (req) => {
+  r.patch('/v1/business-profiles/:id', { schema: { summary: 'Update a business profile', tags: TAG, params: idParams, body: businessBody.partial().strict() }, preHandler: requireAuth }, async (req) => {
     const ctx = ctxFromRequest(req);
     const item = await withTx(pool, async (tx) => {
       const cur = await maybeOne(tx, `SELECT * FROM business_profiles WHERE id = $1 FOR UPDATE`, [req.params.id]);
@@ -122,7 +122,7 @@ export default async function verificationModule(app: FastifyInstance) {
   const staff = requireRole('COMPLIANCE', 'ADMIN');
 
   r.get('/v1/admin/verifications', {
-    schema: {
+    schema: { summary: 'List verification cases',
       tags: TAG,
       querystring: pagination.extend({ status: z.enum(['SUBMITTED', 'IN_REVIEW', 'APPROVED', 'REJECTED', 'EXPIRED']).optional(), subjectType: z.enum(svc.SUBJECT_TYPES).optional() }),
     },
@@ -141,23 +141,23 @@ export default async function verificationModule(app: FastifyInstance) {
     return page(rows, req.query.limit);
   });
 
-  r.get('/v1/admin/verifications/:id', { schema: { tags: TAG, params: idParams }, preHandler: staff }, async (req) => ({
+  r.get('/v1/admin/verifications/:id', { schema: { summary: 'Get a verification case with its evidence', tags: TAG, params: idParams }, preHandler: staff }, async (req) => ({
     item: await svc.getCase(pool, ctxFromRequest(req), req.params.id),
   }));
 
-  r.post('/v1/admin/verifications/:id/start-review', { schema: { tags: TAG, params: idParams }, preHandler: staff }, async (req) => ({
+  r.post('/v1/admin/verifications/:id/start-review', { schema: { summary: 'Start reviewing a verification case', tags: TAG, params: idParams }, preHandler: staff }, async (req) => ({
     item: await withTx(pool, (tx) => svc.startReview(tx, ctxFromRequest(req), req.params.id)),
   }));
 
   r.post('/v1/admin/verifications/:id/approve', {
-    schema: { tags: TAG, params: idParams, body: z.object({ reason: z.string().max(1000).optional(), expiresAt: z.iso.datetime().optional() }).nullish() },
+    schema: { summary: 'Approve a verification case', tags: TAG, params: idParams, body: z.object({ reason: z.string().max(1000).optional(), expiresAt: z.iso.datetime().optional() }).nullish() },
     preHandler: staff,
   }, async (req) => ({
     item: await withTx(pool, (tx) => svc.decideCase(tx, ctxFromRequest(req), req.params.id, { approve: true, reason: req.body?.reason, expiresAt: req.body?.expiresAt })),
   }));
 
   r.post('/v1/admin/verifications/:id/reject', {
-    schema: { tags: TAG, params: idParams, body: z.object({ reason: z.string().trim().min(3).max(1000) }) },
+    schema: { summary: 'Reject a verification case', tags: TAG, params: idParams, body: z.object({ reason: z.string().trim().min(3).max(1000) }) },
     preHandler: staff,
   }, async (req) => ({
     item: await withTx(pool, (tx) => svc.decideCase(tx, ctxFromRequest(req), req.params.id, { approve: false, reason: req.body.reason })),

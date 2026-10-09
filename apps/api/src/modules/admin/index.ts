@@ -33,14 +33,14 @@ export default async function adminModule(app: FastifyInstance) {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const pool = app.ctx.pool;
 
-  r.get('/v1/admin/overview', { schema: { tags: OPS }, preHandler: requireRole('ADMIN', 'SUPPORT', 'ACCOUNTING') }, async () => overview(pool));
+  r.get('/v1/admin/overview', { schema: { summary: 'Backoffice overview counters', tags: OPS }, preHandler: requireRole('ADMIN', 'SUPPORT', 'ACCOUNTING') }, async () => overview(pool));
 
-  r.get('/v1/admin/feature-flags', { schema: { tags: PLAT }, preHandler: requireRole('ADMIN') }, async () => ({ items: await listFlags(pool) }));
+  r.get('/v1/admin/feature-flags', { schema: { summary: 'List feature flags', tags: PLAT }, preHandler: requireRole('ADMIN') }, async () => ({ items: await listFlags(pool) }));
 
   r.patch(
     '/v1/admin/feature-flags',
     {
-      schema: {
+      schema: { summary: 'Turn feature flags on or off',
         tags: PLAT,
         body: z.object({
           flagKey: z.string().regex(/^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/),
@@ -59,18 +59,20 @@ export default async function adminModule(app: FastifyInstance) {
     },
   );
 
-  r.get('/v1/admin/config', { schema: { tags: PLAT, querystring: z.object({ key: z.string().max(100).optional() }) }, preHandler: requireRole('ADMIN', 'ACCOUNTING') }, async (req) => ({
+  r.get('/v1/admin/config', { schema: { summary: 'List effective-dated configuration values', tags: PLAT, querystring: z.object({ key: z.string().max(100).optional() }) }, preHandler: requireRole('ADMIN', 'ACCOUNTING') }, async (req) => ({
     items: await listConfig(pool, req.query.key),
   }));
 
   r.post(
     '/v1/admin/config',
     {
-      schema: {
+      schema: { summary: 'Propose a configuration value change',
         tags: PLAT,
         body: z.object({
           key: z.string().max(100),
-          value: z.json(),
+          // Any JSON value. `z.json()` is recursive and exports a self-$ref the OpenAPI document cannot
+          // resolve; a parsed JSON body is a JSON value by construction, so there is nothing left to check.
+          value: z.unknown(),
           effectiveFrom: z.iso.datetime({ offset: true }).optional(),
           effectiveUntil: z.iso.datetime({ offset: true }).optional(),
           note: z.string().max(1000).optional(),
@@ -86,26 +88,26 @@ export default async function adminModule(app: FastifyInstance) {
 
   r.post(
     '/v1/admin/config/approve',
-    { schema: { tags: PLAT, body: z.object({ key: z.string().max(100), effectiveFrom: z.iso.datetime({ offset: true }), reason }) }, preHandler: requireRole('ADMIN') },
+    { schema: { summary: 'Approve a proposed configuration change', tags: PLAT, body: z.object({ key: z.string().max(100), effectiveFrom: z.iso.datetime({ offset: true }), reason }) }, preHandler: requireRole('ADMIN') },
     async (req) => {
       const ctx = ctxFromRequest(req);
       return { item: await withTx(pool, (tx) => approveConfig(tx, ctx, req.body)) };
     },
   );
 
-  r.get('/v1/config/public', { schema: { tags: PLAT } }, async (req) =>
+  r.get('/v1/config/public', { schema: { summary: 'Public runtime configuration for clients', tags: PLAT } }, async (req) =>
     publicConfig(pool, req.actor ? { userId: req.actor.userId, roles: req.actor.roles } : undefined),
   );
 
   r.get(
     '/v1/admin/outbox/dead-letters',
-    { schema: { tags: OPS, querystring: z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) }) }, preHandler: requireRole('ADMIN') },
+    { schema: { summary: 'List dead-lettered outbox events', tags: OPS, querystring: z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) }) }, preHandler: requireRole('ADMIN') },
     async (req) => ({ items: await listDeadLetters(pool, req.query.limit) }),
   );
 
   r.post(
     '/v1/admin/outbox/dead-letters/:id/retry',
-    { schema: { tags: OPS, params: z.object({ id: z.uuid() }), body: z.object({ reason }) }, preHandler: requireRole('ADMIN') },
+    { schema: { summary: 'Retry a dead-lettered outbox event', tags: OPS, params: z.object({ id: z.uuid() }), body: z.object({ reason }) }, preHandler: requireRole('ADMIN') },
     async (req) => {
       const ctx = ctxFromRequest(req);
       return { item: await withTx(pool, (tx) => retryDeadLetter(tx, ctx, req.params.id, req.body.reason)) };
@@ -115,25 +117,25 @@ export default async function adminModule(app: FastifyInstance) {
   // ---- OPS-02 saved console views (any staff role, AAL2) ---------------------------------------------------------
   r.get(
     '/v1/admin/saved-views',
-    { schema: { tags: OPS, querystring: z.object({ viewType: z.enum(SAVED_VIEW_TYPES).optional(), mine: boolQuery }) }, preHandler: staffAny },
+    { schema: { summary: 'List saved backoffice views', tags: OPS, querystring: z.object({ viewType: z.enum(SAVED_VIEW_TYPES).optional(), mine: boolQuery }) }, preHandler: staffAny },
     async (req) => ({ items: await listSavedViews(pool, getActor(req).userId, req.query) }),
   );
 
-  r.post('/v1/admin/saved-views', { schema: { tags: OPS, body: savedViewCreate }, preHandler: staffAny }, async (req, reply) => {
+  r.post('/v1/admin/saved-views', { schema: { summary: 'Create a saved backoffice view', tags: OPS, body: savedViewCreate }, preHandler: staffAny }, async (req, reply) => {
     const ctx = ctxFromRequest(req);
     return reply.status(201).send({ item: await withTx(pool, (tx) => createSavedView(tx, ctx, req.body)) });
   });
 
-  r.get('/v1/admin/saved-views/:id', { schema: { tags: OPS, params: idParams }, preHandler: staffAny }, async (req) => ({
+  r.get('/v1/admin/saved-views/:id', { schema: { summary: 'Get a saved backoffice view', tags: OPS, params: idParams }, preHandler: staffAny }, async (req) => ({
     item: await getSavedView(pool, getActor(req).userId, req.params.id),
   }));
 
-  r.patch('/v1/admin/saved-views/:id', { schema: { tags: OPS, params: idParams, body: savedViewPatch }, preHandler: staffAny }, async (req) => {
+  r.patch('/v1/admin/saved-views/:id', { schema: { summary: 'Update a saved backoffice view', tags: OPS, params: idParams, body: savedViewPatch }, preHandler: staffAny }, async (req) => {
     const ctx = ctxFromRequest(req);
     return { item: await withTx(pool, (tx) => updateSavedView(tx, ctx, req.params.id, req.body)) };
   });
 
-  r.delete('/v1/admin/saved-views/:id', { schema: { tags: OPS, params: idParams }, preHandler: staffAny }, async (req) => {
+  r.delete('/v1/admin/saved-views/:id', { schema: { summary: 'Delete a saved backoffice view', tags: OPS, params: idParams }, preHandler: staffAny }, async (req) => {
     const ctx = ctxFromRequest(req);
     return { item: await withTx(pool, (tx) => deleteSavedView(tx, ctx, req.params.id)) };
   });
