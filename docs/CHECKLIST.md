@@ -84,7 +84,7 @@ Derived by `node scripts/module-status.mjs`; every other module column checks ou
 | G2 Data | Migrations up/down or forward-fix tested; Constraints/invariants enabled; Seed data deterministic | Automated (CI) | ✅ PASS |
 | G3 Domain | Unit/property/integration tests pass; State transition negative tests pass; Idempotency tests pass | Automated (CI) | ✅ PASS |
 | G4 End-to-end | Stay paid flow passes; Exchange bilateral flow passes; Guide free/paid flow passes; Travel order flow passes where enabled | Automated (CI) | ✅ PASS |
-| G5 Security | SAST/SCA/secret scan pass; Permission-negative tests pass; AAL2 gates pass; No PAN/CVC storage | Automated (CI) | 🟡 PARTIAL |
+| G5 Security | SAST/SCA/secret scan pass; Permission-negative tests pass; AAL2 gates pass; No PAN/CVC storage | Automated (CI) | ✅ PASS |
 | G6 Performance | Search/read/write SLO targets meet load-test plan; No oversell under concurrency test | Automated (CI) | ⚪ NOT RUN |
 | G7 Migration | Dry-run reconciliation approved; 301 URL map approved; Consent/password migration strategy approved | Automated (CI) | ⚪ NOT RUN |
 | G8 DR & Ops | Restore drill successful; Runbooks and alert routes tested; Payment reconciliation tested | Automated (CI) | 🟡 PARTIAL |
@@ -105,6 +105,7 @@ Derived by `node scripts/module-status.mjs`; every other module column checks ou
 - [x] I10. No global admin read of private messages
 - [x] I11. Ledger append-only, double-entry balanced
 - [x] I12. Production deploy needs explicit approval
+
 
 
 
