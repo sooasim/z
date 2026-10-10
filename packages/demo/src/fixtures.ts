@@ -186,12 +186,33 @@ export function allItems(pathPred: (p: string) => boolean, personaPred: (p: stri
   return [...seen.values()].map(clone);
 }
 
+/**
+ * `locale` is a preference, not a filter. The CMS resolves it the way `pagePublished` does — one row per slug,
+ * the requested locale winning and ko-KR standing in when that slug has no translation. Filtering strictly
+ * (which is what the generic rule below would do, since entries carry a `locale` field) empties the list for
+ * every language whose rows were never recorded.
+ */
+function preferLocale(rows: any[], want: string): any[] {
+  const key = (r: any) => r?.slug ?? r?.id ?? JSON.stringify(r);
+  const best = new Map<string, any>();
+  for (const r of rows) {
+    const k = key(r);
+    const cur = best.get(k);
+    if (!cur || (String(r?.locale) === want && String(cur?.locale) !== want)) best.set(k, r);
+  }
+  return [...best.values()];
+}
+
 /** Generic narrowing for fuzzy list matches: filter by simple query keys that exist on items, then apply limit. */
 const META = new Set(['limit', 'cursor', 'page', 'sort', 'q', 'from', 'to', 'offset', 'order', 'include', 'expand', 'role', 'auth']);
 export function narrow(body: any, query: URLSearchParams): any {
   if (!body || typeof body !== 'object' || !Array.isArray(body.items)) return body;
   let rows: any[] = body.items;
   for (const [k, v] of query) {
+    if (k === 'locale' && v) {
+      rows = preferLocale(rows, v);
+      continue;
+    }
     if (META.has(k) || !v || v.includes(',')) continue;
     const has = rows.some((r) => r && typeof r === 'object' && (k in r || k.replace(/[A-Z]/g, (m) => '_' + m.toLowerCase()) in r));
     if (!has) continue;

@@ -9,6 +9,7 @@ import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { LEGACY_PAGES, LiteYouTube, Photo, PhotoCredit, markdownCover, markdownExcerpt } from '@/components/media';
 import s from '@/components/media/media.module.css';
 import { pickText } from '@/lib/phrases';
+import { humanizeEnum } from '@/lib/enums';
 import type { Lang } from '@/lib/format';
 
 /** Migrated wontc.co.kr pages (CMS PAGE slugs, data contract) grouped for the index. */
@@ -69,12 +70,16 @@ export function EntryCard({ href, title, summary, cover, seed }: { href: string;
   );
 }
 
-/** Titles shown when the CMS has no entry for a captured page yet. */
+/**
+ * Titles shown when the CMS has no entry for a captured page yet. A few service slugs (premium-lounge) have
+ * no row in LEGACY_PAGES because their content moved under /stories, so humanize rather than print the slug.
+ */
 function fallbackEntries(slugs: string[], lang: Lang) {
   const byRoute = new Map(Object.values(LEGACY_PAGES).map((p) => [p.route, p]));
   return slugs.map((slug) => {
     const page = byRoute.get(`/about/${slug}`);
-    return { slug, title: page ? pickText(page, lang) : slug, summary: '', data: {} };
+    const title = page ? pickText(page, lang) : humanizeEnum(slug.replace(/-/g, '_'), lang);
+    return { slug, title, summary: '', data: {} };
   });
 }
 
