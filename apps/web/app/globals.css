@@ -386,9 +386,18 @@ hr { border: 0; border-top: 1px solid var(--border); margin: var(--sp-5) 0; }
    ===================================================================== */
 .site-header { position: sticky; top: 0; z-index: var(--z-header); background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: saturate(1.6) blur(12px); -webkit-backdrop-filter: saturate(1.6) blur(12px); border-bottom: 1px solid var(--border); }
 .site-header .bar { display: flex; align-items: center; gap: var(--sp-3); min-height: var(--header-h); }
-.wordmark { font-weight: 900; letter-spacing: 0.16em; font-size: 1.15rem; color: var(--brand); text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
-.wordmark .dot { width: 22px; height: 22px; border-radius: 7px; background: linear-gradient(135deg, var(--coral-500), var(--coral-600)); display: inline-grid; place-items: center; box-shadow: 0 4px 10px rgba(217, 74, 51, 0.35); }
-.wordmark .dot::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #fff; }
+/* Brand lockup (components/shell.tsx <Wordmark/>): transparent-cut-out PNGs of the supplied artwork,
+   painted as a background so only the variant the active theme shows is ever fetched — a hidden <img>
+   is still downloaded. `.lockup` is the taller footer version that keeps the company line. */
+.wordmark { text-decoration: none; display: inline-flex; align-items: center; }
+.wordmark .logo { display: block; height: 30px; aspect-ratio: 480 / 140; background: left center / contain no-repeat url('/brand/jetpool-wordmark.png'); }
+.wordmark.lockup .logo { height: 52px; aspect-ratio: 480 / 196; background-image: url('/brand/jetpool-logo.png'); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .wordmark .logo { background-image: url('/brand/jetpool-wordmark-dark.png'); }
+  :root:not([data-theme='light']) .wordmark.lockup .logo { background-image: url('/brand/jetpool-logo-dark.png'); }
+}
+:root[data-theme='dark'] .wordmark .logo { background-image: url('/brand/jetpool-wordmark-dark.png'); }
+:root[data-theme='dark'] .wordmark.lockup .logo { background-image: url('/brand/jetpool-logo-dark.png'); }
 .main-nav { display: none; gap: 2px; }
 .main-nav a { color: var(--text); text-decoration: none; padding: 8px 12px; border-radius: var(--r-full); font-weight: var(--fw-semibold); font-size: var(--fs-sm); transition: background var(--dur-fast) var(--ease); }
 .main-nav a:hover { background: var(--surface-3); }
@@ -1088,6 +1097,8 @@ dl.kv dd { margin: 0; font-weight: 600; min-width: 0; }
 .admin-side .side-nav .group { color: var(--admin-side-muted); }
 @media (max-width: 1023px) { .admin-side .side-nav { -webkit-mask-image: none; mask-image: none; padding-inline: 0; margin-inline: 0; } }
 .admin-side .brand { font-weight: 900; letter-spacing: 0.14em; font-size: var(--fs-sm); padding: 4px 12px 12px; display: flex; gap: 8px; align-items: center; }
+/* The admin rail is navy in both themes, so it always wants the light-on-dark logo variant. */
+.admin-side .brand .logo { display: block; height: 22px; aspect-ratio: 480 / 140; background: left center / contain no-repeat url('/brand/jetpool-wordmark-dark.png'); }
 
 /* Postcard art fallback */
 .postcard { width: 100%; height: 100%; object-fit: cover; }
@@ -1106,7 +1117,7 @@ dl.kv dd { margin: 0; font-weight: 600; min-width: 0; }
 
 /* Responsive polish */
 .wordmark { white-space: nowrap; flex: 0 0 auto; }
-@media (max-width: 479px) { .wordmark { letter-spacing: 0.08em; font-size: 1.02rem; } .site-header .bar { gap: 6px; } }
+@media (max-width: 479px) { .wordmark .logo { height: 25px; } .wordmark.lockup .logo { height: 44px; } .site-header .bar { gap: 6px; } }
 .seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 .seg::-webkit-scrollbar { display: none; }
 .seg button { white-space: nowrap; flex: 0 0 auto; }
