@@ -14,6 +14,7 @@ import { useToast } from '@/components/ui/toast';
 import { styles as s } from '@/components/traveler/ui';
 import { useCachedApi } from '@/components/traveler/hooks';
 import { REVIEW_TARGET_LABEL, dayLabel, subjectLabel } from '@/components/traveler/labels';
+import { pickPair } from '@/lib/phrases';
 
 interface Target {
   type: string;
@@ -90,7 +91,7 @@ function ReviewForm({ target, onDone, onCancel }: { target: Target; onDone: () =
       }}
     >
       <div>
-        <div className="xs muted">{(REVIEW_TARGET_LABEL[targetType.toUpperCase()] ?? [targetType, targetType])[lang === 'ko' ? 0 : 1]} {L('후기', 'review')}</div>
+        <div className="xs muted">{pickPair((REVIEW_TARGET_LABEL[targetType.toUpperCase()] ?? [targetType, targetType]), lang)} {L('후기', 'review')}</div>
         <h2 style={{ margin: '2px 0 0', fontSize: 'var(--fs-xl)' }}>{subj.title}</h2>
         {subj.meta && <div className="small muted">{subj.meta}</div>}
       </div>
@@ -138,7 +139,7 @@ function PendingRow({ p, onPick }: { p: any; onPick: (t: Target) => void }) {
       <div style={{ minWidth: 0 }}>
         <strong>{subj.title}</strong>
         <div className="small muted">
-          {[subj.meta, `${(REVIEW_TARGET_LABEL[t.type.toUpperCase()] ?? [t.type, t.type])[lang === 'ko' ? 0 : 1]} ${L('평가', 'review')}`, due && L(`${dayLabel(due, lang)}까지 작성`, `due ${dayLabel(due, lang)}`)].filter(Boolean).join(' · ')}
+          {[subj.meta, `${pickPair((REVIEW_TARGET_LABEL[t.type.toUpperCase()] ?? [t.type, t.type]), lang)} ${L('평가', 'review')}`, due && L(`${dayLabel(due, lang)}까지 작성`, `due ${dayLabel(due, lang)}`)].filter(Boolean).join(' · ')}
         </div>
       </div>
       <Button variant="primary" size="sm" icon="star" onClick={() => onPick(t)}>

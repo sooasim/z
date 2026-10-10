@@ -148,6 +148,14 @@
   .pageHero::after { background: linear-gradient(180deg, rgba(5, 12, 22, 0.5) 0%, rgba(5, 12, 22, 0.62) 40%, rgba(5, 12, 22, 0.9) 100%); }
   .pageHero :global(.eyebrow) { font-size: 11px; letter-spacing: 0.08em; }
   .pageHeroBody { padding: var(--sp-6) var(--sp-5); }
+  .pageHero { min-height: 220px; margin-bottom: var(--sp-6); border-radius: var(--r-xl); }
+  .pageHero p { font-size: var(--fs-base); }
+}
+/* Long-form body copy: 18px/1.85 leaves ~16 Korean characters per line on a phone — 16px/1.75 reads better. */
+@media (max-width: 479px) {
+  .md { font-size: var(--fs-base); line-height: 1.75; }
+  .md h2 { margin-top: var(--sp-8); }
+  .md h3 { margin-top: var(--sp-6); }
 }
 /* counts inside filter chips stay legible on the pressed (filled) chip */
 .n { opacity: 0.72; font-weight: 500; margin-left: 2px; }

@@ -1,8 +1,10 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import { useI18n } from '@/lib/i18n';
+import { LANGS, langInfo } from '@/lib/langs';
+import type { Lang } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
 import { useApi } from '@/lib/hooks';
 import { items, str } from '@/lib/shape';
@@ -20,16 +22,111 @@ const NAV = [
   { href: '/jetpool-charter', key: 'nav.charter' },
 ] as const;
 
-export function Wordmark() {
+/**
+ * Brand lockup. The files under `public/brand/` are transparent cut-outs of the supplied artwork
+ * (regenerate with `scripts/brand/cutout-logo.py`); the `-dark` pair is lightness-lifted so the
+ * navy half of the gradient stays legible on the dark theme. The artwork is painted by CSS
+ * (`.wordmark .logo`) rather than an <img> pair so a browser only ever fetches the variant the
+ * active theme actually shows; the link itself carries the accessible name.
+ * `lockup` adds the "JETPOOL INTERNATIONAL Corp." line — footer only, the header bar is too short.
+ */
+export function Wordmark({ lockup = false }: { lockup?: boolean }) {
   return (
-    <Link href="/" className="wordmark" aria-label="JETPOOL home">
-      <span className="dot" aria-hidden="true" />
-      JETPOOL
+    <Link href="/" className={lockup ? 'wordmark lockup' : 'wordmark'} aria-label="JETPOOL home">
+      <span className="logo" aria-hidden="true" />
     </Link>
   );
 }
 
 type MenuLink = [href: string, label: string, icon: IconName];
+
+/**
+ * Shared `role=menu` keyboard behaviour: ↑/↓/Home/End move, Space activates, Esc closes and refocuses the
+ * button, Tab closes. Used by the user menu and the language menu so they stay consistent.
+ */
+function menuKeys(listRef: RefObject<HTMLUListElement | null>, close: (refocus?: boolean) => void) {
+  return (e: KeyboardEvent<HTMLUListElement>) => {
+    const els = Array.from(listRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"], [role="menuitemradio"]') ?? []);
+    const i = els.indexOf(document.activeElement as HTMLElement);
+    let n = -1;
+    if (e.key === 'ArrowDown') n = (i + 1) % els.length;
+    else if (e.key === 'ArrowUp') n = (i - 1 + els.length) % els.length;
+    else if (e.key === 'Home') n = 0;
+    else if (e.key === 'End') n = els.length - 1;
+    else if (e.key === ' ' && i >= 0) {
+      e.preventDefault();
+      els[i].click();
+      return;
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      close(true);
+      return;
+    } else if (e.key === 'Tab') {
+      close();
+      return;
+    }
+    if (n >= 0) {
+      e.preventDefault();
+      els[n]?.focus();
+    }
+  };
+}
+
+/** Language picker: the five shipped UI languages plus "follow the browser". */
+function LangMenu() {
+  const { lang, setLang, auto, t, L } = useI18n();
+  const p = usePopover();
+  const menuId = useId();
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  useFitPopover(p.open, popRef);
+  const close = (refocus = false) => {
+    p.setOpen(false);
+    if (refocus) btnRef.current?.focus();
+  };
+  const choose = (l: Lang | null) => {
+    setLang(l);
+    close(true);
+  };
+  return (
+    <div className="popover-anchor" ref={p.ref}>
+      <button
+        ref={btnRef}
+        type="button"
+        className="btn ghost sm"
+        aria-expanded={p.open}
+        aria-haspopup="menu"
+        aria-controls={p.open ? menuId : undefined}
+        onClick={() => p.setOpen(!p.open)}
+        aria-label={`${L('언어', 'Language')}: ${langInfo(lang).endonym}`}
+      >
+        <Icon name="globe" size={16} /> <span className="hide-mobile">{langInfo(lang).endonym}</span>
+      </button>
+      {p.open && (
+        <div className="popover right" ref={popRef} style={{ minWidth: 200, padding: 8 }}>
+          <ul className="menu" role="menu" id={menuId} aria-label={t('common.lang')} ref={listRef} onKeyDown={menuKeys(listRef, close)}>
+            {LANGS.map((l) => (
+              <li key={l.code} role="none">
+                <button type="button" role="menuitemradio" aria-checked={!auto && l.code === lang} tabIndex={-1} lang={l.locale} onClick={() => choose(l.code)}>
+                  {l.endonym}
+                  {!auto && l.code === lang && <Icon name="check" size={16} />}
+                </button>
+              </li>
+            ))}
+            <li role="separator" />
+            <li role="none">
+              <button type="button" role="menuitemradio" aria-checked={auto} tabIndex={-1} onClick={() => choose(null)}>
+                {t('lang.auto')}
+                {auto && <Icon name="check" size={16} />}
+              </button>
+            </li>
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * WAI-ARIA menu button: role=menu on the list, menuitems are links (middle-click works), ↑/↓/Home/End move,
@@ -71,31 +168,7 @@ function UserMenu() {
     p.setOpen(false);
     if (refocus) btnRef.current?.focus();
   };
-  const onMenuKey = (e: KeyboardEvent<HTMLUListElement>) => {
-    const els = Array.from(listRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
-    const i = els.indexOf(document.activeElement as HTMLElement);
-    let n = -1;
-    if (e.key === 'ArrowDown') n = (i + 1) % els.length;
-    else if (e.key === 'ArrowUp') n = (i - 1 + els.length) % els.length;
-    else if (e.key === 'Home') n = 0;
-    else if (e.key === 'End') n = els.length - 1;
-    else if (e.key === ' ' && i >= 0) {
-      e.preventDefault();
-      els[i].click();
-      return;
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      close(true);
-      return;
-    } else if (e.key === 'Tab') {
-      close();
-      return;
-    }
-    if (n >= 0) {
-      e.preventDefault();
-      els[n]?.focus();
-    }
-  };
+  const onMenuKey = menuKeys(listRef, close);
   return (
     <div className="popover-anchor" ref={p.ref}>
       <button
@@ -189,9 +262,7 @@ export function Header() {
             <Icon name="chart" size={16} /> {t('nav.admin')}
           </Link>
         )}
-        <button className="btn ghost sm" onClick={() => setLang(lang === 'ko' ? 'en' : 'ko')} aria-label={L('언어 전환 (English)', 'Switch language (한국어)')}>
-          <Icon name="globe" size={16} /> <span className="hide-mobile">{t('common.lang')}</span>
-        </button>
+        <LangMenu />
         <ThemeToggle />
         {ready && user ? (
           <UserMenu />
@@ -295,17 +366,25 @@ export function BottomNav() {
   );
 }
 
-/** Operator disclosure required on Korean e-commerce sites (전자상거래법 §10). Values come from NEXT_PUBLIC_BIZ_* env. */
+/**
+ * Operator disclosure required on Korean e-commerce sites (전자상거래법 §10). The registered
+ * company details are the defaults; NEXT_PUBLIC_BIZ_* env overrides each one so a staging or
+ * white-label deploy can disclose a different operator without a code change. `name` is the full
+ * legal name used for the 상호 row and the copyright line; `shortName` is the one that reads
+ * naturally mid-sentence in the intermediary disclaimer. Rows left empty are not rendered.
+ */
 const BIZ = {
-  name: process.env.NEXT_PUBLIC_BIZ_NAME || 'JETPOOL',
-  ceo: process.env.NEXT_PUBLIC_BIZ_CEO || '',
-  regNo: process.env.NEXT_PUBLIC_BIZ_REG_NO || '',
+  name: process.env.NEXT_PUBLIC_BIZ_NAME || '젯풀인터내셔날(주) Jetpool International Co.,LTD.',
+  shortName: process.env.NEXT_PUBLIC_BIZ_SHORT_NAME || '젯풀인터내셔날(주)',
+  ceo: process.env.NEXT_PUBLIC_BIZ_CEO || '원치승',
+  regNo: process.env.NEXT_PUBLIC_BIZ_REG_NO || '101-86-57891',
   mailOrderNo: process.env.NEXT_PUBLIC_BIZ_MAIL_ORDER_NO || '',
   tourismNo: process.env.NEXT_PUBLIC_BIZ_TOURISM_NO || '',
-  address: process.env.NEXT_PUBLIC_BIZ_ADDRESS || '',
-  phone: process.env.NEXT_PUBLIC_BIZ_PHONE || '',
-  email: process.env.NEXT_PUBLIC_BIZ_EMAIL || '',
-  privacyOfficer: process.env.NEXT_PUBLIC_BIZ_PRIVACY_OFFICER || '',
+  address: process.env.NEXT_PUBLIC_BIZ_ADDRESS || '서울시 강남구 영동대로 725 5F',
+  phone: process.env.NEXT_PUBLIC_BIZ_PHONE || '+82.(02). 6672. 0055',
+  fax: process.env.NEXT_PUBLIC_BIZ_FAX || '+82.(02).6937.1399',
+  email: process.env.NEXT_PUBLIC_BIZ_EMAIL || 'ceojp@hanmail.net',
+  privacyOfficer: process.env.NEXT_PUBLIC_BIZ_PRIVACY_OFFICER || '원치승',
   hosting: process.env.NEXT_PUBLIC_BIZ_HOSTING || '',
 };
 
@@ -345,12 +424,14 @@ export function Footer() {
     [
       [L('상호', 'Company'), BIZ.name],
       [L('대표', 'CEO'), BIZ.ceo],
+      [L('개인정보관리책임자', 'Privacy officer'), BIZ.privacyOfficer],
+      [L('전화', 'Phone'), BIZ.phone],
+      [L('팩스', 'Fax'), BIZ.fax],
+      [L('이메일', 'Email'), BIZ.email],
+      [L('주소', 'Address'), BIZ.address],
       [L('사업자등록번호', 'Business reg. no.'), BIZ.regNo],
       [L('통신판매업 신고', 'Mail-order reg. no.'), BIZ.mailOrderNo],
       [L('관광사업 등록', 'Tourism reg. no.'), BIZ.tourismNo],
-      [L('주소', 'Address'), BIZ.address],
-      [L('고객센터', 'Customer center'), [BIZ.phone, BIZ.email].filter(Boolean).join(' · ')],
-      [L('개인정보 보호책임자', 'Privacy officer'), BIZ.privacyOfficer],
       [L('호스팅 서비스', 'Hosting'), BIZ.hosting],
     ] as Array<[string, string]>
   ).filter(([, v]) => v);
@@ -359,7 +440,7 @@ export function Footer() {
       <div className="container stack-lg">
         <div className="cols">
           <div className="stack">
-            <Wordmark />
+            <Wordmark lockup />
             <p className="small">{L('WONT Travel Club의 새로운 이름. 한달살기 맞교환, 전세기 공유, 로컬 라이프.', 'The new home of WONT Travel Club — month-long exchanges, charter sharing and local life.')}</p>
           </div>
           <nav aria-labelledby="ft-travel">
@@ -419,12 +500,12 @@ export function Footer() {
           </div>
           <p className="disclaimer">
             {L(
-              `${BIZ.name}은(는) 통신판매중개자로서 통신판매의 당사자가 아닙니다. 호스트·가이드·여행 공급사가 등록한 상품의 정보와 거래에 대한 책임은 각 판매자에게 있습니다. 단, ${BIZ.name}이(가) 판매자로 명시된 상품은 예외입니다.`,
-              `${BIZ.name} acts as a mail-order intermediary and is not a party to transactions between members. Hosts, guides and travel suppliers are responsible for their listings and transactions, except where ${BIZ.name} is named as the seller.`,
+              `${BIZ.shortName}은(는) 통신판매중개자로서 통신판매의 당사자가 아닙니다. 호스트·가이드·여행 공급사가 등록한 상품의 정보와 거래에 대한 책임은 각 판매자에게 있습니다. 단, ${BIZ.shortName}이(가) 판매자로 명시된 상품은 예외입니다.`,
+              `${BIZ.shortName} acts as a mail-order intermediary and is not a party to transactions between members. Hosts, guides and travel suppliers are responsible for their listings and transactions, except where ${BIZ.shortName} is named as the seller.`,
             )}
           </p>
           <div className="row between xs" style={{ color: 'var(--text-muted)' }}>
-            <span>{t('footer.rights')}</span>
+            <span>Copyright © {BIZ.name}. All rights reserved.</span>
             <span>{L('결제는 토스페이먼츠를 통해 안전하게 처리됩니다.', 'Payments are processed securely by TossPayments.')}</span>
           </div>
         </div>

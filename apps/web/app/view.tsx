@@ -15,6 +15,7 @@ import { charterPhotos, cityPhoto, heroPhotos, useMediaMap } from '@/lib/media';
 import { canonicalPlace } from '@/lib/places';
 import { Photo, PhotoCredit } from '@/components/media';
 import m from '@/components/media/media.module.css';
+import { pickBlock, pickText, pickPair } from '@/lib/phrases';
 
 /** `en` is the canonical (API) city name used in search links; `ko`/`en` are display names. */
 const DESTINATIONS: Array<{ ko: string; en: string; art: string; tag: [string, string] }> = [
@@ -52,8 +53,8 @@ function DestinationRail() {
           <Link key={d.en} href={`/stay?q=${encodeURIComponent(d.en)}`} className={s.destCard}>
             <Photo src={cityPhoto(d.en, canonicalPlace) || `/art/postcards/${d.art}.svg`} seed={d.en} alt="" sizes="(max-width: 640px) 78vw, 260px" />
             <span className={s.cap}>
-              <strong>{d[lang]}</strong>
-              <span>{d.tag[lang === 'ko' ? 0 : 1]}</span>
+              <strong>{pickText(d, lang)}</strong>
+              <span>{pickPair(d.tag, lang)}</span>
             </span>
           </Link>
         ))}
@@ -84,7 +85,8 @@ function BrandBlocks() {
   const blocks =
     remote.length > 0
       ? remote.map((b: any, i: number) => ({ key: str(b, 'key', 'id') || String(i), tone: (['navy', 'coral', 'sand'] as const)[i % 3], art: str(b, 'art') || FALLBACK_BLOCKS[i % 3].art, image: str(b, 'imageUrl', 'image', 'photoUrl'), title: str(b, 'title'), body: str(b, 'body', 'summary', 'text'), cta: str(b, 'cta', 'ctaLabel') || L('자세히', 'Learn more'), href: str(b, 'href', 'url', 'link') || '/' }))
-      : FALLBACK_BLOCKS.map((b) => ({ key: b.key, tone: b.tone, art: b.art, image: '', ...b[lang], href: b.href }));
+      // Each block carries a nested `{ title, body, cta }` per language, so every field is localized together.
+      : FALLBACK_BLOCKS.map((b) => ({ key: b.key, tone: b.tone, art: b.art, image: '', ...pickBlock(b, lang), href: b.href }));
   return (
     <section className="section" aria-labelledby="brand-h">
       <p className="eyebrow">WONT Travel Club → JETPOOL</p>

@@ -386,9 +386,18 @@ hr { border: 0; border-top: 1px solid var(--border); margin: var(--sp-5) 0; }
    ===================================================================== */
 .site-header { position: sticky; top: 0; z-index: var(--z-header); background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: saturate(1.6) blur(12px); -webkit-backdrop-filter: saturate(1.6) blur(12px); border-bottom: 1px solid var(--border); }
 .site-header .bar { display: flex; align-items: center; gap: var(--sp-3); min-height: var(--header-h); }
-.wordmark { font-weight: 900; letter-spacing: 0.16em; font-size: 1.15rem; color: var(--brand); text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
-.wordmark .dot { width: 22px; height: 22px; border-radius: 7px; background: linear-gradient(135deg, var(--coral-500), var(--coral-600)); display: inline-grid; place-items: center; box-shadow: 0 4px 10px rgba(217, 74, 51, 0.35); }
-.wordmark .dot::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #fff; }
+/* Brand lockup (components/shell.tsx <Wordmark/>): transparent-cut-out PNGs of the supplied artwork,
+   painted as a background so only the variant the active theme shows is ever fetched — a hidden <img>
+   is still downloaded. `.lockup` is the taller footer version that keeps the company line. */
+.wordmark { text-decoration: none; display: inline-flex; align-items: center; }
+.wordmark .logo { display: block; height: 30px; aspect-ratio: 480 / 140; background: left center / contain no-repeat url('/brand/jetpool-wordmark.png'); }
+.wordmark.lockup .logo { height: 52px; aspect-ratio: 480 / 196; background-image: url('/brand/jetpool-logo.png'); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .wordmark .logo { background-image: url('/brand/jetpool-wordmark-dark.png'); }
+  :root:not([data-theme='light']) .wordmark.lockup .logo { background-image: url('/brand/jetpool-logo-dark.png'); }
+}
+:root[data-theme='dark'] .wordmark .logo { background-image: url('/brand/jetpool-wordmark-dark.png'); }
+:root[data-theme='dark'] .wordmark.lockup .logo { background-image: url('/brand/jetpool-logo-dark.png'); }
 .main-nav { display: none; gap: 2px; }
 .main-nav a { color: var(--text); text-decoration: none; padding: 8px 12px; border-radius: var(--r-full); font-weight: var(--fw-semibold); font-size: var(--fs-sm); transition: background var(--dur-fast) var(--ease); }
 .main-nav a:hover { background: var(--surface-3); }
@@ -698,7 +707,9 @@ tr:last-child td { border-bottom: 0; }
    art lives in ::before, which carries the rounded corners itself. z-index lifts the popovers above later sections. */
 .hero { position: relative; z-index: 5; color: #fff; background: var(--hero-grad); border-radius: 0 0 var(--r-2xl) var(--r-2xl); padding: var(--sp-12) 0 var(--sp-16); margin-top: calc(-1 * var(--sp-6)); overflow: visible; isolation: isolate; }
 .hero::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: url('/art/hero-waves.svg') center bottom / cover no-repeat; opacity: 0.55; pointer-events: none; }
-.hero h1 { color: #fff; font-size: clamp(2rem, 1.2rem + 3.2vw, var(--fs-5xl)); max-width: 16ch; }
+/* Phones get a smaller floor than the desktop curve would give (2rem never shrinks below 32px); the slope is set so
+   the two meet at 640px, so there is no jump at the breakpoint. */
+.hero h1 { color: #fff; font-size: clamp(1.75rem, 0.8rem + 4.2vw, var(--fs-5xl)); max-width: 16ch; }
 .hero p.lead { color: #d8e4f2; font-size: var(--fs-lg); max-width: 52ch; }
 .hero .eyebrow { color: var(--coral-300); }
 @media (min-width: 900px) { .hero { padding: var(--sp-20) 0 calc(var(--sp-20) + 24px); } }
@@ -859,7 +870,7 @@ body:has(.popover) .map-fab, body:has(.overlay) .map-fab { display: none; }
 .lightbox { position: fixed; inset: 0; z-index: var(--z-overlay); background: #050c16; display: grid; grid-template-rows: auto 1fr auto; color: #fff; animation: fade-in var(--dur) var(--ease); }
 .lightbox .lb-bar { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; }
 .lightbox .lb-stage { display: grid; place-items: center; min-height: 0; padding: 0 56px; position: relative; }
-.lightbox .lb-stage img { max-height: 78vh; max-width: 100%; object-fit: contain; border-radius: var(--r-md); }
+.lightbox .lb-stage img { max-height: 78vh; max-height: 78dvh; max-width: 100%; object-fit: contain; border-radius: var(--r-md); }
 .lightbox .lb-arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 48px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.08); color: #fff; font-size: 22px; cursor: pointer; display: grid; place-items: center; }
 .lightbox .lb-arrow:hover { background: rgba(255, 255, 255, 0.18); }
 .lightbox .lb-arrow.prev { left: 12px; }
@@ -872,7 +883,8 @@ body:has(.popover) .map-fab, body:has(.overlay) .map-fab { display: none; }
 
 /* Modal & bottom sheet */
 .overlay { position: fixed; inset: 0; z-index: var(--z-overlay); background: var(--overlay); display: grid; place-items: center; padding: 16px; animation: fade-in var(--dur) var(--ease); }
-.modal { width: min(560px, 100%); max-height: min(86vh, 900px); overflow: auto; background: var(--surface); color: var(--text); border-radius: var(--r-xl); box-shadow: var(--e4); animation: modal-in var(--dur) var(--ease-out); display: flex; flex-direction: column; }
+/* dvh (with a vh fallback) so a dialog never grows past the visible area while a phone browser's URL bar is shown. */
+.modal { width: min(560px, 100%); max-height: min(86vh, 900px); max-height: min(86dvh, 900px); overflow: auto; background: var(--surface); color: var(--text); border-radius: var(--r-xl); box-shadow: var(--e4); animation: modal-in var(--dur) var(--ease-out); display: flex; flex-direction: column; }
 .modal.wide { width: min(880px, 100%); }
 .modal-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 1; }
 .modal-head h2 { margin: 0; font-size: var(--fs-lg); }
@@ -881,7 +893,7 @@ body:has(.popover) .map-fab, body:has(.overlay) .map-fab { display: none; }
 @keyframes modal-in { from { opacity: 0; transform: translateY(16px) scale(0.98); } to { opacity: 1; transform: none; } }
 @media (max-width: 639px) {
   .overlay.sheet-mobile { place-items: end stretch; padding: 0; }
-  .overlay.sheet-mobile .modal { width: 100%; max-height: 92vh; border-radius: var(--r-xl) var(--r-xl) 0 0; animation: sheet-in var(--dur-slow) var(--ease-out); padding-bottom: env(safe-area-inset-bottom); }
+  .overlay.sheet-mobile .modal { width: 100%; max-height: 92vh; max-height: 92dvh; border-radius: var(--r-xl) var(--r-xl) 0 0; animation: sheet-in var(--dur-slow) var(--ease-out); padding-bottom: env(safe-area-inset-bottom); }
   .overlay.sheet-mobile .modal-head::before { content: ''; position: absolute; top: 6px; left: 50%; width: 40px; height: 4px; margin-left: -20px; border-radius: 4px; background: var(--border-strong); }
 }
 @keyframes sheet-in { from { transform: translateY(100%); } to { transform: none; } }
@@ -966,7 +978,7 @@ body:has(.mobile-action-bar) .toasts { bottom: calc(var(--bottom-nav-h) + 88px +
 /* Messages */
 .chat { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); min-height: 60vh; }
 @media (min-width: 900px) { .chat { grid-template-columns: 340px minmax(0, 1fr); } }
-.thread { display: flex; flex-direction: column; gap: 10px; height: min(62vh, 640px); overflow-y: auto; padding: var(--sp-4); background: var(--surface-2); border-radius: var(--r-xl); border: 1px solid var(--border); }
+.thread { display: flex; flex-direction: column; gap: 10px; height: min(62vh, 640px); height: min(62dvh, 640px); overflow-y: auto; padding: var(--sp-4); background: var(--surface-2); border-radius: var(--r-xl); border: 1px solid var(--border); }
 .bubble { max-width: 78%; padding: 10px 14px; border-radius: 18px 18px 18px 6px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--e1); animation: toast-in var(--dur) var(--ease-out); }
 .bubble.me { align-self: flex-end; background: var(--brand); color: var(--brand-ink); border-color: transparent; border-radius: 18px 18px 6px 18px; }
 .conv { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: var(--r-lg); text-decoration: none; color: inherit; border: 1px solid transparent; transition: background var(--dur-fast); }
@@ -1088,6 +1100,8 @@ dl.kv dd { margin: 0; font-weight: 600; min-width: 0; }
 .admin-side .side-nav .group { color: var(--admin-side-muted); }
 @media (max-width: 1023px) { .admin-side .side-nav { -webkit-mask-image: none; mask-image: none; padding-inline: 0; margin-inline: 0; } }
 .admin-side .brand { font-weight: 900; letter-spacing: 0.14em; font-size: var(--fs-sm); padding: 4px 12px 12px; display: flex; gap: 8px; align-items: center; }
+/* The admin rail is navy in both themes, so it always wants the light-on-dark logo variant. */
+.admin-side .brand .logo { display: block; height: 22px; aspect-ratio: 480 / 140; background: left center / contain no-repeat url('/brand/jetpool-wordmark-dark.png'); }
 
 /* Postcard art fallback */
 .postcard { width: 100%; height: 100%; object-fit: cover; }
@@ -1102,11 +1116,11 @@ dl.kv dd { margin: 0; font-weight: 600; min-width: 0; }
 .trust-item .ico { width: 44px; height: 44px; border-radius: var(--r-md); display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); font-size: 20px; flex: 0 0 auto; }
 .amenity-list { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); list-style: none; padding: 0; margin: 0; }
 .amenity-list li { display: flex; gap: 10px; align-items: center; }
-@media (max-width: 1099px) { .split.with-map > :first-child { display: none; } .split.with-map .map-col .map { height: 70vh; } }
+@media (max-width: 1099px) { .split.with-map > :first-child { display: none; } .split.with-map .map-col .map { height: 70vh; height: 70dvh; } }
 
 /* Responsive polish */
 .wordmark { white-space: nowrap; flex: 0 0 auto; }
-@media (max-width: 479px) { .wordmark { letter-spacing: 0.08em; font-size: 1.02rem; } .site-header .bar { gap: 6px; } }
+@media (max-width: 479px) { .wordmark .logo { height: 25px; } .wordmark.lockup .logo { height: 44px; } .site-header .bar { gap: 6px; } }
 .seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 .seg::-webkit-scrollbar { display: none; }
 .seg button { white-space: nowrap; flex: 0 0 auto; }
@@ -1116,3 +1130,66 @@ dl.kv dd { margin: 0; font-weight: 600; min-width: 0; }
 .stat .val { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: clamp(1.4rem, 1rem + 1vw, var(--fs-3xl)); }
 .stat.card.link { display: grid; align-content: start; }
 .swap .home .art { aspect-ratio: 5 / 2; }
+
+/* =====================================================================
+   Phone tuning
+   Last block in the file on purpose: these rules re-state desktop values at phone widths, so they must win on
+   source order (same specificity). Desktop (≥640px) is untouched.
+   - boxes: chrome (card/dialog/footer/hero padding) shrinks so the content column gets the width back;
+   - text: the display sizes step down one notch — body stays 16px (smaller would hurt Korean and make iOS zoom
+     on focused inputs);
+   - targets: everything tappable is ≥40px on a coarse pointer.
+   ===================================================================== */
+@media (max-width: 639px) {
+  /* A shorter bar also shortens every sticky offset and scroll-padding derived from the token. */
+  :root { --header-h: 60px; }
+
+  main { padding: var(--sp-4) 0 var(--sp-12); min-height: 60dvh; }
+  .section { margin-top: var(--sp-8); }
+  .page-head { margin-bottom: var(--sp-5); }
+  .stack-lg > * + * { margin-top: var(--sp-5); }
+  .grid { gap: var(--sp-5) var(--sp-4); }
+
+  /* .listing-card keeps padding:0 — its media is flush to the card edge. */
+  .card:not(.listing-card) { padding: var(--sp-4); }
+  .booking-card { padding: var(--sp-5); border-radius: var(--r-lg); }
+  .gcard { padding: var(--sp-4); gap: 12px; }
+  .gcard .cover { margin: calc(-1 * var(--sp-4)) calc(-1 * var(--sp-4)) 0; height: 72px; }
+  fieldset { padding: var(--sp-4); }
+  .popover { padding: var(--sp-3); border-radius: var(--r-lg); }
+  .thread { padding: var(--sp-3); }
+  .modal-head { padding: 14px var(--sp-4); }
+  .modal-body { padding: var(--sp-4); }
+  .modal-foot { padding: 12px var(--sp-4); }
+  .state { padding: var(--sp-8) var(--sp-4); border-radius: var(--r-lg); }
+  .state .illo { width: 112px; height: 88px; margin-bottom: var(--sp-3); }
+  .site-footer { padding: var(--sp-8) 0 var(--sp-6); }
+  .hero { padding: var(--sp-8) 0 var(--sp-10); border-radius: 0 0 var(--r-xl) var(--r-xl); }
+  .hero p.lead { font-size: var(--fs-base); }
+  /* 110px of label column out of a 288px row left too little for the value. */
+  dl.kv { grid-template-columns: minmax(84px, max-content) minmax(0, 1fr); gap: 8px 14px; }
+  /* Side arrows overlay the photo instead of stealing 112px of stage width. */
+  .lightbox .lb-stage { padding: 0 8px; }
+  .lightbox .lb-arrow { width: 40px; height: 40px; font-size: 18px; }
+  .lightbox .lb-thumbs { padding: 8px 12px 14px; }
+  /* Landscape notch: the bottom inset is already handled by the fixed bars. */
+  .container { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+}
+
+/* Display sizes only (--fs-xl and below are body copy and stay put). */
+@media (max-width: 479px) {
+  :root { --fs-2xl: 1.375rem; --fs-3xl: 1.5rem; --fs-4xl: 1.75rem; --fs-5xl: 2.125rem; }
+  .btn { padding: 0 14px; }
+  .btn.lg { min-height: 50px; padding: 0 18px; }
+}
+
+/* Touch: a 34–36px control is a miss on a thumb, and double-tap-to-zoom delays every tap by ~300ms. */
+@media (pointer: coarse) {
+  .btn.sm { min-height: 40px; }
+  .btn.icon.sm { width: 40px; }
+  .chip { min-height: 40px; }
+  .qty button { width: 40px; height: 40px; }
+  a, button, [role='button'], summary, label, .search-slot { touch-action: manipulation; }
+  /* Only on controls that already draw a pressed/selected state — list rows keep the flash as their only feedback. */
+  .btn, .chip, .seg button, .tabs button, .tabs a, .bottom-nav a, .qty button, .heart, .search-slot { -webkit-tap-highlight-color: transparent; }
+}

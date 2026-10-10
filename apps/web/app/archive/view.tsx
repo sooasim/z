@@ -12,6 +12,7 @@ import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { useUrlSync } from '@/components/public/hooks';
 import { LEGACY_PAGES, Masonry, legacyPageKey, legacyPageLabel, legacyPageRoute, type MasonryItem } from '@/components/media';
 import s from '@/components/media/media.module.css';
+import { pickText } from '@/lib/phrases';
 
 type Group = 'brand' | 'service' | 'letter' | 'tour' | 'site';
 const GROUPS: Array<{ id: Group; ko: string; en: string }> = [
@@ -133,7 +134,7 @@ export default function ArchiveView() {
         </button>
         {GROUPS.filter((g) => groupCounts.get(g.id)).map((g) => (
           <button key={g.id} type="button" className="chip" aria-pressed={group === g.id} onClick={() => (setGroup(group === g.id ? '' : g.id), setPage(''))}>
-            {g[lang]} <span className={s.n}>{groupCounts.get(g.id)}</span>
+            {pickText(g, lang)} <span className={s.n}>{groupCounts.get(g.id)}</span>
           </button>
         ))}
       </div>

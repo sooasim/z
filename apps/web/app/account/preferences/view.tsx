@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useI18n } from '@/lib/i18n';
+import { LANGS } from '@/lib/langs';
 import { useApi } from '@/lib/hooks';
 import { api } from '@/lib/api';
 import { item, str, f } from '@/lib/shape';
@@ -9,6 +10,7 @@ import { StateView } from '@/components/states';
 import { Button, ErrorText, PageHeader, Select } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 import { ChipsInput, Switch, styles as s } from '@/components/traveler/ui';
+import { pickPair } from '@/lib/phrases';
 
 const STYLES: Record<string, [string, string]> = {
   'month-stay': ['한달살기', 'Month-long stays'],
@@ -53,7 +55,7 @@ function Form({ p, onSaved }: { p: any; onSaved: (x: any) => void }) {
   const [marketing, setMarketing] = useState(f(p, 'marketingOptIn') === true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<unknown>(null);
-  const label = (map: Record<string, [string, string]>) => (v: string) => map[v]?.[lang === 'ko' ? 0 : 1] ?? v;
+  const label = (map: Record<string, [string, string]>) => (v: string) => pickPair(map[v], lang) ?? v;
   return (
     <form
       className="stack-lg"
@@ -113,7 +115,7 @@ function Form({ p, onSaved }: { p: any; onSaved: (x: any) => void }) {
 }
 
 export default function PreferencesView() {
-  const { L, lang, setLang } = useI18n();
+  const { L, lang, setLang, auto, t } = useI18n();
   const st = useApi<any>('/v1/me/preferences', { auth: true });
   return (
     <RequireAuth>
@@ -124,11 +126,13 @@ export default function PreferencesView() {
           <p className="xs muted" style={{ margin: '2px 0 0' }}>{L('이 기기에만 적용돼요.', 'Applies to this device.')}</p>
         </div>
         <div className="chip-group" role="group" aria-label={L('화면 언어', 'Display language')}>
-          <button type="button" className="chip" aria-pressed={lang === 'ko'} onClick={() => setLang('ko')} lang="ko">
-            한국어
-          </button>
-          <button type="button" className="chip" aria-pressed={lang === 'en'} onClick={() => setLang('en')} lang="en">
-            English
+          {LANGS.map((l) => (
+            <button key={l.code} type="button" className="chip" aria-pressed={!auto && lang === l.code} onClick={() => setLang(l.code)} lang={l.locale} title={l.english}>
+              {l.endonym}
+            </button>
+          ))}
+          <button type="button" className="chip" aria-pressed={auto} onClick={() => setLang(null)}>
+            {t('lang.auto')}
           </button>
         </div>
       </section>

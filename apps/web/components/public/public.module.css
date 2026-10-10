@@ -18,6 +18,7 @@
 
 /* ——— Home: hero ——— */
 .hero { padding-bottom: var(--sp-12) !important; }
+@media (max-width: 639px) { .hero { padding-bottom: var(--sp-10) !important; } }
 @media (min-width: 900px) { .hero { padding-bottom: var(--sp-16) !important; } }
 .heroGrid { display: grid; gap: var(--sp-6); align-items: center; }
 @media (min-width: 1100px) { .heroGrid { grid-template-columns: minmax(0, 1fr) 360px; } }
@@ -49,6 +50,7 @@
 @media (min-width: 640px) { .shortGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 1024px) { .shortGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); } .shortGrid > .promo { grid-column: span 2; } }
 .promo { display: grid; align-content: center; justify-items: start; gap: var(--sp-3); padding: var(--sp-6); border-radius: var(--r-xl); background: var(--surface-2); border: 1px dashed var(--border-strong); min-height: 220px; }
+@media (max-width: 639px) { .promo { padding: var(--sp-5); min-height: 0; } }
 .promo h3 { margin: 0; font-size: var(--fs-xl); }
 .promo p { margin: 0; color: var(--text-muted); max-width: 46ch; }
 .promo .ico { width: 48px; height: 48px; border-radius: var(--r-md); display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); }
@@ -111,6 +113,8 @@
 .md blockquote { margin: 0 0 var(--sp-4); padding: var(--sp-3) var(--sp-4); border-left: 4px solid var(--accent-deco); background: var(--surface-2); border-radius: 0 var(--r-md) var(--r-md) 0; color: var(--text-muted); }
 .md.compact { font-size: var(--fs-base); line-height: 1.7; }
 .md.compact h2 { font-size: var(--fs-xl); margin-top: var(--sp-5); }
+/* Phones: 18px/1.8 leaves ~16 Korean characters per line — 16px/1.75 reads better. */
+@media (max-width: 479px) { .md { font-size: var(--fs-base); line-height: 1.75; } .md h2 { margin-top: var(--sp-6); } }
 
 /* Assistant */
 .thread { min-height: 300px; }
@@ -132,6 +136,7 @@
 
 /* Teaser (anonymous value-prop panel) */
 .teaser { display: grid; gap: var(--sp-6); padding: var(--sp-8); border-radius: var(--r-xl); background: var(--surface-2); border: 1px solid var(--border); }
+@media (max-width: 639px) { .teaser { padding: var(--sp-5); gap: var(--sp-5); border-radius: var(--r-lg); } }
 @media (min-width: 900px) { .teaser { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: center; } }
 .teaser h2 { margin: 0 0 var(--sp-2); }
 .benefits { list-style: none; padding: 0; margin: var(--sp-4) 0 0; display: grid; gap: var(--sp-3); }

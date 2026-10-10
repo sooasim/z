@@ -9,6 +9,7 @@ import { presignedUpload } from '@/lib/media';
 import { RequireAuth } from '@/components/gate';
 import { ResourceTable } from '@/components/table';
 import { Alert, ErrorText, PageHeader, Section, StatusPill, Button } from '@/components/ui';
+import { pickText } from '@/lib/phrases';
 
 const PERMIT_TYPES = [
   { value: 'TOURIST_LODGING', ko: '외국인관광 도시민박업', en: 'Urban homestay for foreign tourists' },
@@ -79,7 +80,7 @@ export default function ListingComplianceView() {
           }}
         >
           <div className="form-grid cols-2">
-            <label className="field"><span>{L('인허가 유형', 'Permit type')}</span><select value={type} onChange={(e) => setType(e.target.value)}>{PERMIT_TYPES.map((p) => <option key={p.value} value={p.value}>{p[lang]}</option>)}</select></label>
+            <label className="field"><span>{L('인허가 유형', 'Permit type')}</span><select value={type} onChange={(e) => setType(e.target.value)}>{PERMIT_TYPES.map((p) => <option key={p.value} value={p.value}>{pickText(p, lang)}</option>)}</select></label>
             <label className="field"><span>{L('신고/허가 번호', 'Permit number')}</span><input value={number} onChange={(e) => setNumber(e.target.value)} required /></label>
             <label className="field"><span>{L('관할 (예: KR, KR-49)', 'Jurisdiction (e.g. KR, KR-49)')}</span><input value={jurisdiction} onChange={(e) => setJurisdiction(e.target.value)} pattern="(\*|[A-Za-z]{2}(-[A-Za-z0-9]{1,3})?)" /></label>
             <label className="field"><span>{L('만료일', 'Expiry date')}</span><input type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} /></label>

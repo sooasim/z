@@ -15,13 +15,14 @@ import { Avatar, Button, ChipGroup, ErrorText, Input, PageHeader, Select } from 
 import { useToast } from '@/components/ui/toast';
 import { useCachedApi } from '@/components/traveler/hooks';
 import { styles as s } from '@/components/traveler/ui';
+import type { Lang } from '@/lib/format';
 
 const COUNTRIES = ['KR', 'JP', 'CN', 'TW', 'HK', 'SG', 'TH', 'VN', 'PH', 'ID', 'MY', 'US', 'CA', 'AU', 'NZ', 'GB', 'FR', 'DE', 'ES', 'IT', 'PT', 'NL'];
 const TIMEZONES = ['Asia/Seoul', 'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Taipei', 'Asia/Hong_Kong', 'Asia/Singapore', 'Asia/Bangkok', 'Asia/Ho_Chi_Minh', 'Asia/Jakarta', 'Asia/Manila', 'Australia/Sydney', 'Pacific/Auckland', 'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Lisbon', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Pacific/Honolulu', 'UTC'];
 const LANGS = ['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'it', 'pt', 'th', 'vi', 'id', 'ru'];
 const BIO_MAX = 500;
 
-function tzLabel(tz: string, lang: 'ko' | 'en'): string {
+function tzLabel(tz: string, lang: Lang): string {
   try {
     const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'shortOffset' }).formatToParts(new Date());
     const off = parts.find((p) => p.type === 'timeZoneName')?.value ?? '';

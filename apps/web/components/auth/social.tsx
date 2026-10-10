@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { ApiError, errorMessage, problemFromResponse } from '@/lib/errors';
 import { getAccessToken } from '@/lib/token';
+import { pickText } from '@/lib/phrases';
 
 /**
  * Provider buttons per each brand's login-button guideline:
@@ -99,7 +100,7 @@ export function SocialButtons({ next, consents, disabled }: { next?: string; con
           <span aria-hidden="true" style={{ width: 22, display: 'inline-grid', placeItems: 'center', position: 'absolute', left: 18 }}>
             <ProviderMark id={p.id} />
           </span>
-          {p[lang]}
+          {pickText(p, lang)}
         </button>
       ))}
       {err ? <p role="alert" className="small" style={{ color: 'var(--danger)', margin: 0 }}>{errorMessage(err, lang)}</p> : null}

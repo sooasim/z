@@ -1,4 +1,21 @@
-export type Lang = 'ko' | 'en';
+export type Lang = 'ko' | 'en' | 'ja' | 'zh' | 'vi';
+
+/** BCP-47 tag per UI language. Kept here (not in lib/langs.ts) so the formatters have no import cycle. */
+const LOCALE: Record<Lang, string> = { ko: 'ko-KR', en: 'en-US', ja: 'ja-JP', zh: 'zh-CN', vi: 'vi-VN' };
+
+/** The `Intl` locale for a UI language. */
+export const intlLocale = (lang: Lang = 'ko'): string => LOCALE[lang] ?? LOCALE.ko;
+
+/** Languages that write dates as `11月10日` and need no separator before a time. */
+const CJK: ReadonlySet<Lang> = new Set<Lang>(['ko', 'ja', 'zh']);
+
+/** "3박" / "3 nights" / "3泊" / "3晚" / "3 đêm". */
+export const nightsText = (n: number, lang: Lang): string =>
+  lang === 'ko' ? `${n}박`
+  : lang === 'ja' ? `${n}泊`
+  : lang === 'zh' ? `${n}晚`
+  : lang === 'vi' ? `${n} đêm`
+  : `${n} night${n === 1 ? '' : 's'}`;
 
 /** Minor-unit exponent per ISO-4217 (KRW/JPY have 0 decimals). */
 export function currencyExponent(currency: string): number {
@@ -20,7 +37,7 @@ export function formatMoney(minor: number | string | bigint | null | undefined, 
     if (!Number.isFinite(n)) return '—';
     major = exp === 0 ? n : n / 10 ** exp;
   }
-  return new Intl.NumberFormat(lang === 'ko' ? 'ko-KR' : 'en-US', {
+  return new Intl.NumberFormat(intlLocale(lang), {
     style: 'currency',
     currency: cur,
     minimumFractionDigits: exp,
@@ -100,7 +117,7 @@ export function formatDate(s: string | Date | null | undefined, lang: Lang = 'ko
   if (!s) return '—';
   const d = typeof s === 'string' ? (s.length === 10 ? parseIsoDate(s) : new Date(s)) : s;
   if (!d || Number.isNaN(d.getTime())) return String(s);
-  return new Intl.DateTimeFormat(lang === 'ko' ? 'ko-KR' : 'en-US', {
+  return new Intl.DateTimeFormat(intlLocale(lang), {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -113,7 +130,7 @@ export function formatDateLong(s: string | Date | null | undefined, lang: Lang =
   if (!s) return '—';
   const d = typeof s === 'string' ? (s.length === 10 ? parseIsoDate(s) : new Date(s)) : s;
   if (!d || Number.isNaN(d.getTime())) return String(s);
-  return new Intl.DateTimeFormat(lang === 'ko' ? 'ko-KR' : 'en-US', { dateStyle: 'full' }).format(d);
+  return new Intl.DateTimeFormat(intlLocale(lang), { dateStyle: 'full' }).format(d);
 }
 
 function toDate(s: string | Date | null | undefined): Date | null {
@@ -141,14 +158,15 @@ export function formatRange(start: string, end: string, lang: Lang = 'ko', opts:
     const right = sameM ? `${b.getDate()}일` : sameY ? `${b.getMonth() + 1}월 ${b.getDate()}일` : `${y(b)}${b.getMonth() + 1}월 ${b.getDate()}일`;
     out = `${left} – ${right}`;
   } else {
-    const md = (d: Date) => new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(d);
+    // `Intl` already writes 11月10日 for ja/zh and "10 thg 11" for vi, so one branch covers every non-ko language.
+    const md = (d: Date) => new Intl.DateTimeFormat(intlLocale(lang), { month: 'short', day: 'numeric' }).format(d);
     if (sameM) out = `${md(a)} – ${b.getDate()}${showYear ? `, ${b.getFullYear()}` : ''}`;
     else if (sameY) out = `${md(a)} – ${md(b)}${showYear ? `, ${b.getFullYear()}` : ''}`;
     else out = `${md(a)}, ${a.getFullYear()} – ${md(b)}, ${b.getFullYear()}`;
   }
   if (opts.nights) {
     const n = nightsBetween(String(start).slice(0, 10), String(end).slice(0, 10));
-    if (n > 0) out += lang === 'ko' ? ` · ${n}박` : ` · ${n} night${n === 1 ? '' : 's'}`;
+    if (n > 0) out += ` · ${nightsText(n, lang)}`;
   }
   return out;
 }
@@ -161,13 +179,13 @@ export function formatTimeRange(start: string | Date | null | undefined, end: st
   const a = toDate(start);
   const b = toDate(end);
   if (!a) return '—';
-  const loc = lang === 'ko' ? 'ko-KR' : 'en-US';
+  const loc = intlLocale(lang);
   const time = (d: Date) => new Intl.DateTimeFormat(loc, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(d);
   const day = (d: Date) =>
     lang === 'ko'
       ? `${d.getMonth() + 1}월 ${d.getDate()}일 (${new Intl.DateTimeFormat('ko-KR', { weekday: 'short' }).format(d)})`
-      : new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(d);
-  const sep = lang === 'ko' ? ' ' : ' · ';
+      : new Intl.DateTimeFormat(loc, { weekday: 'short', month: 'short', day: 'numeric' }).format(d);
+  const sep = CJK.has(lang) ? ' ' : ' · ';
   if (!b) return `${day(a)}${sep}${time(a)}`;
   if (isoDate(a) === isoDate(b)) return `${day(a)}${sep}${time(a)}–${time(b)}`;
   return `${day(a)}${sep}${time(a)} – ${day(b)}${sep}${time(b)}`;
@@ -210,7 +228,7 @@ export function formatMoneyCompact(minor: number | string | null | undefined, cu
   const n = Number(minor) / 10 ** currencyExponent(currency);
   if (!Number.isFinite(n)) return '—';
   if (Math.abs(n) < 100000) return formatMoney(minor, currency, lang);
-  return new Intl.NumberFormat(lang === 'ko' ? 'ko-KR' : 'en-US', { style: 'currency', currency: currency.toUpperCase(), notation: 'compact', maximumFractionDigits: 1 }).format(n);
+  return new Intl.NumberFormat(intlLocale(lang), { style: 'currency', currency: currency.toUpperCase(), notation: 'compact', maximumFractionDigits: 1 }).format(n);
 }
 
 /** Very short price for calendar cells: "18만" / "18.5만" (ko), "₩180K" (en); other currencies use compact notation. */
@@ -219,9 +237,11 @@ export function formatPriceShort(minor: number | string | null | undefined, curr
   const n = Number(minor) / 10 ** currencyExponent(currency);
   if (!Number.isFinite(n)) return '';
   if ((currency || 'KRW').toUpperCase() === 'KRW') {
-    if (lang === 'ko' && n >= 10000) return `${Math.round(n / 1000) / 10}만`;
-    if (lang !== 'ko' && n >= 1000) return `₩${Math.round(n / 100) / 10}K`;
+    // ko/ja/zh group by 10,000 (만/万); en/vi read thousands.
+    const myriad = lang === 'ko' ? '만' : lang === 'ja' || lang === 'zh' ? '万' : '';
+    if (myriad && n >= 10000) return `${Math.round(n / 1000) / 10}${myriad}`;
+    if (!myriad && n >= 1000) return `₩${Math.round(n / 100) / 10}K`;
     return formatMoney(minor, currency, lang);
   }
-  return new Intl.NumberFormat(lang === 'ko' ? 'ko-KR' : 'en-US', { style: 'currency', currency: currency.toUpperCase(), notation: 'compact', maximumFractionDigits: 1 }).format(n);
+  return new Intl.NumberFormat(intlLocale(lang), { style: 'currency', currency: currency.toUpperCase(), notation: 'compact', maximumFractionDigits: 1 }).format(n);
 }

@@ -6,6 +6,7 @@ import { arr, f, item, num, str } from '@/lib/shape';
 import { formatMoneyCompact } from '@/lib/format';
 import { StateView } from '@/components/states';
 import { BarChart, PageHeader, Section, StatCard, Tabs } from '@/components/ui';
+import { pickPair } from '@/lib/phrases';
 
 export default function AdminAnalyticsView() {
   const { L, lang } = useI18n();
@@ -22,7 +23,7 @@ export default function AdminAnalyticsView() {
         <StateView state={funnel} skeleton="table">
           {(d) => {
             const fu = item(d) ?? {};
-            const steps = arr<any>(fu, 'steps').map((s: any) => ({ label: STEP[str(s, 'step')]?.[lang === 'ko' ? 0 : 1] ?? str(s, 'step'), value: num(s, 'count') ?? 0, conv: num(s, 'conversionFromPrevious') }));
+            const steps = arr<any>(fu, 'steps').map((s: any) => ({ label: pickPair(STEP[str(s, 'step')], lang) ?? str(s, 'step'), value: num(s, 'count') ?? 0, conv: num(s, 'conversionFromPrevious') }));
             return (
               <div className="card stack">
                 {steps.length ? <BarChart data={steps} label={L('예약 전환 퍼널', 'Booking funnel')} /> : <p className="muted">{L('데이터 없음', 'No data')}</p>}

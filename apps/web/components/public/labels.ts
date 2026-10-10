@@ -6,7 +6,8 @@ import { enumLabel, knownEnumLabel } from '@/lib/enums';
 import { countryLabel, placeLabel } from '@/lib/places';
 import { arr, f, num, str } from '@/lib/shape';
 
-type Lang = 'ko' | 'en';
+import type { Lang } from '@/lib/format';
+import { pickText, pickPair } from '@/lib/phrases';
 type Pair = readonly [string, string];
 
 export const PROPERTY_TYPES: Array<{ value: string; ko: string; en: string }> = [
@@ -21,7 +22,7 @@ export const PROPERTY_TYPES: Array<{ value: string; ko: string; en: string }> = 
 export function propertyTypeLabel(code: string | null | undefined, lang: Lang): string {
   if (!code) return '';
   const t = PROPERTY_TYPES.find((x) => x.value === code.toUpperCase());
-  return t ? t[lang] : knownEnumLabel(code.toUpperCase(), lang) ?? enumLabel(code, lang);
+  return t ? pickText(t, lang) : knownEnumLabel(code.toUpperCase(), lang) ?? enumLabel(code, lang);
 }
 
 const INTERESTS: Record<string, Pair> = {
@@ -65,7 +66,7 @@ const INTERESTS: Record<string, Pair> = {
 export function interestLabel(v: string, lang: Lang): string {
   const k = String(v ?? '').trim();
   const p = INTERESTS[k.toLowerCase()];
-  return p ? p[lang === 'ko' ? 0 : 1] : k;
+  return pickPair(p, lang) ?? k;
 }
 
 const KINDS: Record<string, Pair> = {
@@ -78,7 +79,7 @@ const KINDS: Record<string, Pair> = {
 };
 export function productKindLabel(kind: string, lang: Lang): string {
   const p = KINDS[(kind || '').toUpperCase()];
-  return p ? p[lang === 'ko' ? 0 : 1] : enumLabel(kind, lang);
+  return pickPair(p, lang) ?? enumLabel(kind, lang);
 }
 
 function hoursText(h: number, lang: Lang): string {

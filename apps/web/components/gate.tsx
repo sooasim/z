@@ -6,6 +6,7 @@ import { useI18n } from '@/lib/i18n';
 import { LoginLink } from './states';
 import { ListSkeleton } from './ui/skeleton';
 import { Illustration } from './ui/illustrations';
+import { pickPair } from '@/lib/phrases';
 
 const ROLE_LABEL: Record<string, [string, string]> = {
   HOST: ['호스트', 'Host'],
@@ -47,7 +48,7 @@ export function RequireAuth({ roles, children, staff }: { roles?: string[]; staf
     );
   if ((staff && !isStaff) || (roles && roles.length && !hasRole(...roles, 'ADMIN'))) {
     const needed = staff ? ['STAFF'] : roles ?? [];
-    const names = needed.map((r) => ROLE_LABEL[r]?.[lang === 'ko' ? 0 : 1] ?? r).join(lang === 'ko' ? ' 또는 ' : ' or ');
+    const names = needed.map((r) => pickPair(ROLE_LABEL[r], lang) ?? r).join(lang === 'ko' ? ' 또는 ' : ' or ');
     const ctas = needed.map((r) => ROLE_CTA[r]).filter(Boolean);
     return (
       <div className="state" role="alert">

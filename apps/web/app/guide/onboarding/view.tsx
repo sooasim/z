@@ -12,6 +12,7 @@ import { FormCard } from '@/components/form';
 import { Alert, ErrorText, PageHeader, Section, StatusBadge } from '@/components/ui';
 import { presignedUpload } from '@/lib/media';
 import { ApiError } from '@/lib/errors';
+import { pickText } from '@/lib/phrases';
 
 function PublishButton({ onDone }: { onDone: () => void }) {
   const { L } = useI18n();
@@ -93,7 +94,7 @@ export default function GuideOnboardingView() {
                 <div className="grid">
                   {GUIDE_TYPES.map((t) => (
                     <button key={t} type="button" className="card" aria-pressed={current === t} onClick={() => setType(t)} style={{ textAlign: 'left', cursor: 'pointer', outline: current === t ? '2px solid var(--c-primary)' : undefined }}>
-                      <strong>{GUIDE_TYPE_LABEL[t][lang]}</strong>
+                      <strong>{pickText(GUIDE_TYPE_LABEL[t], lang)}</strong>
                       <p className="small muted" style={{ margin: '4px 0 0' }}>
                         {t === 'FRIEND' && L('여행자와 동네를 함께 걷는 무료 교류', 'Free local meetups')}
                         {t === 'VOLUNTEER' && L('봉사 목적의 무료 안내', 'Volunteer guidance')}

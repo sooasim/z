@@ -2,6 +2,8 @@
 import type { ReactNode } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { enumLabel, humanizeEnum } from '@/lib/enums';
+import { translate } from '@/lib/phrases';
+import type { Lang } from '@/lib/format';
 
 import { STATES, type Tone } from '@/lib/statuses';
 
@@ -13,13 +15,13 @@ export function statusTone(status: string): Tone {
 }
 
 /** Localized label for a status value (falls back to a humanized enum, never the raw SNAKE_CASE). */
-export function statusLabel(status: string | null | undefined, lang: 'ko' | 'en' = 'ko', labels?: Record<string, string | [string, string]>): string {
+export function statusLabel(status: string | null | undefined, lang: Lang = 'ko', labels?: Record<string, string | [string, string]>): string {
   if (!status) return '—';
   const s = String(status).toUpperCase();
   const o = labels?.[s] ?? labels?.[String(status)];
-  if (o) return Array.isArray(o) ? o[lang === 'ko' ? 0 : 1] : o;
+  if (o) return Array.isArray(o) ? (lang === 'ko' ? o[0] : translate(o[1], lang)) : o;
   const def = STATES[s];
-  return def ? (lang === 'ko' ? def[1] : def[2]) : humanizeEnum(s, lang);
+  return def ? (lang === 'ko' ? def[1] : translate(def[2], lang)) : humanizeEnum(s, lang);
 }
 
 /**
@@ -27,10 +29,10 @@ export function statusLabel(status: string | null | undefined, lang: 'ko' | 'en'
  * guide side. An empty status renders a muted dash (no pill).
  */
 export function StatusPill({ status, live, labels, tone }: { status: string | undefined | null; live?: boolean; labels?: Record<string, string | [string, string]>; tone?: Tone }) {
-  const { lang } = useI18n();
+  const { lang, L } = useI18n();
   if (!status)
     return (
-      <span className="pill-empty" aria-label={lang === 'ko' ? '상태 없음' : 'No status'}>
+      <span className="pill-empty" aria-label={L('상태 없음', 'No status')}>
         —
       </span>
     );

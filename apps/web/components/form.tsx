@@ -8,6 +8,7 @@ import { toMinor, currencyExponent } from '@/lib/format';
 import { fieldErrors } from '@/lib/errors';
 import { StateView } from './states';
 import { Alert, ErrorText, Icon } from './ui';
+import type { Lang } from '@/lib/format';
 
 export interface FieldSpec {
   name: string;
@@ -29,7 +30,7 @@ export interface FieldSpec {
 
 const CURRENCY_SIGN: Record<string, string> = { KRW: '₩', USD: '$', JPY: '¥', EUR: '€', GBP: '£' };
 
-function groupDigits(v: string, lang: 'ko' | 'en' = 'ko'): string {
+function groupDigits(v: string, lang: Lang = 'ko'): string {
   const raw = String(v ?? '').replace(/[^\d]/g, '');
   if (!raw) return '';
   return Number(raw).toLocaleString(lang === 'ko' ? 'ko-KR' : 'en-US');
@@ -66,7 +67,7 @@ export function fromFormValue(v: any, fs: FieldSpec): any {
 }
 
 /** Client-side checks the browser can't express (money/number digits, ranges, JSON). Returns field → message. */
-export function validateFields(fields: FieldSpec[], values: Record<string, any>, lang: 'ko' | 'en' = 'ko'): Record<string, string> {
+export function validateFields(fields: FieldSpec[], values: Record<string, any>, lang: Lang = 'ko'): Record<string, string> {
   const out: Record<string, string> = {};
   const L = (ko: string, en: string) => (lang === 'ko' ? ko : en);
   for (const fs of fields) {

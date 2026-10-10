@@ -2,6 +2,8 @@
 import { useI18n } from '@/lib/i18n';
 import type { QuoteView } from '@/lib/quote';
 import { DateText, PriceBreakdown } from './ui';
+import { pickText } from '@/lib/phrases';
+import { nightsText } from '@/lib/format';
 
 const LABELS: Record<string, { ko: string; en: string }> = {
   NIGHTLY: { ko: '숙박 요금', en: 'Nightly rate' },
@@ -22,7 +24,12 @@ export function QuoteBreakdown({ q }: { q: QuoteView }) {
     <PriceBreakdown
       currency={q.currency}
       totalMinor={q.totalMinor}
-      lines={q.lines.map((l) => ({ label: l.code?.toUpperCase() === 'NIGHTLY' && q.nights ? `${LABELS.NIGHTLY[lang]} · ${q.nights}${lang === 'ko' ? '박' : ' nights'}` : LABELS[l.code?.toUpperCase()]?.[lang] ?? l.label, amountMinor: l.amountMinor }))}
+      lines={q.lines.map((l) => {
+        const known = LABELS[l.code?.toUpperCase() ?? ''];
+        if (l.code?.toUpperCase() === 'NIGHTLY' && q.nights)
+          return { label: `${pickText(LABELS.NIGHTLY, lang)} · ${nightsText(q.nights, lang)}`, amountMinor: l.amountMinor };
+        return { label: known ? pickText(known, lang) : l.label, amountMinor: l.amountMinor };
+      })}
       footnote={q.expiresAt ? <>{L('견적 유효기간', 'Quote valid until')}: <DateText value={q.expiresAt} time /></> : undefined}
     />
   );

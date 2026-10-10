@@ -12,6 +12,7 @@ import { Alert, Button, ButtonLink, ChipGroup, DestinationInput, HeadingLevel, P
 import { DateField } from '@/components/public/DateField';
 import { useDebounced, useUrlSync } from '@/components/public/hooks';
 import s from '@/components/public/public.module.css';
+import { pickText } from '@/lib/phrases';
 
 export default function GuideFriendsView() {
   const { L, lang } = useI18n();
@@ -68,7 +69,7 @@ export default function GuideFriendsView() {
             ]}
           />
         </div>
-        <ChipGroup multi label={L('가이드 유형', 'Guide type')} value={types} onChange={setTypes} options={GUIDE_TYPES.map((t) => ({ value: t, label: GUIDE_TYPE_LABEL[t][lang] }))} />
+        <ChipGroup multi label={L('가이드 유형', 'Guide type')} value={types} onChange={setTypes} options={GUIDE_TYPES.map((t) => ({ value: t, label: pickText(GUIDE_TYPE_LABEL[t], lang) }))} />
         <p className="small muted" style={{ margin: 0 }}>{L('프렌드·자원봉사는 무료 교류이며 금전 거래가 금지돼요. 유료·전문 가이드는 자격 확인 후 JETPOOL에서 결제해요.', 'Friend/volunteer meetups are free (no payments allowed). Paid/pro guides are verified and paid via JETPOOL.')}</p>
       </div>
       <div style={{ marginTop: 16 }}>

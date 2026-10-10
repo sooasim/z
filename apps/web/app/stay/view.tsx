@@ -15,6 +15,7 @@ import { StateView, EmptyState } from '@/components/states';
 import { ChipGroup, Modal, Icon, Button, amenityIcon } from '@/components/ui';
 import { PROPERTY_TYPES } from '@/components/public/labels';
 import s from '@/components/public/public.module.css';
+import { pickText } from '@/lib/phrases';
 
 const AMENITIES = [
   { value: 'WIFI', ko: '와이파이', en: 'Wi-Fi' },
@@ -115,7 +116,7 @@ export default function StaySearchView({ mapOnly = false }: { mapOnly?: boolean 
             <button className="chip" aria-pressed={exchangeOnly} onClick={() => setExchangeOnly(!exchangeOnly)}><Icon name="swap" size={16} /> {L('맞교환 가능', 'Exchange')}</button>
             {AMENITIES.slice(0, 5).map((a) => (
               <button key={a.value} className="chip" aria-pressed={amen.includes(a.value)} onClick={() => setAmen(amen.includes(a.value) ? amen.filter((x) => x !== a.value) : [...amen, a.value])}>
-                <Icon name={amenityIcon(a.value)} size={16} /> {a[lang]}
+                <Icon name={amenityIcon(a.value)} size={16} /> {pickText(a, lang)}
               </button>
             ))}
             <label className="sr-only" htmlFor="sort">{L('정렬', 'Sort')}</label>
@@ -229,11 +230,11 @@ export default function StaySearchView({ mapOnly = false }: { mapOnly?: boolean 
           </fieldset>
           <div className="stack">
             <h3>{L('숙소 유형', 'Property type')}</h3>
-            <ChipGroup multi label={L('숙소 유형', 'Property type')} value={types} onChange={setTypes} options={PROPERTY_TYPES.map((t) => ({ value: t.value, label: t[lang] }))} />
+            <ChipGroup multi label={L('숙소 유형', 'Property type')} value={types} onChange={setTypes} options={PROPERTY_TYPES.map((t) => ({ value: t.value, label: pickText(t, lang) }))} />
           </div>
           <div className="stack">
             <h3>{L('편의시설', 'Amenities')}</h3>
-            <ChipGroup multi label={L('편의시설', 'Amenities')} value={amen} onChange={setAmen} options={AMENITIES.map((a) => ({ value: a.value, label: a[lang], icon: amenityIcon(a.value) }))} />
+            <ChipGroup multi label={L('편의시설', 'Amenities')} value={amen} onChange={setAmen} options={AMENITIES.map((a) => ({ value: a.value, label: pickText(a, lang), icon: amenityIcon(a.value) }))} />
           </div>
           <label className="check"><input type="checkbox" checked={compliantOnly} onChange={(e) => setCompliantOnly(e.target.checked)} /><span>{L('인허가 확인을 마친 숙소만 보기 (유료 예약 가능)', 'Only permit-verified stays (bookable)')}</span></label>
           <label className="check"><input type="checkbox" checked={exchangeOnly} onChange={(e) => setExchangeOnly(e.target.checked)} /><span>{L('홈 맞교환 가능한 집만', 'Only homes open to exchange')}</span></label>
