@@ -19,7 +19,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
     <RequireAuth staff>
       <div className="admin-shell">
         <aside className="admin-side" aria-label={L('관리자 메뉴', 'Admin navigation')}>
-          <div className="brand"><span className="wordmark" style={{ color: 'inherit', fontSize: 'var(--fs-sm)' }}><span className="dot" aria-hidden="true" />JETPOOL</span> <span className="badge accent">ADMIN</span></div>
+          <div className="brand"><span className="logo" role="img" aria-label="JETPOOL" /> <span className="badge accent">ADMIN</span></div>
           <SideNav
             label={L('관리자', 'Admin')}
             items={[

@@ -20,11 +20,18 @@ const NAV = [
   { href: '/jetpool-charter', key: 'nav.charter' },
 ] as const;
 
-export function Wordmark() {
+/**
+ * Brand lockup. The files under `public/brand/` are transparent cut-outs of the supplied artwork
+ * (regenerate with `scripts/brand/cutout-logo.py`); the `-dark` pair is lightness-lifted so the
+ * navy half of the gradient stays legible on the dark theme. The artwork is painted by CSS
+ * (`.wordmark .logo`) rather than an <img> pair so a browser only ever fetches the variant the
+ * active theme actually shows; the link itself carries the accessible name.
+ * `lockup` adds the "JETPOOL INTERNATIONAL Corp." line — footer only, the header bar is too short.
+ */
+export function Wordmark({ lockup = false }: { lockup?: boolean }) {
   return (
-    <Link href="/" className="wordmark" aria-label="JETPOOL home">
-      <span className="dot" aria-hidden="true" />
-      JETPOOL
+    <Link href="/" className={lockup ? 'wordmark lockup' : 'wordmark'} aria-label="JETPOOL home">
+      <span className="logo" aria-hidden="true" />
     </Link>
   );
 }
@@ -295,17 +302,25 @@ export function BottomNav() {
   );
 }
 
-/** Operator disclosure required on Korean e-commerce sites (전자상거래법 §10). Values come from NEXT_PUBLIC_BIZ_* env. */
+/**
+ * Operator disclosure required on Korean e-commerce sites (전자상거래법 §10). The registered
+ * company details are the defaults; NEXT_PUBLIC_BIZ_* env overrides each one so a staging or
+ * white-label deploy can disclose a different operator without a code change. `name` is the full
+ * legal name used for the 상호 row and the copyright line; `shortName` is the one that reads
+ * naturally mid-sentence in the intermediary disclaimer. Rows left empty are not rendered.
+ */
 const BIZ = {
-  name: process.env.NEXT_PUBLIC_BIZ_NAME || 'JETPOOL',
-  ceo: process.env.NEXT_PUBLIC_BIZ_CEO || '',
-  regNo: process.env.NEXT_PUBLIC_BIZ_REG_NO || '',
+  name: process.env.NEXT_PUBLIC_BIZ_NAME || '젯풀인터내셔날(주) Jetpool International Co.,LTD.',
+  shortName: process.env.NEXT_PUBLIC_BIZ_SHORT_NAME || '젯풀인터내셔날(주)',
+  ceo: process.env.NEXT_PUBLIC_BIZ_CEO || '원치승',
+  regNo: process.env.NEXT_PUBLIC_BIZ_REG_NO || '101-86-57891',
   mailOrderNo: process.env.NEXT_PUBLIC_BIZ_MAIL_ORDER_NO || '',
   tourismNo: process.env.NEXT_PUBLIC_BIZ_TOURISM_NO || '',
-  address: process.env.NEXT_PUBLIC_BIZ_ADDRESS || '',
-  phone: process.env.NEXT_PUBLIC_BIZ_PHONE || '',
-  email: process.env.NEXT_PUBLIC_BIZ_EMAIL || '',
-  privacyOfficer: process.env.NEXT_PUBLIC_BIZ_PRIVACY_OFFICER || '',
+  address: process.env.NEXT_PUBLIC_BIZ_ADDRESS || '서울시 강남구 영동대로 725 5F',
+  phone: process.env.NEXT_PUBLIC_BIZ_PHONE || '+82.(02). 6672. 0055',
+  fax: process.env.NEXT_PUBLIC_BIZ_FAX || '+82.(02).6937.1399',
+  email: process.env.NEXT_PUBLIC_BIZ_EMAIL || 'ceojp@hanmail.net',
+  privacyOfficer: process.env.NEXT_PUBLIC_BIZ_PRIVACY_OFFICER || '원치승',
   hosting: process.env.NEXT_PUBLIC_BIZ_HOSTING || '',
 };
 
@@ -345,12 +360,14 @@ export function Footer() {
     [
       [L('상호', 'Company'), BIZ.name],
       [L('대표', 'CEO'), BIZ.ceo],
+      [L('개인정보관리책임자', 'Privacy officer'), BIZ.privacyOfficer],
+      [L('전화', 'Phone'), BIZ.phone],
+      [L('팩스', 'Fax'), BIZ.fax],
+      [L('이메일', 'Email'), BIZ.email],
+      [L('주소', 'Address'), BIZ.address],
       [L('사업자등록번호', 'Business reg. no.'), BIZ.regNo],
       [L('통신판매업 신고', 'Mail-order reg. no.'), BIZ.mailOrderNo],
       [L('관광사업 등록', 'Tourism reg. no.'), BIZ.tourismNo],
-      [L('주소', 'Address'), BIZ.address],
-      [L('고객센터', 'Customer center'), [BIZ.phone, BIZ.email].filter(Boolean).join(' · ')],
-      [L('개인정보 보호책임자', 'Privacy officer'), BIZ.privacyOfficer],
       [L('호스팅 서비스', 'Hosting'), BIZ.hosting],
     ] as Array<[string, string]>
   ).filter(([, v]) => v);
@@ -359,7 +376,7 @@ export function Footer() {
       <div className="container stack-lg">
         <div className="cols">
           <div className="stack">
-            <Wordmark />
+            <Wordmark lockup />
             <p className="small">{L('WONT Travel Club의 새로운 이름. 한달살기 맞교환, 전세기 공유, 로컬 라이프.', 'The new home of WONT Travel Club — month-long exchanges, charter sharing and local life.')}</p>
           </div>
           <nav aria-labelledby="ft-travel">
@@ -419,12 +436,12 @@ export function Footer() {
           </div>
           <p className="disclaimer">
             {L(
-              `${BIZ.name}은(는) 통신판매중개자로서 통신판매의 당사자가 아닙니다. 호스트·가이드·여행 공급사가 등록한 상품의 정보와 거래에 대한 책임은 각 판매자에게 있습니다. 단, ${BIZ.name}이(가) 판매자로 명시된 상품은 예외입니다.`,
-              `${BIZ.name} acts as a mail-order intermediary and is not a party to transactions between members. Hosts, guides and travel suppliers are responsible for their listings and transactions, except where ${BIZ.name} is named as the seller.`,
+              `${BIZ.shortName}은(는) 통신판매중개자로서 통신판매의 당사자가 아닙니다. 호스트·가이드·여행 공급사가 등록한 상품의 정보와 거래에 대한 책임은 각 판매자에게 있습니다. 단, ${BIZ.shortName}이(가) 판매자로 명시된 상품은 예외입니다.`,
+              `${BIZ.shortName} acts as a mail-order intermediary and is not a party to transactions between members. Hosts, guides and travel suppliers are responsible for their listings and transactions, except where ${BIZ.shortName} is named as the seller.`,
             )}
           </p>
           <div className="row between xs" style={{ color: 'var(--text-muted)' }}>
-            <span>{t('footer.rights')}</span>
+            <span>Copyright © {BIZ.name}. All rights reserved.</span>
             <span>{L('결제는 토스페이먼츠를 통해 안전하게 처리됩니다.', 'Payments are processed securely by TossPayments.')}</span>
           </div>
         </div>

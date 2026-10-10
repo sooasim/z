@@ -41,7 +41,6 @@ export const DICT = {
     'common.actions': '작업',
     'common.back': '뒤로',
     'common.lang': 'English',
-    'footer.rights': '© 2026 JETPOOL. All rights reserved.',
   },
   en: {
     'nav.stay': 'Stays',
@@ -84,7 +83,6 @@ export const DICT = {
     'common.actions': 'Actions',
     'common.back': 'Back',
     'common.lang': '한국어',
-    'footer.rights': '© 2026 JETPOOL. All rights reserved.',
   },
 } as const;
 
