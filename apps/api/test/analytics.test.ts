@@ -48,9 +48,13 @@ describe('OPS-04 analytics ingestion', () => {
 describe('OPS-04 dashboards', () => {
   it('funnel and KPIs reconcile with source tables; staff AAL2 only', async () => {
     expect((await call(t, user, 'GET', '/v1/admin/analytics/funnel')).status).toBe(403);
+    // approved_at is backdated a minute on purpose. The funnel window ends at the API process's `new Date()`
+    // while this row is stamped with the database's `now()`; the two clocks can disagree by a fraction of a
+    // millisecond, and stamping "exactly now" lets the payment land after the window ends and vanish from the
+    // count. A minute ago is still unambiguously inside the default 30-day window.
     await t.pool.query(
       `INSERT INTO payments(provider, provider_order_id, payer_id, subject_type, subject_id, status, amount_minor, refunded_minor, currency, approved_at, expires_at)
-       VALUES ('MOCK','k1',$1,'RESERVATION',gen_random_uuid(),'APPROVED',200000,0,'KRW',now(),now())`,
+       VALUES ('MOCK','k1',$1,'RESERVATION',gen_random_uuid(),'APPROVED',200000,0,'KRW',now() - interval '1 minute',now())`,
       [user.id],
     );
     const f = await call(t, accounting, 'GET', '/v1/admin/analytics/funnel');

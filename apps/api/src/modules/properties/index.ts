@@ -5,6 +5,7 @@ import { requireAuth, requireRole, getActor } from '../../platform/auth.js';
 import { ctxFromRequest, systemCtx } from '../../platform/context.js';
 import { onEvent } from '../../platform/outbox.js';
 import { registerJob } from '../../platform/jobs.js';
+import { contentLocale, contentTranslation, localize } from '../../platform/content-locale.js';
 import {
   PROPERTY_TYPES, ROOM_TYPES, archiveProperty, assertValidNights, backfillGeoJurisdictions, blockProperty, createProperty, enforceHostStanding, getProperty, getPublicBySlug,
   listAmenities, listCancellationPolicies, listHostProperties, listPublicProperties, publishProperty, setAmenities, unblockProperty,
@@ -72,6 +73,10 @@ const idParams = z.object({ id: z.uuid() });
 const reasonBody = z.object({ reason: z.string().trim().min(3).max(1000) });
 const STATUSES = ['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'UNLISTED', 'BLOCKED', 'ARCHIVED'] as const;
 
+/** Host-written text in the public DTOs. Everything else (city, amenity codes, policy names) is enum/reference data the UI already translates. */
+const LISTING_TEXT = ['items[].title', 'items[].summary', 'items[].description'] as const;
+const DETAIL_TEXT = ['title', 'summary', 'description', 'houseRules.extraRules', 'host.about'] as const;
+
 /** STAY-01 Property / Listing Management — draft CRUD, content, lifecycle FSM and public detail. */
 export default async function propertiesModule(app: FastifyInstance) {
   const r = app.withTypeProvider<ZodTypeProvider>();
@@ -109,11 +114,20 @@ export default async function propertiesModule(app: FastifyInstance) {
       tags, summary: 'Published listings (public)',
       querystring: z.object({ hostId: z.uuid().optional(), city: z.string().max(100).optional(), limit: z.coerce.number().int().min(1).max(100).default(20), offset: z.coerce.number().int().min(0).max(10000).default(0) }),
     },
-  }, async (req) => ({ items: await listPublicProperties(app.ctx.pool, req.query) }));
+  }, async (req) => {
+    // Listing copy is written by hosts, so it is translated for a reader in another language (STAY-01 +
+    // content.auto_translate). Anything not cached yet stays in the source language — see
+    // platform/translate.ts.
+    const body = { items: await listPublicProperties(app.ctx.pool, req.query) };
+    const locale = contentLocale(req);
+    return localize(await contentTranslation(ctxFromRequest(req), locale), body, LISTING_TEXT, locale);
+  });
 
-  r.get('/v1/properties/by-slug/:slug', { schema: { tags, summary: 'Public listing detail', params: z.object({ slug: z.string().min(1).max(200) }) } }, async (req) => ({
-    item: await getPublicBySlug(app.ctx.pool, req.params.slug),
-  }));
+  r.get('/v1/properties/by-slug/:slug', { schema: { tags, summary: 'Public listing detail', params: z.object({ slug: z.string().min(1).max(200) }) } }, async (req) => {
+    const item = await getPublicBySlug(app.ctx.pool, req.params.slug);
+    const locale = contentLocale(req);
+    return { item: await localize(await contentTranslation(ctxFromRequest(req), locale), item, DETAIL_TEXT, locale) };
+  });
 
   r.get('/v1/properties/:id', { schema: { summary: 'Get a property', tags, params: idParams } }, async (req) => ({
     item: await getProperty(ctxFromRequest(req), req.actor ?? null, req.params.id),

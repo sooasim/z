@@ -1,6 +1,7 @@
 import { API_URL } from './env';
 import { ApiError, problemFromResponse } from './errors';
 import { getAccessToken, refreshAccessToken } from './token';
+import { isLang, langInfo } from './langs';
 
 export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -33,8 +34,27 @@ export function buildUrl(path: string, query?: RequestOptions['query'], base = A
   return url.toString();
 }
 
+/**
+ * The reader's chosen UI language as a BCP-47 tag, or null on the server / before a choice exists (the API
+ * then falls back to its own `Accept-Language` handling and finally to Korean).
+ */
+function uiLocale(): string | null {
+  if (typeof document === 'undefined') return null;
+  try {
+    const code = document.cookie.match(/(?:^|;\s*)jp_lang=([^;]+)/)?.[1] ?? localStorage.getItem('jp_lang');
+    return isLang(code) ? langInfo(code).locale : null;
+  } catch {
+    return null; // storage blocked
+  }
+}
+
 async function doFetch(path: string, opts: RequestOptions, token: string | null): Promise<Response> {
   const headers: Record<string, string> = { accept: 'application/json', ...(opts.headers || {}) };
+  // The API renders member-written content (listing copy, reviews, bios) in this language when a translation
+  // is cached — see apps/api/src/platform/content-locale.ts. Read from storage rather than the React context
+  // so plain `api()` calls outside a component carry it too.
+  const lang = uiLocale();
+  if (lang && !headers['accept-language']) headers['accept-language'] = lang;
   if (opts.body !== undefined && !(opts.body instanceof FormData)) headers['content-type'] = 'application/json';
   if (token && !opts.anonymous) headers.authorization = `Bearer ${token}`;
   if (opts.idempotencyKey) headers['idempotency-key'] = opts.idempotencyKey === true ? newIdempotencyKey() : opts.idempotencyKey;

@@ -10,6 +10,7 @@ import { onEvent } from '../../platform/outbox.js';
 import { registerJob } from '../../platform/jobs.js';
 import { registerPaymentSubject } from '../../platform/payment-subjects.js';
 import { notFound } from '../../platform/errors.js';
+import { contentLocale, contentTranslation, localize } from '../../platform/content-locale.js';
 import * as S from './schemas.js';
 import {
   createProfile, updateProfile, publishProfile, publicationDenied, unpublishProfile, getPublicProfile, getMyProfile,
@@ -26,6 +27,10 @@ import {
 export { evaluateGuideEligibility } from './eligibility.js';
 export { computeGuideRefund, guideBookingPaymentSubject } from './bookings.js';
 export { searchGuides } from './search.js';
+
+/** Guide-written text in the public DTOs. */
+const GUIDE_TEXT = ['item.headline', 'item.bio'] as const;
+const GUIDE_LIST_TEXT = ['items[].headline', 'items[].bio'] as const;
 
 /** Job: mark lapsed qualifications EXPIRED and re-run the paid gate for published paid guides (invariant 7). */
 export async function runQualificationExpiry(app: AppContext): Promise<number> {
@@ -92,7 +97,9 @@ export default async function guideModule(app: FastifyInstance) {
   });
 
   r.get('/v1/guides/:id', { schema: { summary: 'Get a published guide profile', tags: ['GUIDE-01'], params: idParams } }, async (req) => {
-    return { item: await getPublicProfile(pool, req.params.id) };
+    // A guide writes their own headline and bio, so a reader in another language gets them translated.
+    const locale = contentLocale(req);
+    return localize(await contentTranslation(ctxFromRequest(req), locale), { item: await getPublicProfile(pool, req.params.id) }, GUIDE_TEXT, locale);
   });
 
   r.post('/v1/guides/qualifications', { schema: { summary: 'Submit a guide qualification for review', tags: ['GUIDE-01'], body: S.qualificationBody }, preHandler: requireAuth }, async (req, reply) => {
@@ -146,8 +153,9 @@ export default async function guideModule(app: FastifyInstance) {
 
   // ------------------------------------------------------------ GUIDE-03 search & matching
   r.get('/v1/search/guides', { schema: { summary: 'Search guides', tags: ['GUIDE-03'], querystring: S.searchQuery } }, async (req) => {
-    const items = await searchGuides(pool, { ...req.query, excludeUserId: req.actor?.userId });
-    return { items, weights: RANK_WEIGHTS };
+    const body = { items: await searchGuides(pool, { ...req.query, excludeUserId: req.actor?.userId }), weights: RANK_WEIGHTS };
+    const locale = contentLocale(req);
+    return localize(await contentTranslation(ctxFromRequest(req), locale), body, GUIDE_LIST_TEXT, locale);
   });
 
   // ------------------------------------------------------------ GUIDE-04 request & offer

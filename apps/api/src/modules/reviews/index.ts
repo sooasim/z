@@ -6,9 +6,14 @@ import { ctxFromRequest } from '../../platform/context.js';
 import { maybeOne, q, withTx } from '../../platform/db.js';
 import { notFound } from '../../platform/errors.js';
 import { decodeCursor, idParams, page, pagination } from '../../platform/http.js';
+import { contentLocale, contentTranslation, localize } from '../../platform/content-locale.js';
 import * as svc from './service.js';
 
 const TAG = ['TRUST-02'];
+
+/** Member-written text in the review DTOs. */
+const REVIEW_TEXT = ['items[].body', 'items[].response.body'] as const;
+const ITEM_TEXT = ['item.body', 'item.response.body'] as const;
 
 const SELECT = `SELECT r.*, u.display_name AS author_name, rr.body AS response_body, rr.created_at AS response_created_at
                   FROM reviews r JOIN users u ON u.id = r.author_id LEFT JOIN review_responses rr ON rr.review_id = r.id`;
@@ -52,13 +57,18 @@ export default async function reviewsModule(app: FastifyInstance) {
     );
     const p = page(rows, limit);
     const rep = await maybeOne(pool, `SELECT review_count, rating_avg, updated_at FROM reputation_scores WHERE target_type = $1 AND target_id = $2`, [targetType, targetId]);
-    return { items: p.items.map(svc.presentReview), nextCursor: p.nextCursor, summary: { reviewCount: rep?.review_count ?? 0, ratingAvg: rep?.rating_avg ?? null } };
+    // Review bodies and host replies are member-written, so a reader in another language gets them
+    // translated (TRUST-02 + content.auto_translate); uncached text stays in the source language.
+    const body = { items: p.items.map(svc.presentReview), nextCursor: p.nextCursor, summary: { reviewCount: rep?.review_count ?? 0, ratingAvg: rep?.rating_avg ?? null } };
+    const locale = contentLocale(req);
+    return localize(await contentTranslation(ctxFromRequest(req), locale), body, REVIEW_TEXT, locale);
   });
 
   r.get('/v1/reviews/:id', { schema: { summary: 'Get a review', tags: TAG, params: idParams } }, async (req) => {
     const row = await maybeOne(pool, `${SELECT} WHERE r.id = $1 AND r.status = 'PUBLISHED'`, [req.params.id]);
     if (!row) throw notFound('Review');
-    return { item: svc.presentReview(row) };
+    const locale = contentLocale(req);
+    return localize(await contentTranslation(ctxFromRequest(req), locale), { item: svc.presentReview(row) }, ITEM_TEXT, locale);
   });
 
   r.get('/v1/me/reviews', { schema: { tags: TAG, summary: 'Reviews I wrote and reviews I can still write' }, preHandler: requireAuth }, async (req) => {

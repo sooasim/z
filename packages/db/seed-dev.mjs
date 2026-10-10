@@ -922,7 +922,7 @@ try {
     );
   }
   if (process.env.SEED_ENABLE_FLAGS !== 'false') {
-    await db.query(`UPDATE feature_flags SET enabled = true WHERE flag_key IN ('stay.paid_booking','exchange.enabled','guide.paid','travel.commerce','ai.assistant','ai.recommendations')`);
+    await db.query(`UPDATE feature_flags SET enabled = true WHERE flag_key IN ('stay.paid_booking','exchange.enabled','guide.paid','travel.commerce','ai.assistant','ai.recommendations','content.auto_translate')`);
   }
 
   // ================================================================================================ transactions
