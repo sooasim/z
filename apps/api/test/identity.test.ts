@@ -113,6 +113,35 @@ describe('CORE-01 signup & login', () => {
     expect(after.status).toBe(200);
   });
 
+  it('logs in with a login handle (admin console); unknown handles and the wrong field are refused', async () => {
+    const s = await signup('console.admin@example.com');
+    await t.pool.query(`UPDATE users SET username = 'console-admin' WHERE id = $1`, [s.body.user.id]);
+
+    const ok = await call(t, null, 'POST', '/v1/auth/login', { username: 'Console-Admin', password: 'Sup3r-secret-pw' });
+    expect(ok.status).toBe(200);
+    expect(ok.body.user.email).toBe('console.admin@example.com');
+    expect(ok.body.user.username).toBe('console-admin');
+    expect((await call(t, asUser(ok.body), 'GET', '/v1/me')).body.user.username).toBe('console-admin');
+
+    // a handle is not an address: neither field accepts the other's value
+    expect((await call(t, null, 'POST', '/v1/auth/login', { username: 'nobody-here', password: 'Sup3r-secret-pw' })).status).toBe(401);
+    expect((await call(t, null, 'POST', '/v1/auth/login', { email: 'console-admin', password: 'Sup3r-secret-pw' })).status).toBe(400);
+    expect((await call(t, null, 'POST', '/v1/auth/login', { password: 'Sup3r-secret-pw' })).status).toBe(400);
+    expect((await call(t, null, 'POST', '/v1/auth/login', { username: 'console-admin', password: 'nope-nope-1' })).status).toBe(401);
+
+    // the handle shares the account's lockout counter — it is not a second, unthrottled door
+    const { rows } = await t.pool.query(`SELECT failed_login_attempts AS n FROM users WHERE id = $1`, [s.body.user.id]);
+    expect(rows[0].n).toBe(1);
+  });
+
+  it('login handles are unique and must be lowercase kebab/dot/underscore', async () => {
+    const a = await signup('handle.a@example.com');
+    const b = await signup('handle.b@example.com');
+    await t.pool.query(`UPDATE users SET username = 'taken-handle' WHERE id = $1`, [a.body.user.id]);
+    await expect(t.pool.query(`UPDATE users SET username = 'Taken-Handle' WHERE id = $1`, [b.body.user.id])).rejects.toThrow();
+    await expect(t.pool.query(`UPDATE users SET username = 'has space' WHERE id = $1`, [b.body.user.id])).rejects.toThrow();
+  });
+
   it('suspended users cannot log in or use existing tokens', async () => {
     const s = await signup('suspended@example.com');
     await t.pool.query(`UPDATE users SET status = 'SUSPENDED' WHERE id = $1`, [s.body.user.id]);

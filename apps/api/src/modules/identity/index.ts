@@ -11,6 +11,8 @@ import * as svc from './service.js';
 
 const TAG = ['CORE-01'];
 const email = z.email().max(254);
+/** Staff login handle (`users.username`) — the admin console signs in with this instead of an address. */
+const username = z.string().trim().min(3).max(40).regex(svc.USERNAME_RE, 'letters, digits, dot, dash or underscore');
 const password = z.string().min(1).max(256);
 export const consentInput = z.object({ type: z.enum(CONSENT_TYPES), version: z.string().min(1).max(64), granted: z.boolean() });
 const providerParams = z.object({ provider: z.enum(OAUTH_PROVIDERS) });
@@ -47,7 +49,13 @@ export default async function identityModule(app: FastifyInstance) {
   }, async (req, reply) => reply.status(201).send(await svc.signup(pool, ctxFromRequest(req), req.body)));
 
   r.post('/v1/auth/login', {
-    schema: { tags: TAG, summary: 'Email + password login (per-account lockout with exponential backoff)', body: z.object({ email, password }) },
+    schema: {
+      tags: TAG,
+      summary: 'Email (or login handle) + password login (per-account lockout with exponential backoff)',
+      body: z
+        .object({ email: email.optional(), username: username.optional(), password })
+        .refine((b) => !!(b.email || b.username), { message: 'email or username is required', path: ['email'] }),
+    },
     config: authLimit,
   }, async (req) => svc.passwordLogin(pool, ctxFromRequest(req), req.body));
 

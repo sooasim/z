@@ -9,7 +9,7 @@ export const SESSION_KEY = 'jpdemo:session:v1';
 export const ACCOUNTS_KEY = 'jpdemo:accounts:v1';
 export const UI_KEY = 'jpdemo:ui:v1';
 
-export type Kind = 'reservation' | 'exchange' | 'guideRequest' | 'guideBooking' | 'order' | 'payment' | 'quote' | 'hold' | 'conversation' | 'property' | 'review' | 'notification' | 'agreement';
+export type Kind = 'reservation' | 'exchange' | 'guideRequest' | 'guideBooking' | 'order' | 'payment' | 'quote' | 'hold' | 'conversation' | 'property' | 'review' | 'notification' | 'agreement' | 'cmsEntry';
 
 export interface DemoState {
   v: 1;
@@ -32,7 +32,7 @@ export interface DemoState {
 
 const empty = (): DemoState => ({
   v: 1,
-  entities: { reservation: {}, exchange: {}, guideRequest: {}, guideBooking: {}, order: {}, payment: {}, quote: {}, hold: {}, conversation: {}, property: {}, review: {}, notification: {}, agreement: {} },
+  entities: { reservation: {}, exchange: {}, guideRequest: {}, guideBooking: {}, order: {}, payment: {}, quote: {}, hold: {}, conversation: {}, property: {}, review: {}, notification: {}, agreement: {}, cmsEntry: {} },
   messages: {},
   favorites: {},
   read: { notifications: {}, allBefore: {}, conversations: {} },
