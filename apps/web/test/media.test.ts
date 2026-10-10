@@ -151,7 +151,7 @@ describe('markdown (migrated CMS bodies)', () => {
     expect(b.filter((x) => x.t === 'p' && x.lines[0].startsWith('▶'))).toHaveLength(0);
     expect(b.find((x) => x.t === 'ul')).toEqual({ t: 'ul', items: ['하나', '둘'] });
     const media = b.flatMap((x) => (x.t === 'images' ? x.images.map((i) => i.src) : x.t === 'video' ? [x.thumb ?? ''] : []));
-    expect(media.some((u) => u.startsWith('javascript:'))).toBe(false);
+    expect(media.some((u) => /^\s*(javascript|data|vbscript):/i.test(u))).toBe(false);
     expect(b[b.length - 1]).toMatchObject({ t: 'p', note: true });
   });
 

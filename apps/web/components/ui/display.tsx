@@ -21,11 +21,13 @@ export function Avatar({ name, src, size = 40, verified, decorative, personId }:
   useMediaMap();
   const bg = AVATAR_BG[hashString(name || '?') % AVATAR_BG.length];
   const label = `${name || '?'}${verified ? `, ${L('본인 확인됨', 'verified')}` : ''}`;
-  const photo = src || personPhoto(personId, name);
-  const p = photo ? imgProps(photo, { sizes: `${size}px`, alt: '', placeholder: false }) : null;
+  // An uploaded avatar (API URL, or a blob: preview of the file the user just picked) is rendered as it is; only the
+  // portrait from the media map goes through imgProps, which adds the basePath and the 96/192/384 srcset.
+  const portrait = src ? undefined : personPhoto(personId, name);
+  const p = portrait ? imgProps(portrait, { sizes: `${size}px`, alt: '', placeholder: false }) : null;
   return (
     <span className="avatar" style={{ width: size, height: size, background: bg, fontSize: size * 0.42 }} {...(decorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': label })}>
-      {p ? <img src={p.src} srcSet={p.srcSet} sizes={p.sizes} alt="" /> : <span aria-hidden="true">{(name || '?').trim().slice(0, 1).toUpperCase()}</span>}
+      {src ? <img src={src} alt="" /> : p ? <img src={p.src} srcSet={p.srcSet} sizes={p.sizes} alt="" /> : <span aria-hidden="true">{(name || '?').trim().slice(0, 1).toUpperCase()}</span>}
       {verified && (
         <span className="verified" title={L('본인 확인됨', 'Verified')} aria-hidden="true">
           <svg viewBox="0 0 24 24" width="70%" height="70%" fill="none" stroke="#fff" strokeWidth="4" aria-hidden="true">

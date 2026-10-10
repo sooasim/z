@@ -23,7 +23,6 @@
  *   (no timestamps). Only <sha12> directories this script published before are pruned.
  */
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -60,14 +59,20 @@ const hex = ({ r, g, b }) => '#' + [r, g, b].map((v) => Math.round(v).toString(1
 const isND = (license) => /(^|-)nd($|-)/i.test(String(license ?? ''));
 const licenseLabel = (code, version) =>
   code === 'cc0' ? `CC0 ${version || '1.0'}` : code === 'pdm' ? 'Public Domain Mark 1.0' : `CC ${String(code).toUpperCase()} ${version || ''}`.trim();
-const readJson = (p) => JSON.parse(readFileSync(p, 'utf8'));
+/** Read a file, or undefined when it is not there — one syscall, never "exists? then read" (TOCTOU). */
+const readMaybe = async (p) => fs.readFile(p).catch((e) => (e.code === 'ENOENT' ? undefined : Promise.reject(e)));
+const readText = async (p) => (await readMaybe(p))?.toString('utf8');
+const readJson = async (p) => {
+  const t = await readText(p);
+  return t === undefined ? undefined : JSON.parse(t);
+};
 
 // ───────────────────────────────────────────────────────────── fetch
 async function fetchCandidates() {
   const cfg = readJson(QUERIES);
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await fs.mkdir(path.join(RAW, 'files'), { recursive: true });
-  const prev = existsSync(path.join(RAW, 'manifest.json')) ? readJson(path.join(RAW, 'manifest.json')) : null;
+  const prev = await readJson(path.join(RAW, 'manifest.json'));
   const manifest = { fetchedAt: new Date().toISOString(), source: 'openverse', photos: { ...(prev?.photos ?? {}) }, queries: {}, failures: [] };
 
   async function api(q) {
@@ -113,7 +118,9 @@ async function fetchCandidates() {
             const sha = sha256(buf);
             const ext = ct === 'image/png' ? 'png' : ct === 'image/webp' ? 'webp' : 'jpg';
             if (!manifest.photos[sha]) {
-              await fs.writeFile(path.join(RAW, 'files', `${sha}.${ext}`), buf);
+              // The candidate is an image body fetched from the provider CDN, written to the git-ignored raw working
+              // set under its own sha256 and never executed; `publish` only reads back bytes whose sha256 still matches.
+              await fs.writeFile(path.join(RAW, 'files', `${sha}.${ext}`), buf); // lgtm[js/http-to-file-access] codeql[js/http-to-file-access]
               manifest.photos[sha] = {
                 sha256: sha, file: `files/${sha}.${ext}`, bytes: buf.length, width: it.width, height: it.height,
                 title: it.title, creator: it.creator, creatorUrl: it.creator_url, license: it.license, licenseVersion: it.license_version,
@@ -161,13 +168,13 @@ async function publish() {
     fail('sharp is not installed — run: pnpm install --filter @jetpool/legacy-import');
   }
   sharp.cache(false);
-  if (!existsSync(path.join(RAW, 'manifest.json'))) fail(`no raw candidates at ${path.relative(ROOT, RAW)} — run: node scripts/legacy/fetch-people.mjs fetch`);
-  if (!existsSync(CURATION)) fail(`no curation at ${path.relative(ROOT, CURATION)} — review the candidates first`);
-  const manifest = readJson(path.join(RAW, 'manifest.json'));
-  const curationRaw = readFileSync(CURATION, 'utf8');
+  const manifest = await readJson(path.join(RAW, 'manifest.json'));
+  if (!manifest) fail(`no raw candidates at ${path.relative(ROOT, RAW)} — run: node scripts/legacy/fetch-people.mjs fetch`);
+  const curationRaw = await readText(CURATION);
+  if (curationRaw === undefined) fail(`no curation at ${path.relative(ROOT, CURATION)} — review the candidates first`);
   const curation = JSON.parse(curationRaw);
   const decisions = curation.photos ?? curation;
-  const previous = existsSync(OUT) ? readJson(OUT) : null;
+  const previous = await readJson(OUT);
 
   const photos = {};
   const written = new Set();
@@ -206,8 +213,8 @@ async function publish() {
     for (const w of widths) {
       const out = await square(w).toBuffer();
       const file = path.join(dir, `${w}.webp`);
-      const current = existsSync(file) ? await fs.readFile(file) : null;
-      if (!current || !current.equals(out)) {
+      const current = await readMaybe(file);
+      if (!current?.equals(out)) {
         if (CHECK) stale.push(`photos/${s12}/${w}.webp`);
         else await fs.writeFile(file, out);
       }
@@ -278,7 +285,8 @@ async function publish() {
   for (const [sha, p] of Object.entries(previous?.photos ?? {})) {
     if (photos[sha]) continue;
     const dir = path.join(PHOTOS_DIR, p.sha12);
-    if (!existsSync(dir)) continue;
+    const there = await fs.stat(dir).then(() => true, () => false);
+    if (!there) continue;
     pruned.push(dir);
     if (CHECK) stale.push(`photos/${p.sha12}/ (no longer curated)`);
     else await fs.rm(dir, { recursive: true, force: true });
@@ -302,7 +310,7 @@ async function publish() {
   };
   const out = `${JSON.stringify(doc, null, 2)}\n`;
   if (CHECK) {
-    if (!existsSync(OUT) || readFileSync(OUT, 'utf8') !== out) stale.unshift('data/media/people.json');
+    if ((await readText(OUT)) !== out) stale.unshift('data/media/people.json');
     if (stale.length) fail(`out of date: ${stale.slice(0, 5).join(', ')}${stale.length > 5 ? `, +${stale.length - 5} more` : ''} — run node scripts/legacy/fetch-people.mjs publish`);
     console.log(`people: people.json and the ${written.size} published renditions are current`);
     return;
