@@ -1,5 +1,6 @@
 'use client';
 import type { ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 import { useI18n } from '@/lib/i18n';
 import { useAuth } from '@/lib/auth';
 import { RequireAuth } from '@/components/gate';
@@ -7,16 +8,23 @@ import { SideNav } from '@/components/shell';
 import { MfaPrompt } from '@/components/states';
 import { Alert } from '@/components/ui';
 
+/** The admin console's own sign-in page — staff come in here instead of the member `/login`. */
+export const ADMIN_LOGIN_PATH = '/admin/login';
+
 export function AdminShell({ children }: { children: ReactNode }) {
   const { L } = useI18n();
   const { user } = useAuth();
+  // `trailingSlash` is on for the static export, so the path arrives as `/admin/login/` there and `/admin/login` in dev.
+  const pathname = (usePathname() || '').replace(/\/+$/, '');
+  // The sign-in page lives under /admin, so it has to render outside the staff gate and the console chrome.
+  if (pathname === ADMIN_LOGIN_PATH) return <>{children}</>;
   const ops = L('운영', 'Operations');
   const trust = L('신뢰·안전', 'Trust & safety');
   const money = L('결제·정산', 'Money');
   const content = L('콘텐츠', 'Content');
   const platform = L('플랫폼', 'Platform');
   return (
-    <RequireAuth staff>
+    <RequireAuth staff loginHref={ADMIN_LOGIN_PATH}>
       <div className="admin-shell">
         <aside className="admin-side" aria-label={L('관리자 메뉴', 'Admin navigation')}>
           <div className="brand"><span className="logo" role="img" aria-label="JETPOOL" /> <span className="badge accent">ADMIN</span></div>
@@ -35,7 +43,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
               { href: '/admin/settlements', label: L('정산 승인', 'Settlements'), icon: 'coin' },
               { href: '/admin/ledger', label: L('원장', 'Ledger'), icon: 'doc' },
               { href: '/admin/finance/rules', label: L('수수료·세금 규칙', 'Fee & tax rules'), icon: 'settings' },
-              { href: '/admin/cms', label: L('CMS · 리다이렉트', 'CMS & redirects'), icon: 'doc', group: content },
+              { href: '/admin/home', label: L('메인 첫 페이지', 'Main page'), icon: 'home', group: content },
+              { href: '/admin/cms', label: L('CMS · 리다이렉트', 'CMS & redirects'), icon: 'doc' },
               { href: '/admin/audit', label: L('감사 로그', 'Audit logs'), icon: 'doc', group: platform },
               { href: '/admin/access', label: L('권한 관리', 'Access & roles'), icon: 'user' },
               { href: '/admin/config', label: L('기능 플래그', 'Feature flags'), icon: 'settings' },

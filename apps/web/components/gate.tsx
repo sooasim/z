@@ -27,8 +27,12 @@ const ROLE_CTA: Record<string, { href: string; ko: string; en: string }> = {
   SUPPLIER: { href: '/support?topic=supplier', ko: '여행 공급사 입점 문의', en: 'Apply as a supplier' },
 };
 
-/** Client-side route gate (UX only — the API enforces authorization on every request). */
-export function RequireAuth({ roles, children, staff }: { roles?: string[]; staff?: boolean; children: ReactNode }) {
+/**
+ * Client-side route gate (UX only — the API enforces authorization on every request).
+ * `loginHref` overrides where an anonymous visitor is sent (the admin console uses its own sign-in page);
+ * signing up is not offered there, because a staff account is granted, not self-served.
+ */
+export function RequireAuth({ roles, children, staff, loginHref }: { roles?: string[]; staff?: boolean; children: ReactNode; loginHref?: string }) {
   const { ready, user, hasRole, isStaff } = useAuth();
   const { t, L, lang } = useI18n();
   if (!ready) return <ListSkeleton rows={3} />;
@@ -37,12 +41,14 @@ export function RequireAuth({ roles, children, staff }: { roles?: string[]; staf
       <div className="state" role="alert">
         <Illustration name="lock" />
         <h1>{t('state.unauth')}</h1>
-        <p className="muted">{L('로그인하면 이 페이지를 이용할 수 있어요.', 'Sign in to continue.')}</p>
+        <p className="muted">{loginHref ? L('관리자 계정으로 로그인해 주세요.', 'Sign in with your admin account.') : L('로그인하면 이 페이지를 이용할 수 있어요.', 'Sign in to continue.')}</p>
         <div className="actions">
-          <LoginLink />
-          <Link className="btn ghost" href="/signup">
-            {t('nav.signup')}
-          </Link>
+          <LoginLink href={loginHref} />
+          {!loginHref && (
+            <Link className="btn ghost" href="/signup">
+              {t('nav.signup')}
+            </Link>
+          )}
         </div>
       </div>
     );

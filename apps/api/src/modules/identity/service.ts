@@ -53,6 +53,9 @@ export function validatePasswordPolicy(password: string, email?: string | null) 
 }
 
 const normEmail = (e: string) => e.trim().toLowerCase();
+/** Login handles are stored and compared lowercase (users.username is citext, CHECK `users_username_format`). */
+export const normUsername = (u: string) => u.trim().toLowerCase();
+export const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{2,39}$/i;
 
 /**
  * Neutral public handle for accounts that did not choose a display name. Never derived from the email address:
@@ -273,10 +276,20 @@ export async function signup(
   });
 }
 
-export async function passwordLogin(pool: pg.Pool, ctx: Ctx, input: { email: string; password: string }): Promise<AuthResult> {
-  const email = normEmail(input.email);
+/**
+ * Email + password, or login handle + password (`username`, used by the admin console sign-in). Both land on
+ * the same per-account lockout and the same neutral INVALID_CREDENTIALS, so a handle cannot be probed for
+ * existence any more than an address can.
+ */
+export async function passwordLogin(pool: pg.Pool, ctx: Ctx, input: { email?: string; username?: string; password: string }): Promise<AuthResult> {
+  const byEmail = input.email ? normEmail(input.email) : null;
+  const byUsername = byEmail ? null : normUsername(input.username ?? '');
+  if (!byEmail && !byUsername) throw badRequest('VALIDATION_FAILED', 'email or username is required');
   const r = await withTx(pool, async (tx) => {
-    const u = await maybeOne(tx, `SELECT id, password_hash, status, failed_login_attempts, locked_until FROM users WHERE email = $1 FOR UPDATE`, [email]);
+    const cols = 'id, password_hash, status, failed_login_attempts, locked_until';
+    const u = byEmail
+      ? await maybeOne(tx, `SELECT ${cols} FROM users WHERE email = $1 FOR UPDATE`, [byEmail])
+      : await maybeOne(tx, `SELECT ${cols} FROM users WHERE username = $1 FOR UPDATE`, [byUsername]);
     if (!u || !u.password_hash) {
       await burnPasswordCheck(input.password);
       return { err: INVALID_CREDENTIALS() };

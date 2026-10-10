@@ -82,7 +82,7 @@ export async function hasVerifiedMfa(db: Db, userId: string): Promise<boolean> {
 export async function accountSummary(db: Db, userId: string) {
   const u = await maybeOne(
     db,
-    `SELECT u.id, u.email, u.phone, u.display_name, u.status, u.locale, u.email_verified_at, u.phone_verified_at,
+    `SELECT u.id, u.email, u.username, u.phone, u.display_name, u.status, u.locale, u.email_verified_at, u.phone_verified_at,
             u.identity_verified_at, u.last_login_at, u.created_at, (u.password_hash IS NOT NULL) AS has_password
        FROM users u WHERE u.id = $1`,
     [userId],
@@ -93,6 +93,7 @@ export async function accountSummary(db: Db, userId: string) {
   return {
     id: u.id,
     email: u.email,
+    username: u.username,
     phone: u.phone,
     displayName: u.display_name,
     status: u.status,

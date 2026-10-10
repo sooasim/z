@@ -80,6 +80,11 @@ pnpm dev:web                         # http://localhost:3000
 docker compose up -d redis meilisearch minio minio-init mailpit   # optional backing services
 ```
 
+The dev seed prints the member logins it created. The **admin console is at `/admin/login`** — login handle `admin`,
+password `admin1234` (override with `SEED_ADMIN_USERNAME` / `SEED_ADMIN_PASSWORD`; `seed-dev` refuses to run with
+`NODE_ENV=production`). Staff routes need an AAL2 session, so enroll an authenticator on first sign-in. The main
+page (`/`) is edited from **Admin → Content → Main page** (`/admin/home`).
+
 ## Environment variables (API / worker)
 
 Defined and validated in `apps/api/src/platform/config.ts`. In `NODE_ENV=production` the API refuses to start with
