@@ -9,19 +9,24 @@ import { statusLabel } from '@/components/ui/status';
 
 const CODES = LANGS.map((l) => l.code);
 
-function webSource(): string {
-  const root = path.resolve(__dirname, '..');
-  let out = '';
+const WEB_ROOT = path.resolve(__dirname, '..');
+
+function webFiles(): Array<{ rel: string; src: string }> {
+  const out: Array<{ rel: string; src: string }> = [];
   const walk = (d: string) => {
     for (const e of fs.readdirSync(d, { withFileTypes: true })) {
       if (e.name === 'node_modules' || e.name === '.next' || e.name === 'test') continue;
       const f = path.join(d, e.name);
       if (e.isDirectory()) walk(f);
-      else if (/\.tsx?$/.test(e.name)) out += fs.readFileSync(f, 'utf8');
+      else if (/\.tsx?$/.test(e.name)) out.push({ rel: path.relative(WEB_ROOT, f).split(path.sep).join('/'), src: fs.readFileSync(f, 'utf8') });
     }
   };
-  walk(root);
+  walk(WEB_ROOT);
   return out;
+}
+
+function webSource(): string {
+  return webFiles().map((f) => f.src).join('\n');
 }
 
 describe('language registry', () => {
@@ -150,6 +155,50 @@ describe('formatters follow the language', () => {
     }
     expect(formatRange('2026-11-10', '2026-11-13', 'ja')).toMatch(/11月10日/);
     expect(formatRange('2026-11-10', '2026-11-13', 'zh')).toMatch(/11月10日/);
+  });
+});
+
+describe('no screen reads the Korean side directly', () => {
+  // The bug this guards: `obj.ko` / `obj[lang]` / `pair[lang === 'ko' ? 0 : 1]` compile fine against a
+  // `{ko, en}` record but bypass the phrase table, so the string stays Korean in ja/zh/vi. Every such read
+  // must go through pickText / pickPair / pickBlock instead. `lib/*` owns those helpers and is exempt.
+  const EXEMPT = /^lib\/(dict|phrases|langs|format|places|i18n)\.tsx?$/;
+
+  it('never indexes a copy record by language', () => {
+    const bad: string[] = [];
+    for (const { rel, src } of webFiles()) {
+      if (EXEMPT.test(rel)) continue;
+      src.split('\n').forEach((line, i) => {
+        const code = line.replace(/\/\/.*$/, '');
+        // Real indexing has an expression right before the bracket; `useMemo(…, [lang])` does not.
+        const indexes = /[\w$\]\)]\??\.?\[lang\]/.test(code) && !/DICT\[lang\]|PHRASES\[lang\]|regionNames\[lang\]/.test(code);
+        if (indexes) bad.push(`${rel}:${i + 1} ${code.trim().slice(0, 70)}`);
+        if (/\[lang === 'ko' \? 0 : 1\]/.test(code)) bad.push(`${rel}:${i + 1} ${code.trim().slice(0, 70)}`);
+      });
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('never reads `.ko` off a copy record to render it', () => {
+    const bad: string[] = [];
+    for (const { rel, src } of webFiles()) {
+      if (EXEMPT.test(rel)) continue;
+      src.split('\n').forEach((line, i) => {
+        const code = line.replace(/\/\/.*$/, '');
+        // `x.ko.includes(…)` matches Korean input rather than rendering it, `ko: '…'` is a table row, and a
+        // line already inside a `lang === 'ko'` branch is reading the Korean side on purpose.
+        const reads = /\.ko\b(?!\s*[.(:])/.test(code) && !/\bko:\s/.test(code) && !/lang === 'ko'/.test(code);
+        if (reads) bad.push(`${rel}:${i + 1} ${code.trim().slice(0, 70)}`);
+      });
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('keeps the skip link inside the provider so it can be translated', () => {
+    const layout = fs.readFileSync(path.join(WEB_ROOT, 'app/layout.tsx'), 'utf8');
+    expect(layout, 'the skip link must render <SkipLink/>, not hard-coded Korean').not.toMatch(/본문 바로가기/);
+    expect(layout).toMatch(/<SkipLink\s*\/>/);
+    for (const code of CODES) expect(DICT[code]['a11y.skip'], code).toBeTruthy();
   });
 });
 

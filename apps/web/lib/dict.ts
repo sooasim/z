@@ -50,6 +50,7 @@ const ko = {
   'common.back': '뒤로',
   'common.lang': '언어',
   'lang.auto': '브라우저 언어 사용',
+  'a11y.skip': '본문 바로가기',
 } as const;
 
 export type DictKey = keyof typeof ko;
@@ -96,6 +97,7 @@ const en: Record<DictKey, string> = {
   'common.back': 'Back',
   'common.lang': 'Language',
   'lang.auto': 'Use browser language',
+  'a11y.skip': 'Skip to content',
 };
 
 const ja: Record<DictKey, string> = {
@@ -140,6 +142,7 @@ const ja: Record<DictKey, string> = {
   'common.back': '戻る',
   'common.lang': '言語',
   'lang.auto': 'ブラウザの言語を使う',
+  'a11y.skip': '本文へスキップ',
 };
 
 const zh: Record<DictKey, string> = {
@@ -184,6 +187,7 @@ const zh: Record<DictKey, string> = {
   'common.back': '返回',
   'common.lang': '语言',
   'lang.auto': '使用浏览器语言',
+  'a11y.skip': '跳转到正文',
 };
 
 const vi: Record<DictKey, string> = {
@@ -228,6 +232,7 @@ const vi: Record<DictKey, string> = {
   'common.back': 'Quay lại',
   'common.lang': 'Ngôn ngữ',
   'lang.auto': 'Dùng ngôn ngữ của trình duyệt',
+  'a11y.skip': 'Chuyển đến nội dung',
 };
 
 export const DICT: Record<Lang, Record<DictKey, string>> = { ko, en, ja, zh, vi };

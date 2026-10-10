@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
 import { Providers } from '@/components/providers';
-import { Header, Footer, BottomNav, ScrollReset, ServiceWorkerRegister } from '@/components/shell';
+import { Header, Footer, BottomNav, ScrollReset, ServiceWorkerRegister, SkipLink } from '@/components/shell';
 import { THEME_SCRIPT } from '@/components/theme';
 import { SITE_URL } from '@/lib/env';
 
@@ -49,10 +49,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <link rel="stylesheet" href={FONT_CSS} />
       </head>
       <body>
-        <a href="#main" className="skip-link">
-          본문 바로가기 / Skip to content
-        </a>
         <Providers lang="ko">
+          <SkipLink />
           <Header />
           <main id="main" tabIndex={-1}>
             <div className="container">{children}</div>

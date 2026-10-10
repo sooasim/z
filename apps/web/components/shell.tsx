@@ -282,6 +282,68 @@ function UserMenu() {
   );
 }
 
+/**
+ * Keeps the browser tab in the reader's language.
+ *
+ * Route metadata (`export const metadata` in 79 `page.tsx` files) is Korean and stays Korean: it is what
+ * search engines index for the Korean market, and translating it would mean ~400 more strings that no screen
+ * ever shows. The tab, though, is read by the person using the site, so outside Korean we rebuild the title
+ * from the page's own `<h1>` — which is already localized — keeping the `· JETPOOL` suffix.
+ *
+ * Next writes `document.title` itself whenever metadata resolves, and the order against our effect is not
+ * guaranteed, so we watch the element and re-apply instead of racing it.
+ */
+function TitleSync() {
+  const { lang } = useI18n();
+  const path = usePathname();
+  useEffect(() => {
+    if (lang === 'ko') return; // the server title is already right
+    const titleEl = document.querySelector('title');
+    if (!titleEl) return;
+    let ours = '';
+    const apply = () => {
+      const h1 = document.querySelector('main h1')?.textContent?.trim();
+      if (!h1) return;
+      const next = `${h1} · JETPOOL`;
+      if (document.title === next) return;
+      ours = next;
+      document.title = next;
+    };
+    // The heading mounts with the page, which can be after this effect on a client navigation.
+    const raf = requestAnimationFrame(apply);
+    const onTitle = () => {
+      if (document.title !== ours) apply();
+    };
+    const titleObserver = new MutationObserver(onTitle);
+    titleObserver.observe(titleEl, { childList: true, characterData: true, subtree: true });
+    const mainObserver = new MutationObserver(apply);
+    const main = document.getElementById('main');
+    if (main) mainObserver.observe(main, { childList: true, subtree: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      titleObserver.disconnect();
+      mainObserver.disconnect();
+    };
+  }, [lang, path]);
+  return null;
+}
+
+/**
+ * First focusable element on every page. It lives here rather than in app/layout.tsx because it has to sit
+ * inside `<Providers>` to read the UI language — outside it, `useI18n` falls back to Korean for everyone.
+ */
+export function SkipLink() {
+  const { t } = useI18n();
+  return (
+    <>
+      <TitleSync />
+      <a href="#main" className="skip-link">
+        {t('a11y.skip')}
+      </a>
+    </>
+  );
+}
+
 export function Header() {
   const { t, lang, setLang, L } = useI18n();
   const { user, ready, isStaff } = useAuth();

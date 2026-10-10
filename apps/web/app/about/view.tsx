@@ -8,6 +8,8 @@ import { AutoHeading, ButtonLink, HeadingLevel, Icon } from '@/components/ui';
 import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { LEGACY_PAGES, LiteYouTube, Photo, PhotoCredit, markdownCover, markdownExcerpt } from '@/components/media';
 import s from '@/components/media/media.module.css';
+import { pickText } from '@/lib/phrases';
+import type { Lang } from '@/lib/format';
 
 /** Migrated wontc.co.kr pages (CMS PAGE slugs, data contract) grouped for the index. */
 export const BRAND_SLUGS = ['about-jetpool', 'about-wontc', 'about-ceo', 'won-story'];
@@ -67,9 +69,13 @@ export function EntryCard({ href, title, summary, cover, seed }: { href: string;
   );
 }
 
-function fallbackEntries(slugs: string[]) {
+/** Titles shown when the CMS has no entry for a captured page yet. */
+function fallbackEntries(slugs: string[], lang: Lang) {
   const byRoute = new Map(Object.values(LEGACY_PAGES).map((p) => [p.route, p]));
-  return slugs.map((slug) => ({ slug, title: byRoute.get(`/about/${slug}`)?.ko ?? slug, summary: '', data: {} }));
+  return slugs.map((slug) => {
+    const page = byRoute.get(`/about/${slug}`);
+    return { slug, title: page ? pickText(page, lang) : slug, summary: '', data: {} };
+  });
 }
 
 export default function AboutIndexView() {
@@ -83,7 +89,7 @@ export default function AboutIndexView() {
   const loaded = !pages.loading;
   const group = (slugs: string[]) => {
     const rows = slugs.map((x) => bySlug.get(x)).filter(Boolean);
-    return rows.length || !loaded ? rows : fallbackEntries(slugs);
+    return rows.length || !loaded ? rows : fallbackEntries(slugs, lang);
   };
   const brand = group(BRAND_SLUGS);
   const service = group(SERVICE_SLUGS);
