@@ -173,9 +173,10 @@ export function withBase(url: string | null | undefined): string {
  */
 export function safeImageSrc(url: string | null | undefined): string | undefined {
   const u = String(url ?? '').trim();
-  if (!u || u.startsWith('//')) return undefined;
+  // the scheme check guards every path below, including the root-relative one
+  if (!u || u.startsWith('//') || /^[a-z0-9.+-]*(javascript|vbscript|data|file|about)\s*:/i.test(u)) return undefined;
   if (u.startsWith('/')) return u;
-  return /^(https?|blob):/i.test(u) && !/^\s*(javascript|vbscript|data):/i.test(u) ? u : undefined;
+  return /^(https?|blob):/i.test(u) ? u : undefined;
 }
 
 const ASSET_RE = /^\/(photos|legacy)\/([0-9a-f]{12})(?:\/|$)/;
