@@ -1,3 +1,5 @@
+import type { Lang } from './format';
+import { pickText, translate } from './phrases';
 /** RFC 7807 problem+json → typed client error. `code` is the stable machine identifier from the API. */
 export interface Problem {
   type?: string;
@@ -220,18 +222,18 @@ const GENERIC_TITLE = /^(bad request|unprocessable( entity| content)?|conflict|f
  * it is in the UI language (Korean UI never shows raw English server text); otherwise a status-based Korean
  * fallback is shown. `overrides` lets a screen reword a code (e.g. the password-change form).
  */
-export function errorMessage(err: unknown, lang: 'ko' | 'en' = 'ko', overrides?: MessageOverrides): string {
+export function errorMessage(err: unknown, lang: Lang = 'ko', overrides?: MessageOverrides): string {
   if (err instanceof ApiError) {
     const o = overrides?.[err.code];
-    if (o) return Array.isArray(o) ? o[lang === 'ko' ? 0 : 1] : (o as { ko: string; en: string })[lang];
+    if (o) return Array.isArray(o) ? (lang === 'ko' ? o[0] : translate(o[1], lang)) : pickText(o as { ko: string; en: string }, lang);
     const base = err.code.split(':')[0];
     const m = MESSAGES[err.code] ?? MESSAGES[base];
-    if (m) return m[lang];
+    if (m) return pickText(m, lang);
     const fits = (t?: string) => !!t && (lang === 'ko' ? HANGUL.test(t) : true);
     if (fits(err.problem.detail)) return err.problem.detail!;
     if (err.problem.title && fits(err.problem.title) && !GENERIC_TITLE.test(err.problem.title.trim()) && err.code !== 'INVALID_INPUT' && err.code !== 'VALIDATION_FAILED') return err.problem.title;
     const fallback = MESSAGES[defaultCode(err.status)];
-    return fallback ? fallback[lang] : err.message;
+    return fallback ? pickText(fallback, lang) : err.message;
   }
   if (err instanceof Error) {
     if (lang === 'ko' && !HANGUL.test(err.message)) return MESSAGES.SERVER_ERROR.ko;
@@ -241,7 +243,7 @@ export function errorMessage(err: unknown, lang: 'ko' | 'en' = 'ko', overrides?:
 }
 
 /** Field-level validation errors from a problem+json body: `{ errors: [{ path, message }] }` (zod) → { field: message }. */
-export function fieldErrors(err: unknown, lang: 'ko' | 'en' = 'ko'): Record<string, string> {
+export function fieldErrors(err: unknown, lang: Lang = 'ko'): Record<string, string> {
   if (!(err instanceof ApiError)) return {};
   const raw = (err.problem.errors ?? (err.problem.details as any)?.errors ?? (err.problem.details as any)?.issues ?? err.problem.details) as unknown;
   const out: Record<string, string> = {};

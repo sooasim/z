@@ -11,6 +11,7 @@ import { RequireAuth } from '@/components/gate';
 import { StateView } from '@/components/states';
 import { Alert, ErrorText, Section, StatusPill, Button, ButtonLink } from '@/components/ui';
 import { ExchangeHeader, exchangeView } from '../../shared';
+import { pickText } from '@/lib/phrases';
 
 const CHECKS: Record<string, { ko: string; en: string; href?: string }> = {
   IDENTITY: { ko: '본인 확인', en: 'Identity verified', href: '/verification' },
@@ -70,7 +71,7 @@ export default function ExchangeVerificationView() {
                     <tbody>
                       {Object.entries(CHECKS).map(([type, c]) => (
                         <tr key={type}>
-                          <th scope="row">{c[lang]}</th>
+                          <th scope="row">{pickText(c, lang)}</th>
                           {people.map(([uid]) => {
                             const v = checkOf(uid, type);
                             return (

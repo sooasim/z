@@ -5,6 +5,7 @@ import { subjectHref } from '@/lib/payment';
 import { ButtonLink, Steps } from '@/components/ui';
 import { EmptyState } from '@/components/states';
 import { styles as s } from '@/components/traveler/ui';
+import { pickPair } from '@/lib/phrases';
 
 /** Friendly copy for common TossPayments failure codes (the PG message is shown when we don't know the code). */
 const CODES: Record<string, [string, string]> = {
@@ -30,7 +31,7 @@ export default function CheckoutFailView() {
   const id = sp.get('subjectId') ?? '';
   const isStay = type === 'RESERVATION';
   const steps = isStay ? [L('요금 확인', 'Review'), L('날짜 확보', 'Hold'), L('결제', 'Pay'), L('확정', 'Confirmed')] : [L('상품 선택', 'Choose'), L('결제', 'Pay'), L('확정', 'Confirmed')];
-  const title = known ? known[lang === 'ko' ? 0 : 1] : L('결제가 완료되지 않았어요', 'Payment didn’t go through');
+  const title = known ? pickPair(known, lang) : L('결제가 완료되지 않았어요', 'Payment didn’t go through');
   const retryHref = id && ['RESERVATION', 'ORDER', 'GUIDE_BOOKING'].includes(type) ? `/checkout?type=${type}&id=${id}` : '';
   return (
     <>

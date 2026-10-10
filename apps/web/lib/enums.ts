@@ -1,5 +1,14 @@
 import { langName } from './art';
 import { placeLabel } from './places';
+import type { Lang } from './format';
+import { translate } from './phrases';
+
+/**
+ * Label tuples in this file are written `[ko, en]`. Korean takes the first side; every other language takes the
+ * English side translated by source string (lib/phrases.ts), falling back to English.
+ */
+const pick = (pair: readonly string[], lang: Lang): string =>
+  lang === 'ko' ? String(pair[0]) : translate(String(pair[1]), lang);
 
 /**
  * Localized labels for API enum values that are not FSM statuses (statuses live in components/ui/status.tsx):
@@ -268,16 +277,17 @@ const PATTERNS: Array<[RegExp, (m: RegExpExecArray, ko: boolean) => string]> = [
 ];
 
 /** "PAYMENT_APPROVED" → "Payment approved" (last-resort fallback for unknown values). */
-export function humanizeEnum(v: string, lang: 'ko' | 'en' = 'ko'): string {
+export function humanizeEnum(v: string, lang: Lang = 'ko'): string {
   const s = String(v ?? '');
   if (!s) return '—';
   const known = ENUM_LABELS[s.toUpperCase()];
-  if (known) return known[lang === 'ko' ? 0 : 1];
+  if (known) return pick(known, lang);
   for (const [re, fn] of PATTERNS) {
     const m = re.exec(s.toUpperCase());
+    // Pattern labels interpolate values ("Guest cancelled (50% refund)"), so they stay English outside Korean.
     if (m) return fn(m, lang === 'ko');
   }
-  return s.replace(/[_.]+/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
+  return translate(s.replace(/[_.]+/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase()), lang);
 }
 
 /** True for values that look like machine enums/keys (SNAKE_CASE or dotted.action). */
@@ -286,26 +296,26 @@ export function isEnumLike(v: unknown): v is string {
 }
 
 /** Localized label for an enum value or dotted action key; returns the input unchanged when it is not enum-like. */
-export function enumLabel(v: unknown, lang: 'ko' | 'en' = 'ko'): string {
+export function enumLabel(v: unknown, lang: Lang = 'ko'): string {
   if (v === null || v === undefined || v === '') return '—';
   const s = String(v);
   const act = ACTION_LABELS[s];
-  if (act) return act[lang === 'ko' ? 0 : 1];
+  if (act) return pick(act, lang);
   if (!isEnumLike(s)) return s;
   if (s.includes('.')) {
     const [obj, ...rest] = s.split('.');
     const o = ENUM_LABELS[obj.toUpperCase()];
     const verb = rest.join(' ').replace(/_/g, ' ');
-    return o ? `${o[lang === 'ko' ? 0 : 1]} · ${verb}` : s;
+    return o ? `${pick(o, lang)} · ${verb}` : s;
   }
   return humanizeEnum(s, lang);
 }
 
 /** Known label only (no humanized fallback) — lets callers decide whether to localize automatically. */
-export function knownEnumLabel(v: unknown, lang: 'ko' | 'en' = 'ko'): string | undefined {
+export function knownEnumLabel(v: unknown, lang: Lang = 'ko'): string | undefined {
   if (typeof v !== 'string') return undefined;
   const a = ACTION_LABELS[v] ?? ENUM_LABELS[v];
-  return a ? a[lang === 'ko' ? 0 : 1] : undefined;
+  return a ? pick(a, lang) : undefined;
 }
 
 
@@ -314,7 +324,7 @@ export function knownEnumLabel(v: unknown, lang: 'ko' | 'en' = 'ko'): string | u
  * templates; drop lines that repeat what the card already shows (rating) or that cannot be localized.
  * Returns null when the line should not be shown.
  */
-export function localizeExplanation(line: string, lang: 'ko' | 'en' = 'ko'): string | null {
+export function localizeExplanation(line: string, lang: Lang = 'ko'): string | null {
   const s = String(line ?? '').trim();
   if (!s) return null;
   const ko = lang === 'ko';

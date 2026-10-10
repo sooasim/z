@@ -18,6 +18,7 @@ import { AuthTeaser } from '@/components/public/AuthTeaser';
 import { useDebounced, useUrlSync } from '@/components/public/hooks';
 import { ELIGIBILITY } from './shared';
 import s from '@/components/public/public.module.css';
+import { pickText } from '@/lib/phrases';
 
 /** Next 12 months as select options: { value: '2026-11', label: '2026년 11월' }. */
 function useMonthOptions() {
@@ -54,7 +55,7 @@ function EligibilityCard({ unmet }: { unmet: string[] }) {
             <li key={code} className={ok ? s.ok : s.todo} style={{ alignItems: 'center' }}>
               <Icon name={ok ? 'check-circle' : 'circle'} size={20} />
               <span className="grow small">
-                {it[lang]}
+                {pickText(it, lang)}
                 <span className="sr-only">{ok ? L(' (완료)', ' (done)') : L(' (필요)', ' (to do)')}</span>
               </span>
               {!ok && (

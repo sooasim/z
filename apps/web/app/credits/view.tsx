@@ -7,6 +7,7 @@ import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { ListSkeleton, Icon } from '@/components/ui';
 import { Photo } from '@/components/media';
 import s from '@/components/media/media.module.css';
+import { pickPair } from '@/lib/phrases';
 
 const LICENSE_HELP: Record<string, [string, string]> = {
   'CC BY': ['저작자 표시', 'Attribution'],
@@ -85,7 +86,7 @@ export default function CreditsView() {
           </div>
           <p className={s.count} aria-live="polite">
             {L(`사진 ${shown.length}장`, `${shown.length} photos`)}
-            {lic && LICENSE_HELP[lic] ? ` · ${LICENSE_HELP[lic][lang === 'ko' ? 0 : 1]}` : ''}
+            {lic && LICENSE_HELP[lic] ? ` · ${pickPair(LICENSE_HELP[lic], lang)}` : ''}
           </p>
           <ul className={s.credits}>
             {shown.map(({ url, credit: raw }) => {

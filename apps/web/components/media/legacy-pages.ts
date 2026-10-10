@@ -1,3 +1,5 @@
+import type { Lang } from '@/lib/format';
+import { pickText } from '@/lib/phrases';
 /**
  * The 34 pages captured from wontc.co.kr and where their content lives on JETPOOL now. Used for archive filters,
  * captions and "see where this image is used" links. CMS entries carry `data.legacyUrl`; when the CMS knows a
@@ -57,10 +59,10 @@ export function legacyPageKey(page: string | null | undefined): string {
   return p;
 }
 
-export function legacyPageLabel(page: string | null | undefined, lang: 'ko' | 'en' = 'ko'): string {
+export function legacyPageLabel(page: string | null | undefined, lang: Lang = 'ko'): string {
   const key = legacyPageKey(page);
   const hit = LEGACY_PAGES[key];
-  if (hit) return hit[lang];
+  if (hit) return pickText(hit, lang);
   if (!key) return lang === 'ko' ? '기타' : 'Other';
   return key.replace(/^\//, '').replace(/[_-]+/g, ' ');
 }

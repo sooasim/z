@@ -14,6 +14,7 @@ import { Alert, Button, ButtonLink, DateRangeField, ErrorText, Kv, Section, Text
 import { useToast } from '@/components/ui/toast';
 import { ExchangeHeader, NEXT_ACTION, exchangeView, homeTitle, offerLabel, termRows } from '../shared';
 import s from '@/components/public/public.module.css';
+import { pickPair } from '@/lib/phrases';
 
 export { NEXT_ACTION };
 
@@ -114,7 +115,7 @@ export default function ExchangeDetailView() {
                 <ExchangeHeader x={x} back={false} />
                 {na && (
                   <Alert tone={['RESPOND', 'SAFETY_ACK', 'SIGN_AGREEMENT', 'CONFIRM'].includes(x.nextAction) ? 'warn' : 'info'}>
-                    <strong>{na[lang === 'ko' ? 0 : 1]}</strong>
+                    <strong>{pickPair(na, lang)}</strong>
                     {myTurn && x.respondBy && <span className="small" style={{ display: 'block' }}>{L(`${formatDate(x.respondBy, 'ko', true)}까지 응답하지 않으면 제안이 만료돼요.`, `The offer expires if not answered by ${formatDate(x.respondBy, 'en', true)}.`)}</span>}
                   </Alert>
                 )}

@@ -9,6 +9,7 @@ import { EmptyState, StateView } from '@/components/states';
 import { ButtonLink, DateText, PageHeader, RatingStars, Section, StatusPill } from '@/components/ui';
 import { useCachedApi } from '@/components/traveler/hooks';
 import { REVIEW_TARGET_LABEL } from '@/components/traveler/labels';
+import { pickPair } from '@/lib/phrases';
 
 /** Name + link of what a review is about (stays, guides and tours resolve; hosts/partners show the role). */
 function useTargetName(type: string, id: string) {
@@ -26,7 +27,7 @@ function ReviewCard({ r, mine }: { r: any; mine: boolean }) {
   const { L, lang } = useI18n();
   const type = str(r, 'targetType', 'target_type');
   const target = useTargetName(type, str(r, 'targetId', 'target_id'));
-  const label = (REVIEW_TARGET_LABEL[type.toUpperCase()] ?? [type, type])[lang === 'ko' ? 0 : 1];
+  const label = pickPair((REVIEW_TARGET_LABEL[type.toUpperCase()] ?? [type, type]), lang);
   const resp = f<any>(r, 'response');
   return (
     <li className="card stack">

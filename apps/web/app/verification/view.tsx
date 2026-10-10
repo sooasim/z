@@ -14,6 +14,7 @@ import { Alert, Button, ErrorText, Icon, PageHeader, Section, type IconName } fr
 import { useToast } from '@/components/ui/toast';
 import { styles as s } from '@/components/traveler/ui';
 import { VERIFICATION_TYPE_LABEL } from '@/components/traveler/labels';
+import { pickPair } from '@/lib/phrases';
 
 const KINDS: Array<{ value: string; icon: IconName; ko: string; en: string; dko: string; den: string; doc: string; cta?: { href: string; ko: string; en: string } }> = [
   { value: 'IDENTITY', icon: 'user', ko: '본인 확인', en: 'Identity', dko: '신분증으로 본인임을 확인해요', den: 'Confirm who you are with an ID', doc: 'ID_CARD' },
@@ -35,7 +36,7 @@ function StatusGrid({ summary, onStart }: { summary: any; onStart: (k: string) =
         const st = str(sv, 'status').toUpperCase();
         const pending = ['PENDING', 'SUBMITTED', 'IN_REVIEW', 'UNDER_REVIEW'].includes(st);
         const rejected = ['REJECTED', 'NEEDS_INFO'].includes(st);
-        const label = (VERIFICATION_TYPE_LABEL[t] ?? [t, t])[lang === 'ko' ? 0 : 1];
+        const label = pickPair((VERIFICATION_TYPE_LABEL[t] ?? [t, t]), lang);
         return (
           <li key={t} className={`${s.statusItem} ${verified ? s.ok : pending ? s.pending : ''}`}>
             <span className={s.ico} aria-hidden="true">
@@ -162,7 +163,7 @@ export default function VerificationView() {
               filterable={false}
               paged={false}
               columns={[
-                { key: 'subjectType|verificationType', label: L('유형', 'Type'), primary: true, render: (r) => (VERIFICATION_TYPE_LABEL[str(r, 'subjectType', 'verificationType').toUpperCase()] ?? [str(r, 'subjectType'), str(r, 'subjectType')])[lang === 'ko' ? 0 : 1] },
+                { key: 'subjectType|verificationType', label: L('유형', 'Type'), primary: true, render: (r) => pickPair((VERIFICATION_TYPE_LABEL[str(r, 'subjectType', 'verificationType').toUpperCase()] ?? [str(r, 'subjectType'), str(r, 'subjectType')]), lang) },
                 { key: 'status|state', label: L('상태', 'Status'), kind: 'status' },
                 { key: 'decisionReason|reason|rejectionReason', label: L('사유', 'Reason') },
                 { key: 'submittedAt|createdAt', label: L('신청일', 'Submitted'), kind: 'date' },

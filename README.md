@@ -42,7 +42,7 @@ apps/web      Next.js customer / host / guide / supplier / admin UI
 packages/db   forward-only, checksummed SQL migrations + runner (migrate.mjs)
 infra/        Terraform (AWS Seoul), kustomize (k8s), Fly configs, Docker entrypoints, observability, deploy scripts
 scripts/      validate-spec (G0), module-status (CHECKLIST), release-report, oneclick pipeline, k6 load tests (G6), PAN/CVC guard
-docs/         PLAN, CONVENTIONS, CHECKLIST, ADRs, runbooks, SECURITY, OPERATIONS, RELEASE_REPORT
+docs/         PLAN, CONVENTIONS, CHECKLIST, ADRs, runbooks, SECURITY, OPERATIONS, RELEASE_REPORT, I18N
 dd/           product/spec source of truth (master spec, OpenAPI/AsyncAPI seeds, DB blueprint, traceability, gates)
 ```
 

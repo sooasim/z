@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { charterPhotos, useMediaMap } from '@/lib/media';
 import { Photo, PhotoCredit } from '@/components/media';
 import m from '@/components/media/media.module.css';
+import { pickText } from '@/lib/phrases';
 
 const FALLBACK = {
   ko: {
@@ -62,7 +63,9 @@ export default function CharterView() {
   const c = item(st.data);
   // CMS copy is authored per locale: use it only when it matches the UI language, else the bilingual fallback.
   const sameLocale = !!c && (str(c, 'locale') || 'ko-KR').toLowerCase().startsWith(lang);
-  const fb = FALLBACK[lang];
+  // FALLBACK holds nested copy objects, not strings: Korean reads its own tree, every other language reads
+  // the English one (long-form marketing copy is not in the phrase table — see docs/I18N.md).
+  const fb = lang === 'ko' ? FALLBACK.ko : FALLBACK.en;
   const title = (sameLocale && str(c, 'title')) || fb.title;
   const lead = (sameLocale && str(c, 'summary', 'lead')) || fb.lead;
   const body = sameLocale ? str(c, 'bodyMd', 'body') : '';

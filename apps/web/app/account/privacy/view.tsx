@@ -10,6 +10,7 @@ import { DataTable } from '@/components/table';
 import { Alert, Badge, Button, DateText, ErrorText, Modal, PageHeader, Section, useConfirm } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 import { Switch, styles as s } from '@/components/traveler/ui';
+import { pickPair } from '@/lib/phrases';
 
 /** Core documents every member must accept; service-specific terms are accepted when that service is first used. */
 const CORE = ['TERMS', 'PRIVACY', 'REFUND_POLICY'];
@@ -65,7 +66,7 @@ function Consents() {
     const d = doc(t);
     const r = current.get(t);
     const on = granted(t);
-    const name = NAMES[t]?.[lang === 'ko' ? 0 : 1] ?? cleanTitle(str(d, 'title'));
+    const name = pickPair(NAMES[t], lang) ?? cleanTitle(str(d, 'title'));
     return (
       <div className={s.consentRow} key={t}>
         <div style={{ minWidth: 0 }}>
@@ -119,7 +120,7 @@ function Consents() {
                 <div className="row between" style={{ gap: 12 }}>
                   <span>
                     <strong>{L('서비스 이용을 위해 필수 약관 동의가 필요해요.', 'Please accept the required terms to keep using JETPOOL.')}</strong>{' '}
-                    {missing.map((t) => NAMES[t]?.[lang === 'ko' ? 0 : 1]).join(', ')}
+                    {missing.map((t) => pickPair(NAMES[t], lang)).join(', ')}
                   </span>
                   <Button
                     size="sm"
@@ -144,7 +145,7 @@ function Consents() {
           </div>
         )}
       </StateView>
-      <Modal open={!!od} onClose={() => setOpen(null)} title={open ? NAMES[open]?.[lang === 'ko' ? 0 : 1] ?? cleanTitle(str(od, 'title')) : ''} wide>
+      <Modal open={!!od} onClose={() => setOpen(null)} title={open ? pickPair(NAMES[open], lang) ?? cleanTitle(str(od, 'title')) : ''} wide>
         <div className="stack">
           <p className="xs muted" style={{ margin: 0 }}>
             {L('버전', 'Version')} {cleanVersion(str(od, 'version'))}
@@ -252,7 +253,7 @@ function Requests() {
               filterable={false}
               paged={false}
               columns={[
-                { key: 'requestType|type', label: L('유형', 'Type'), primary: true, render: (r) => (REQUEST_TYPE[str(r, 'requestType', 'type').toUpperCase()] ?? [str(r, 'requestType', 'type'), str(r, 'requestType', 'type')])[lang === 'ko' ? 0 : 1] },
+                { key: 'requestType|type', label: L('유형', 'Type'), primary: true, render: (r) => pickPair((REQUEST_TYPE[str(r, 'requestType', 'type').toUpperCase()] ?? [str(r, 'requestType', 'type'), str(r, 'requestType', 'type')]), lang) },
                 { key: 'status', label: L('상태', 'Status'), kind: 'status' },
                 { key: 'requestedAt|createdAt', label: L('요청일', 'Requested'), kind: 'datetime' },
                 { key: 'completedAt', label: L('완료일', 'Completed'), kind: 'datetime' },

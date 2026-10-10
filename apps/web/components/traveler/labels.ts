@@ -8,9 +8,10 @@ import { placeLabel, countryLabel } from '@/lib/places';
 import { enumLabel } from '@/lib/enums';
 import { arr, f, isObj, num, str } from '@/lib/shape';
 import type { PriceLine } from '@/components/ui';
+import { pickPair } from '@/lib/phrases';
 
 type Pair = readonly [string, string];
-const pick = (p: Pair | undefined, lang: Lang) => (p ? p[lang === 'ko' ? 0 : 1] : undefined);
+const pick = (p: Pair | undefined, lang: Lang) => (p ? pickPair(p, lang) : undefined);
 
 function lookup(map: Record<string, Pair>, v: unknown, lang: Lang): string {
   if (v === null || v === undefined || v === '') return '—';

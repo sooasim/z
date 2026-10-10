@@ -10,6 +10,7 @@ import { EmptyState, StateView } from '@/components/states';
 import { DataTable, type Column } from '@/components/table';
 import { Alert, Button, ButtonLink, DateText, Icon, Money, PageHeader, Section, StatusPill } from '@/components/ui';
 import { paymentMethodLabel, prettyOrderName, receiptTypeLabel, subjectLabel } from '@/components/traveler/labels';
+import { pickPair } from '@/lib/phrases';
 
 const FAILURE: Record<string, [string, string]> = {
   EXPIRED: ['결제 시간 만료', 'Payment window expired'],
@@ -41,7 +42,7 @@ function Payments() {
             </Link>
             <div className="xs muted">
               {subjectLabel(str(r, 'subjectType'), lang)}
-              {failure && ` · ${(FAILURE[failure] ?? [L('결제 실패', 'Failed'), 'Failed'])[lang === 'ko' ? 0 : 1]}`}
+              {failure && ` · ${pickPair((FAILURE[failure] ?? [L('결제 실패', 'Failed'), 'Failed']), lang)}`}
             </div>
           </div>
         );

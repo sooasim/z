@@ -10,6 +10,7 @@ import { Alert, Button, ErrorText, Icon, PageHeader, type IconName } from '@/com
 import { useToast } from '@/components/ui/toast';
 import { Switch } from '@/components/traveler/ui';
 import { channelLabel } from '@/components/traveler/labels';
+import { pickText } from '@/lib/phrases';
 
 const CATEGORIES: Array<{ key: string; icon: IconName; ko: string; en: string; dko: string; den: string; locked?: boolean }> = [
   { key: 'TRANSACTIONAL', icon: 'bag', ko: '예약·결제·메시지', en: 'Bookings, payments & messages', dko: '예약 확정, 결제 영수증, 새 메시지처럼 여행에 꼭 필요한 알림이에요.', den: 'Booking confirmations, receipts and new messages.' },
@@ -75,13 +76,13 @@ function Form({ rows, onSaved }: { rows: any[]; onSaved: () => void }) {
     >
       {CATEGORIES.map((c) => (
         <fieldset key={c.key} className="card stack" style={{ margin: 0 }}>
-          <legend className="sr-only">{c[lang]}</legend>
+          <legend className="sr-only">{pickText(c, lang)}</legend>
           <div className="row nowrap" style={{ gap: 12, alignItems: 'flex-start' }}>
             <span style={{ width: 40, height: 40, borderRadius: 12, display: 'grid', placeItems: 'center', background: 'var(--brand-soft)', color: 'var(--brand)', flex: '0 0 auto' }} aria-hidden="true">
               <Icon name={c.icon} size={20} />
             </span>
             <div className="grow">
-              <h2 style={{ margin: 0, fontSize: 'var(--fs-lg)' }}>{c[lang]}</h2>
+              <h2 style={{ margin: 0, fontSize: 'var(--fs-lg)' }}>{pickText(c, lang)}</h2>
               <p className="small muted" style={{ margin: '2px 0 0' }} id={`desc-${c.key}`}>
                 {lang === 'ko' ? c.dko : c.den}
               </p>
@@ -101,7 +102,7 @@ function Form({ rows, onSaved }: { rows: any[]; onSaved: () => void }) {
                   <Switch
                     checked={v.enabled}
                     disabled={v.mandatory}
-                    label={`${c[lang]} · ${channelLabel(ch.key, lang)}`}
+                    label={`${pickText(c, lang)} · ${channelLabel(ch.key, lang)}`}
                     describedBy={`desc-${c.key}`}
                     onChange={(on) => {
                       setDirty(true);

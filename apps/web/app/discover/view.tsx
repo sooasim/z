@@ -8,6 +8,7 @@ import { postcardFor } from '@/lib/art';
 import { canonicalPlace, placeLabel } from '@/lib/places';
 import { CardGridSkeleton, HeadingLevel, Icon, PageHeader } from '@/components/ui';
 import s from '@/components/public/public.module.css';
+import { pickText, pickPair } from '@/lib/phrases';
 
 /** Fallback destinations (CMS down / empty). `en` is the canonical API city used in search links. */
 const FALLBACK = [
@@ -50,7 +51,7 @@ export default function DiscoverView() {
           tags: sameLocale ? arr<string>(r, 'data.highlights').slice(0, 3) : [],
         };
       })
-    : FALLBACK.map((f) => ({ slug: f.slug, city: f.en, title: f[lang], sub: f.s[lang === 'ko' ? 0 : 1], cover: '', tags: [] }));
+    : FALLBACK.map((f) => ({ slug: f.slug, city: f.en, title: pickText(f, lang), sub: pickPair(f.s, lang) ?? '', cover: '', tags: [] }));
   return (
     <>
       <PageHeader title={L('여행지 탐색', 'Discover destinations')} subtitle={L('JETPOOL 멤버들이 살아본 도시 이야기와 추천 숙소·가이드·투어를 모았어요.', 'City guides from members who lived there, with stays, guides and tours to match.')} />

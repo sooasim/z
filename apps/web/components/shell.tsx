@@ -1,8 +1,10 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import { useI18n } from '@/lib/i18n';
+import { LANGS, langInfo } from '@/lib/langs';
+import type { Lang } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
 import { useApi } from '@/lib/hooks';
 import { items, str } from '@/lib/shape';
@@ -37,6 +39,94 @@ export function Wordmark({ lockup = false }: { lockup?: boolean }) {
 }
 
 type MenuLink = [href: string, label: string, icon: IconName];
+
+/**
+ * Shared `role=menu` keyboard behaviour: ↑/↓/Home/End move, Space activates, Esc closes and refocuses the
+ * button, Tab closes. Used by the user menu and the language menu so they stay consistent.
+ */
+function menuKeys(listRef: RefObject<HTMLUListElement | null>, close: (refocus?: boolean) => void) {
+  return (e: KeyboardEvent<HTMLUListElement>) => {
+    const els = Array.from(listRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"], [role="menuitemradio"]') ?? []);
+    const i = els.indexOf(document.activeElement as HTMLElement);
+    let n = -1;
+    if (e.key === 'ArrowDown') n = (i + 1) % els.length;
+    else if (e.key === 'ArrowUp') n = (i - 1 + els.length) % els.length;
+    else if (e.key === 'Home') n = 0;
+    else if (e.key === 'End') n = els.length - 1;
+    else if (e.key === ' ' && i >= 0) {
+      e.preventDefault();
+      els[i].click();
+      return;
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      close(true);
+      return;
+    } else if (e.key === 'Tab') {
+      close();
+      return;
+    }
+    if (n >= 0) {
+      e.preventDefault();
+      els[n]?.focus();
+    }
+  };
+}
+
+/** Language picker: the five shipped UI languages plus "follow the browser". */
+function LangMenu() {
+  const { lang, setLang, auto, t, L } = useI18n();
+  const p = usePopover();
+  const menuId = useId();
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  useFitPopover(p.open, popRef);
+  const close = (refocus = false) => {
+    p.setOpen(false);
+    if (refocus) btnRef.current?.focus();
+  };
+  const choose = (l: Lang | null) => {
+    setLang(l);
+    close(true);
+  };
+  return (
+    <div className="popover-anchor" ref={p.ref}>
+      <button
+        ref={btnRef}
+        type="button"
+        className="btn ghost sm"
+        aria-expanded={p.open}
+        aria-haspopup="menu"
+        aria-controls={p.open ? menuId : undefined}
+        onClick={() => p.setOpen(!p.open)}
+        aria-label={`${L('언어', 'Language')}: ${langInfo(lang).endonym}`}
+      >
+        <Icon name="globe" size={16} /> <span className="hide-mobile">{langInfo(lang).endonym}</span>
+      </button>
+      {p.open && (
+        <div className="popover right" ref={popRef} style={{ minWidth: 200, padding: 8 }}>
+          <ul className="menu" role="menu" id={menuId} aria-label={t('common.lang')} ref={listRef} onKeyDown={menuKeys(listRef, close)}>
+            {LANGS.map((l) => (
+              <li key={l.code} role="none">
+                <button type="button" role="menuitemradio" aria-checked={!auto && l.code === lang} tabIndex={-1} lang={l.locale} onClick={() => choose(l.code)}>
+                  {l.endonym}
+                  {!auto && l.code === lang && <Icon name="check" size={16} />}
+                </button>
+              </li>
+            ))}
+            <li role="separator" />
+            <li role="none">
+              <button type="button" role="menuitemradio" aria-checked={auto} tabIndex={-1} onClick={() => choose(null)}>
+                {t('lang.auto')}
+                {auto && <Icon name="check" size={16} />}
+              </button>
+            </li>
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * WAI-ARIA menu button: role=menu on the list, menuitems are links (middle-click works), ↑/↓/Home/End move,
@@ -78,31 +168,7 @@ function UserMenu() {
     p.setOpen(false);
     if (refocus) btnRef.current?.focus();
   };
-  const onMenuKey = (e: KeyboardEvent<HTMLUListElement>) => {
-    const els = Array.from(listRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
-    const i = els.indexOf(document.activeElement as HTMLElement);
-    let n = -1;
-    if (e.key === 'ArrowDown') n = (i + 1) % els.length;
-    else if (e.key === 'ArrowUp') n = (i - 1 + els.length) % els.length;
-    else if (e.key === 'Home') n = 0;
-    else if (e.key === 'End') n = els.length - 1;
-    else if (e.key === ' ' && i >= 0) {
-      e.preventDefault();
-      els[i].click();
-      return;
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      close(true);
-      return;
-    } else if (e.key === 'Tab') {
-      close();
-      return;
-    }
-    if (n >= 0) {
-      e.preventDefault();
-      els[n]?.focus();
-    }
-  };
+  const onMenuKey = menuKeys(listRef, close);
   return (
     <div className="popover-anchor" ref={p.ref}>
       <button
@@ -196,9 +262,7 @@ export function Header() {
             <Icon name="chart" size={16} /> {t('nav.admin')}
           </Link>
         )}
-        <button className="btn ghost sm" onClick={() => setLang(lang === 'ko' ? 'en' : 'ko')} aria-label={L('언어 전환 (English)', 'Switch language (한국어)')}>
-          <Icon name="globe" size={16} /> <span className="hide-mobile">{t('common.lang')}</span>
-        </button>
+        <LangMenu />
         <ThemeToggle />
         {ready && user ? (
           <UserMenu />

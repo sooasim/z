@@ -10,6 +10,7 @@ import { DateText, ErrorText, Money, StatusBadge } from './ui/base';
 import { Icon } from './ui/icons';
 import { ConfirmDialog, type DialogField } from './ui/modal';
 import { usePopover, useFitPopover } from './ui/pickers';
+import type { Lang } from '@/lib/format';
 
 export interface Column {
   key: string;
@@ -28,7 +29,7 @@ export interface Column {
 }
 
 /** Plain text cell: known machine enums (RESERVATION, CARD, PAYMENT_APPROVED, auth.login …) are localized. */
-function textValue(v: unknown, lang: 'ko' | 'en'): ReactNode {
+function textValue(v: unknown, lang: Lang): ReactNode {
   if (v === undefined || v === null || v === '') return '—';
   if (typeof v === 'boolean') return v ? (lang === 'ko' ? '예' : 'Yes') : lang === 'ko' ? '아니요' : 'No';
   if (typeof v === 'object') return JSON.stringify(v).slice(0, 80);

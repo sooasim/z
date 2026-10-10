@@ -7,6 +7,7 @@ import { items, str, num } from '@/lib/shape';
 import { canonicalPlace, findPlace, placeLabel } from '@/lib/places';
 import { Icon, type IconName } from './icons';
 import { Modal } from './modal';
+import { pickText, pickPair } from '@/lib/phrases';
 
 const useIsoLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
@@ -531,7 +532,7 @@ export function DestinationInput({ value, onChange, onPick, label, placeholder, 
     return () => clearTimeout(t);
   }, [value, lang, L]);
   const q = value.trim().toLowerCase();
-  const local: PlaceOption[] = POPULAR.filter((x) => !q || x.ko.includes(value.trim()) || x.en.toLowerCase().includes(q)).map((x) => ({ label: x[lang], value: x.en, art: x.art, hint: x.hint[lang === 'ko' ? 0 : 1], kind: 'popular', ...(findPlace(x.en) ? { lat: findPlace(x.en)!.lat, lng: findPlace(x.en)!.lng } : {}) }));
+  const local: PlaceOption[] = POPULAR.filter((x) => !q || x.ko.includes(value.trim()) || x.en.toLowerCase().includes(q)).map((x) => ({ label: pickText(x, lang), value: x.en, art: x.art, hint: pickPair(x.hint, lang), kind: 'popular', ...(findPlace(x.en) ? { lat: findPlace(x.en)!.lat, lng: findPlace(x.en)!.lng } : {}) }));
   const options = useMemo(() => {
     const seen = new Set<string>();
     const out: PlaceOption[] = [];

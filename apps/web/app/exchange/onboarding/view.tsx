@@ -15,6 +15,7 @@ import { Button, ButtonLink, ErrorText, Icon, PageHeader, Section, StatusBadge, 
 import { AuthTeaser } from '@/components/public/AuthTeaser';
 import { ELIGIBILITY } from '../shared';
 import s from '@/components/public/public.module.css';
+import { pickText } from '@/lib/phrases';
 
 function Onboarding() {
   const { L, lang } = useI18n();
@@ -48,7 +49,7 @@ function Onboarding() {
                       <li key={code} className={met ? s.ok : s.todo} style={{ alignItems: 'center' }}>
                         <Icon name={met ? 'check-circle' : 'circle'} size={20} />
                         <span className="grow">
-                          {it[lang]}
+                          {pickText(it, lang)}
                           <span className="sr-only">{met ? L(' (완료)', ' (done)') : L(' (필요)', ' (to do)')}</span>
                         </span>
                         {!met && (

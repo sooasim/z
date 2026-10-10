@@ -13,6 +13,7 @@ import { useToast } from '@/components/ui/toast';
 import { StateView, EmptyState } from '@/components/states';
 import { CopyButton, QrCode, downloadText, styles as s } from '@/components/traveler/ui';
 import { aalLabel, parseUserAgent, relTime } from '@/components/traveler/labels';
+import { pickPair } from '@/lib/phrases';
 
 const chunk = (v: string, n = 4) => (v.replace(/\s+/g, '').match(new RegExp(`.{1,${n}}`, 'g')) ?? []);
 
@@ -374,7 +375,7 @@ function Sessions() {
                         {current && <Badge tone="info">{L('현재 기기', 'This device')}</Badge>}
                       </strong>
                       <div className={s.meta}>
-                        {[current ? L('지금 사용 중', 'Active now') : `${L('최근 활동', 'Last active')} ${relTime(str(x, 'lastUsedAt', 'last_used_at', 'createdAt', 'created_at'), lang)}`, str(x, 'ip') && `IP ${str(x, 'ip')}`, METHOD[method]?.[lang === 'ko' ? 0 : 1], aalLabel(str(x, 'aal'), lang)].filter(Boolean).join(' · ')}
+                        {[current ? L('지금 사용 중', 'Active now') : `${L('최근 활동', 'Last active')} ${relTime(str(x, 'lastUsedAt', 'last_used_at', 'createdAt', 'created_at'), lang)}`, str(x, 'ip') && `IP ${str(x, 'ip')}`, pickPair(METHOD[method], lang), aalLabel(str(x, 'aal'), lang)].filter(Boolean).join(' · ')}
                       </div>
                     </div>
                     {current ? (

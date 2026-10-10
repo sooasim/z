@@ -22,6 +22,7 @@ import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { ReviewsSection } from '@/components/public/Reviews';
 import { interestLabel } from '@/components/public/labels';
 import s from '@/components/public/public.module.css';
+import { pickText } from '@/lib/phrases';
 
 /** Guides work in Korea: availability intervals (UTC) are bucketed into Asia/Seoul calendar days. */
 const KST = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' });
@@ -148,7 +149,7 @@ export default function GuideProfileView() {
                   </div>
                   {g.headline && <p style={{ margin: '4px 0 0', fontWeight: 600 }}>{g.headline}</p>}
                   <div className={s.metaRow}>
-                    <span className={`badge ${tl.paid ? 'info' : 'ok'}`}>{tl[lang]}</span>
+                    <span className={`badge ${tl.paid ? 'info' : 'ok'}`}>{pickText(tl, lang)}</span>
                     {g.verified && (
                       <span className="badge ok">
                         <Icon name="verified" size={14} /> {L('본인 확인', 'Verified')}

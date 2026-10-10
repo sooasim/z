@@ -16,6 +16,7 @@ import { useToast } from '@/components/ui/toast';
 import { SubjectPicker, type Subject } from '@/components/traveler/SubjectPicker';
 import { styles as s } from '@/components/traveler/ui';
 import { SUPPORT_CATEGORY_LABEL, subjectLabel } from '@/components/traveler/labels';
+import { pickPair } from '@/lib/phrases';
 
 const FAQ: Array<{ q: [string, string]; a: [string, string] }> = [
   { q: ['결제했는데 예약이 확정되지 않았어요', 'I paid but my booking isn’t confirmed'], a: ['결제사 승인을 받은 뒤 서버에서 확정해요. 보통 몇 분 안에 반영되며, 승인되지 않은 결제는 자동으로 취소돼요. 내 여행에서 상태를 확인해 보세요.', 'We confirm once the payment provider approves. It usually takes a few minutes; unapproved payments are voided automatically. Check My trips.'] },
@@ -135,7 +136,7 @@ function MyCases() {
           paged={false}
           columns={[
             { key: 'subject|title', label: L('제목', 'Subject'), primary: true, render: (r) => <strong>{str(r, 'subject', 'title')}</strong> },
-            { key: 'category', label: L('분류', 'Category'), render: (r) => (SUPPORT_CATEGORY_LABEL[str(r, 'category').toUpperCase()] ?? [str(r, 'category'), str(r, 'category')])[lang === 'ko' ? 0 : 1] },
+            { key: 'category', label: L('분류', 'Category'), render: (r) => pickPair((SUPPORT_CATEGORY_LABEL[str(r, 'category').toUpperCase()] ?? [str(r, 'category'), str(r, 'category')]), lang) },
             { key: 'contextType', label: L('관련', 'About'), hideOnMobile: true, render: (r) => (str(r, 'contextType') ? subjectLabel(str(r, 'contextType'), lang) : '—') },
             { key: 'status|state', label: L('상태', 'Status'), kind: 'status' },
             { key: 'createdAt', label: L('접수일', 'Opened'), kind: 'datetime' },

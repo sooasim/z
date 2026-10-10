@@ -1,5 +1,6 @@
 import { cityPhoto, photoPool, pick, prefetchMediaMap } from './media';
 import { canonicalPlace } from './places';
+import { intlLocale, type Lang } from './format';
 
 /**
  * Cover art when an entity has no photo of its own. Once the media map (public/media-map.json) has loaded these
@@ -94,7 +95,13 @@ export function langCode(l: string): string {
 export function flagFor(l: string): string {
   return FLAGS[langCode(l)] ?? '🌐';
 }
-export function langName(l: string, ui: 'ko' | 'en'): string {
+export function langName(l: string, ui: Lang): string {
   const n = LANG_NAME[langCode(l)];
-  return n ? n[ui === 'ko' ? 0 : 1] : l;
+  if (!n) return l;
+  // `Intl.DisplayNames` knows every language name in every UI language; LANG_NAME is the ko/en fallback.
+  try {
+    return new Intl.DisplayNames([intlLocale(ui)], { type: 'language' }).of(langCode(l)) ?? n[ui === 'ko' ? 0 : 1];
+  } catch {
+    return n[ui === 'ko' ? 0 : 1];
+  }
 }

@@ -4,6 +4,7 @@ import { monthWeeks as weeksOf, isoDate, parseDateRange, formatDateLong, formatP
 import { useI18n } from '@/lib/i18n';
 import { f, str } from '@/lib/shape';
 import { Icon } from './ui/icons';
+import { pickPair } from '@/lib/phrases';
 
 export type DayKind = 'paid' | 'exchange' | 'block' | 'hold' | 'unavail' | '';
 export interface DayInfo {
@@ -135,8 +136,8 @@ export function MonthCalendar({
                 const past = d < todayIso;
                 const sel = inSel(d);
                 const kind = info?.kind || '';
-                const shortLabel = info?.label ?? info?.code ?? (kind ? KIND_LABEL[kind].short[lang === 'ko' ? 0 : 1] : '');
-                const stateText = info?.label ?? (kind ? KIND_LABEL[kind].long[lang === 'ko' ? 0 : 1] : '');
+                const shortLabel = info?.label ?? info?.code ?? (kind ? pickPair(KIND_LABEL[kind].short, lang) : '');
+                const stateText = info?.label ?? (kind ? pickPair(KIND_LABEL[kind].long, lang) : '');
                 const price = showPrices && info?.price && !past && (kind === '' || kind === 'block') ? formatPriceShort(info.price, info.currency || 'KRW', lang) : '';
                 const cls = ['day', kind, sel ? 'sel' : '', sel && d === selected?.start ? 'edge-start' : '', sel && d === lastSel ? 'edge-end' : '', d === todayIso ? 'today' : ''].filter(Boolean).join(' ');
                 const name = [formatDateLong(d, lang), stateText, info?.code ?? '', price, sel ? L('선택됨', 'selected') : '', past ? L('지난 날짜', 'past') : '']

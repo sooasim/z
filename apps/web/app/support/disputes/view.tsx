@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/toast';
 import { SubjectPicker, type Subject } from '@/components/traveler/SubjectPicker';
 import { styles as s } from '@/components/traveler/ui';
 import { DISPUTE_REASON_LABEL, SEVERITY_LABEL, subjectLabel } from '@/components/traveler/labels';
+import { pickPair } from '@/lib/phrases';
 
 const KINDS = ['PROPERTY_NOT_AS_DESCRIBED', 'CLEANLINESS', 'NO_ACCESS', 'DAMAGE', 'NO_SHOW', 'REFUND', 'HARASSMENT', 'SAFETY', 'FRAUD', 'OTHER'];
 const SAFETY_CAT: Record<string, string> = { HARASSMENT: 'HARASSMENT', SAFETY: 'SAFETY_THREAT', FRAUD: 'FRAUD', PROPERTY_NOT_AS_DESCRIBED: 'PROPERTY_MISREPRESENTATION' };
@@ -88,7 +89,7 @@ function NewCase({ onSent }: { onSent: () => void }) {
             <option value="">{L('선택하세요', 'Choose…')}</option>
             {KINDS.map((k) => (
               <option key={k} value={k}>
-                {(DISPUTE_REASON_LABEL[k] ?? [k, k])[lang === 'ko' ? 0 : 1]}
+                {pickPair((DISPUTE_REASON_LABEL[k] ?? [k, k]), lang)}
               </option>
             ))}
           </select>
@@ -149,9 +150,9 @@ function MyCases() {
           filterable={false}
           paged={false}
           columns={[
-            { key: 'reason', label: L('유형', 'Type'), primary: true, render: (r) => <strong>{(DISPUTE_REASON_LABEL[str(r, 'reason').toUpperCase()] ?? [str(r, 'reason'), str(r, 'reason')])[lang === 'ko' ? 0 : 1]}</strong> },
+            { key: 'reason', label: L('유형', 'Type'), primary: true, render: (r) => <strong>{pickPair((DISPUTE_REASON_LABEL[str(r, 'reason').toUpperCase()] ?? [str(r, 'reason'), str(r, 'reason')]), lang)}</strong> },
             { key: 'context_type|contextType', label: L('대상', 'About'), render: (r) => subjectLabel(str(r, 'contextType', 'context_type'), lang) },
-            { key: 'severity', label: L('중요도', 'Priority'), hideOnMobile: true, render: (r) => (SEVERITY_LABEL[str(r, 'severity').toUpperCase()] ?? ['—', '—'])[lang === 'ko' ? 0 : 1] },
+            { key: 'severity', label: L('중요도', 'Priority'), hideOnMobile: true, render: (r) => pickPair((SEVERITY_LABEL[str(r, 'severity').toUpperCase()] ?? ['—', '—']), lang) },
             { key: 'status|state', label: L('상태', 'Status'), kind: 'status' },
             { key: 'created_at|createdAt', label: L('접수일', 'Opened'), kind: 'datetime' },
           ]}

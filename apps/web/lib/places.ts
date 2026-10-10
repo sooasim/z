@@ -1,3 +1,5 @@
+import { intlLocale, type Lang } from './format';
+import { pickText } from './phrases';
 /**
  * Place-name i18n. The API stores canonical English city names ("Jeju"); the Korean UI shows "제주".
  * - canonicalPlace('제주') → 'Jeju' (search params, API queries)
@@ -75,21 +77,22 @@ export function canonicalPlace(text: string | null | undefined): string {
 }
 
 /** Localized display name: placeLabel('Jeju','ko') → '제주'. Unknown names are returned unchanged. */
-export function placeLabel(value: string | null | undefined, lang: 'ko' | 'en' = 'ko'): string {
+export function placeLabel(value: string | null | undefined, lang: Lang = 'ko'): string {
   const v = (value ?? '').trim();
   if (!v) return '';
   const p = findPlace(v);
-  return p ? p[lang] : v;
+  return p ? pickText(p, lang) : v;
 }
 
-const regionNames: Partial<Record<'ko' | 'en', Intl.DisplayNames | null>> = {};
+const regionNames: Partial<Record<Lang, Intl.DisplayNames | null>> = {};
 /** ISO-3166 country code → localized country name ('KR' → '대한민국'); other strings pass through. */
-export function countryLabel(code: string | null | undefined, lang: 'ko' | 'en' = 'ko'): string {
+export function countryLabel(code: string | null | undefined, lang: Lang = 'ko'): string {
   const c = (code ?? '').trim();
   if (!/^[A-Za-z]{2}$/.test(c)) return c;
   if (regionNames[lang] === undefined) {
     try {
-      regionNames[lang] = new Intl.DisplayNames([lang === 'ko' ? 'ko-KR' : 'en'], { type: 'region' });
+      // `Intl.DisplayNames` already knows every UI language, so country names need no phrase entries.
+      regionNames[lang] = new Intl.DisplayNames([intlLocale(lang)], { type: 'region' });
     } catch {
       regionNames[lang] = null;
     }

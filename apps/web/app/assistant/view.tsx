@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/states';
 import { Button, ButtonLink, ErrorText, Icon, PageHeader } from '@/components/ui';
 import { AuthTeaser } from '@/components/public/AuthTeaser';
 import s from '@/components/public/public.module.css';
+import { pickPair } from '@/lib/phrases';
 
 interface Suggestion {
   href: string;
@@ -74,8 +75,8 @@ function Chat() {
         return {
           href: str(x, 'action.href') || (t === 'GUIDE' ? `/guides/${id}` : t === 'TRAVEL_PRODUCT' ? `/travel/${id}` : `/stay/${id}`),
           title: str(x, 'title'),
-          meta: [KIND[t] ? KIND[t][lang === 'ko' ? 0 : 1] : '', placeLabel(city, lang)].filter(Boolean).join(' · '),
-          price: price !== undefined ? `${formatMoney(price, str(x, 'price.currency') || 'KRW', lang)}${unit ? ` / ${unit[lang === 'ko' ? 0 : 1]}` : ''}` : undefined,
+          meta: [KIND[t] ? pickPair(KIND[t], lang) : '', placeLabel(city, lang)].filter(Boolean).join(' · '),
+          price: price !== undefined ? `${formatMoney(price, str(x, 'price.currency') || 'KRW', lang)}${unit ? ` / ${pickPair(unit, lang)}` : ''}` : undefined,
           reason: lang === 'ko' ? arr<string>(x, 'reasons')[0] : undefined,
           img: postcardFor(city || str(x, 'title'), id),
           kind: t,

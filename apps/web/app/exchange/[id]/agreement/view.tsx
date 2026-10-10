@@ -13,6 +13,7 @@ import { StateView } from '@/components/states';
 import { Alert, DateText, ErrorText, Section, Button, Kv, Icon } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 import { ExchangeHeader, exchangeView, homeTitle } from '../../shared';
+import { pickPair } from '@/lib/phrases';
 
 const CLAUSES: Array<[string, string]> = [
   ['제1조 (목적) 양 당사자는 아래 조건에 따라 각자의 주거를 상호 교환하여 사용한다. 본 교환에는 금전 대가가 수반되지 않는다.', 'Art. 1 (Purpose) The parties exchange the use of their homes on the terms below. No rent is paid.'],
@@ -86,7 +87,7 @@ export default function ExchangeAgreementView() {
                     <>
                       <Section title={L('맞교환 계약서', 'Exchange agreement')}>
                         <article className="card stack" tabIndex={0} aria-label={L('계약서 본문', 'Agreement text')} style={{ maxHeight: 460, overflowY: 'auto' }}>
-                          {CLAUSES.map((c, i) => <p key={i} style={{ margin: 0 }}>{c[lang === 'ko' ? 0 : 1]}</p>)}
+                          {CLAUSES.map((c, i) => <p key={i} style={{ margin: 0 }}>{pickPair(c, lang)}</p>)}
                           <hr />
                           <h3>{L('합의한 조건', 'Agreed terms')}</h3>
                           <Kv
