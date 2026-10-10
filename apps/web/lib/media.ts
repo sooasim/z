@@ -165,6 +165,19 @@ export function withBase(url: string | null | undefined): string {
   return BASE_PATH + u;
 }
 
+/**
+ * Scheme allow-list for a URL that is about to become an `<img src>`: an uploaded avatar or listing photo arrives
+ * as API data or as a `blob:` preview of the file the user just picked, so only `http(s):`, `blob:` and
+ * root-relative paths are rendered. Anything else (`javascript:`, `vbscript:`, `data:`, a protocol-relative host)
+ * is dropped and the caller falls back to its placeholder.
+ */
+export function safeImageSrc(url: string | null | undefined): string | undefined {
+  const u = String(url ?? '').trim();
+  if (!u || u.startsWith('//')) return undefined;
+  if (u.startsWith('/')) return u;
+  return /^(https?|blob):/i.test(u) && !/^\s*(javascript|vbscript|data):/i.test(u) ? u : undefined;
+}
+
 const ASSET_RE = /^\/(photos|legacy)\/([0-9a-f]{12})(?:\/|$)/;
 /** 'photos/<sha12>' | 'legacy/<sha12>' for a migrated / licensed asset URL (any variant, with or without basePath). */
 export function assetId(url: string | null | undefined): string | null {

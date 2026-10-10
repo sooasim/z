@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { assetId, canonicalUrl, cityPhoto, credit, creditedPhotos, guideCover, imgProps, indexMediaMap, personPhoto, setMediaMap, stripBase, withBase, pick, archive } from '@/lib/media';
+import { assetId, canonicalUrl, cityPhoto, credit, creditedPhotos, guideCover, imgProps, indexMediaMap, personPhoto, safeImageSrc, setMediaMap, stripBase, withBase, pick, archive } from '@/lib/media';
 import { canonicalPlace } from '@/lib/places';
 import { postcardFor, realize, isArt } from '@/lib/art';
 import { markdownExcerpt, markdownMedia, parseMarkdown } from '@/components/media/markdown';
@@ -85,6 +85,14 @@ describe('media map', () => {
     setMediaMap({ ...MAP, people: { byId: {}, byName: {}, pool: [] } });
     expect(personPhoto('user-1', '서울 호스트')).toBeUndefined();
     setMediaMap(MAP);
+  });
+
+  it('renders only http(s), blob and root-relative image URLs', () => {
+    expect(safeImageSrc('https://cdn.example.com/a.jpg')).toBe('https://cdn.example.com/a.jpg');
+    expect(safeImageSrc('blob:http://localhost:3000/9f2a')).toBe('blob:http://localhost:3000/9f2a');
+    expect(safeImageSrc('/photos/aaaaaaaaaaaa/960.webp')).toBe('/photos/aaaaaaaaaaaa/960.webp');
+    for (const bad of [' javascript:alert(1)', 'JavaScript:alert(1)', 'vbscript:msgbox', 'data:text/html,<script>', '//evil.example.com/a.jpg', '', null, undefined])
+      expect(safeImageSrc(bad)).toBeUndefined();
   });
 
   it('exposes credits for licensed photos only', () => {
