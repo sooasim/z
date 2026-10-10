@@ -1,0 +1,632 @@
+{
+  "version": 1,
+  "readme": "Hand review of the portrait candidates fetched by scripts/legacy/fetch-people.mjs (Openverse, CC BY / BY-SA / CC0 / PDM). Accepted photos are published as the demo profile pictures of seeded hosts, guides and travellers — the person shown is a stand-in, never the persona. Rejected photos keep the reason. Apply with: node scripts/legacy/fetch-people.mjs publish",
+  "reviewedAt": "2026-10-10",
+  "photos": {
+    "b8ebb7de4cded393a58618bbb98436928d85b2673d912e95661823451976f682": {
+      "accepted": true,
+      "subjectKo": "분홍 배경 앞에서 환하게 웃는 20대 여성",
+      "subjectEn": "Young woman smiling in front of a pink backdrop",
+      "roles": [
+        "person:woman",
+        "age:20s"
+      ],
+      "crop": "attention",
+      "quality": 4
+    },
+    "6fefb3ad40917f378b91ac16b1120700e905ed5aa0c31b1b8ffa5e56959ee10f": {
+      "accepted": true,
+      "subjectKo": "초록 나무를 배경으로 미소 짓는 20대 여성",
+      "subjectEn": "Young woman smiling against summer greenery",
+      "roles": [
+        "person:woman",
+        "age:20s"
+      ],
+      "crop": "attention",
+      "quality": 5
+    },
+    "e1d9f36a66a7014a9b05c0180f5b7c6886838febb8186e2f870f4b85c47f3d82": {
+      "accepted": false,
+      "reason": "swimwear studio shot — not a profile photo"
+    },
+    "f24b53f7e1cde7869d7af2ccc81e42ba335f1a4fb20564704aa0ad3574f6c0b7": {
+      "accepted": true,
+      "subjectKo": "체크 코트를 입고 크게 웃는 중년 여성 (흑백)",
+      "subjectEn": "Middle-aged woman laughing in a checked coat (black and white)",
+      "roles": [
+        "person:woman",
+        "age:50s"
+      ],
+      "crop": "attention",
+      "quality": 4
+    },
+    "3035f79114aeb0d15fa8b66776138d9ea8f03b847a68e9a5886a0cd51ac77d08": {
+      "accepted": false,
+      "reason": "street scene, the face is too small to crop into an avatar"
+    },
+    "6fe27bf8d7f1e1569b455dc6de9f5ea781782b2bddd58d319f00c8f38285439b": {
+      "accepted": true,
+      "subjectKo": "골목에 선 백발의 할머니 (흑백)",
+      "subjectEn": "Elderly woman standing in a lane (black and white)",
+      "roles": [
+        "person:woman",
+        "age:70s"
+      ],
+      "crop": "attention",
+      "quality": 4
+    },
+    "7704d16ea07668171db2d5953461872c26f4acc9e4915b07c0cc926080dacec1": {
+      "accepted": false,
+      "reason": "mid-distance street photo, the face is too small"
+    },
+    "9c6b87a4c090979ba519f0fcea64dc4da2560fe99b2fadacb667b003d09ec60d": {
+      "accepted": false,
+      "reason": "seated at a distance — the face is too small once cropped square"
+    },
+    "ddfbaddde229017383ca67e0b6872e0ea6ded83fb0aa9f3e451b0cd952d24a0d": {
+      "accepted": false,
+      "reason": "painting, not a photograph"
+    },
+    "0e92ced28f1bb070441db02f51f40ef2f56c3db208de2e0fa43473e287dcbe96": {
+      "accepted": false,
+      "reason": "painting, not a photograph"
+    },
+    "28d41ac376c0a6179c8ba73b51f3897c360730cd5ff0a30b3840c1e267bda9e9": {
+      "accepted": false,
+      "reason": "glamour shot lying down — not a profile photo"
+    },
+    "13c3daea2ccebdc145eab26469abc605716132c4209cef8d083ddfb732688d1f": {
+      "accepted": false,
+      "reason": "the subject appears to be a child"
+    },
+    "8476e76ff0ced1e0b24a843d5d26d9e6bf1ec9c5e7fc2025c0b90fc0b38f6ce2": {
+      "accepted": false,
+      "reason": "documentary portrait of a named community — not a stand-in for a fictional persona"
+    },
+    "fbfb3ef88317d48fa26b57823ccc2d5aaed9bf3b6999ead32baefccb21f73c9d": {
+      "accepted": false,
+      "reason": "mother with small children"
+    },
+    "38d4c1ecdf52533b2f061e03b7d10caeae2856d9bd727defa1c52ff137d256a4": {
+      "accepted": false,
+      "reason": "carnival dancers, several people"
+    },
+    "f4ad0453b46288ee536359364a992fa4f80c1d6037c9ff266ce9ad8a564a8058": {
+      "accepted": false,
+      "reason": "painting, not a photograph"
+    },
+    "2a2056b168346a389f75d0a8cbeffe763e7945e83e83ac9694f983cc1cdce3db": {
+      "accepted": false,
+      "reason": "two people in frame"
+    },
+    "ac157079c78dc90b7aee290fb8c72f46c20d0ebeecfce71d9141bb4f3d60ffe5": {
+      "accepted": false,
+      "reason": "arms raised, the face is too small"
+    },
+    "7f63340a531a1bb69d5cf95833e2ebcdb85abfa6f59f22c0d69558bd42144e09": {
+      "accepted": false,
+      "reason": "documentary portrait of a named community — not a stand-in for a fictional persona"
+    },
+    "63e48c551dc5cd7b509023cf531a5c80a1fb4e149c7dc7bac27e19299cb7839d": {
+      "accepted": false,
+      "reason": "a couple, two faces"
+    },
+    "f0eb3a10e873eb6b499354e8813d61318dcb7935edfedf52dc11ed23f0c0b9d8": {
+      "accepted": false,
+      "reason": "war memorial statue, not a person"
+    },
+    "5756ab0ef87fc280ad5413eaaa0ce353153b0a494b6cad59a0c14eb1a501e58b": {
+      "accepted": false,
+      "reason": "painted presidential portrait"
+    },
+    "87204ef81e7da19d9c4718711e00f481a8e754cde46e20607d775a4abbe522ca": {
+      "accepted": false,
+      "reason": "two people in frame"
+    },
+    "ae55e1257c9b2e48232d9fb823acf8a1d749f2e49409ef11318bb272bcf3ea26": {
+      "accepted": false,
+      "reason": "three people in frame"
+    },
+    "c01253346c86d47b3bd087e6ed72ba8588075d104930e40d195eb66221b25a11": {
+      "accepted": true,
+      "subjectKo": "골목에서 손을 들어 인사하는 노년 남성 (흑백)",
+      "subjectEn": "Older man waving in an alley (black and white)",
+      "roles": [
+        "person:man",
+        "age:60s"
+      ],
+      "crop": "attention",
+      "quality": 4
+    },
+    "40b7ed5ba7b154f897028ce223f577a5b103977e6ef74954789fbb7c15e60fc7": {
+      "accepted": false,
+      "reason": "the face is hidden behind cage bars"
+    },
+    "e6f19c3076355903b2332b350c891f1da27a0af0e4fcf1318f61bce37a4cfc19": {
+      "accepted": false,
+      "reason": "a couple, two faces"
+    },
+    "c0d467a75217b2d64b83a007d9024b7f5d287b7f2a277563b957acf60dd848f5": {
+      "accepted": false,
+      "reason": "a couple, two faces"
+    },
+    "a663064e96d9cb36230d32cd5d5ff95e46a95395655597f28fcc1f6e85292ab0": {
+      "accepted": false,
+      "reason": "face in profile in deep shadow"
+    },
+    "74e878f9b95f45748128ff9cf79bd7dd16b93469260db94a39f947ebc77e48ca": {
+      "accepted": false,
+      "reason": "painting (nude)"
+    },
+    "eb818d5f58925c2446153deb881a9e1b519e2fe6de88945a2efdb2b2082abaf1": {
+      "accepted": false,
+      "reason": "gas mask still life, no person"
+    },
+    "5eea1ea299a0d39b5d67b525524b1e60e794b2be9eca9edeef7d63c6db18726a": {
+      "accepted": false,
+      "reason": "busy art background, the subject does not read as a portrait"
+    },
+    "5993df9218c88ccbc3e1eeb9de4d982d9e880a888adb78f67ac4172dd6788835": {
+      "accepted": false,
+      "reason": "festival costume, the subject may be a minor"
+    },
+    "880321550d70b5bd665c3779adcb37bd24fa6d11652a6a34ab905a338b4d3998": {
+      "accepted": false,
+      "reason": "mid-distance gallery photo, the face is too small"
+    },
+    "fdd727b92d3c5d9abb3f58876f29140c28e40e6c255caafe9601b0b0da861bbf": {
+      "accepted": true,
+      "subjectKo": "수염을 기른 노년 남성의 흑백 인물 사진",
+      "subjectEn": "Portrait of a bearded older man (black and white)",
+      "roles": [
+        "person:man",
+        "age:70s"
+      ],
+      "crop": "attention",
+      "quality": 5
+    },
+    "38dd30a01d43f0e98d38a6c8adadd3066c0b0b056f7011b58067214d079cbdf9": {
+      "accepted": true,
+      "subjectKo": "정장 차림으로 정면을 바라보는 노년 남성 (흑백)",
+      "subjectEn": "Older man in a jacket looking at the camera (black and white)",
+      "roles": [
+        "person:man",
+        "age:70s"
+      ],
+      "crop": "attention",
+      "quality": 4
+    },
+    "c493b618c326274566c09f3b3d5913ed300f990ae1f9b5bf3cd62708da32676d": {
+      "accepted": false,
+      "reason": "distant figure on a building site"
+    },
+    "30f849fc41dcd4c019c61558921f08ee509fef95858f9bda68bede5b5a461693": {
+      "accepted": false,
+      "reason": "three people in frame"
+    },
+    "7229f200b503c72dd8ea807d105ce0e6e9d7ddd1823a7bd5e62065fdd736327f": {
+      "accepted": true,
+      "subjectKo": "흰 수염에 청진기를 건 중년 의사",
+      "subjectEn": "Doctor with a white beard and a stethoscope",
+      "roles": [
+        "person:man",
+        "age:60s"
+      ],
+      "crop": "attention",
+      "quality": 5
+    },
+    "d44f23e3cb259408d9be16fef62a3ccb7cf1cc16b018de29b810bde449d336d4": {
+      "accepted": true,
+      "subjectKo": "주방에서 접시를 담는 여성 셰프 (흑백)",
+      "subjectEn": "Woman chef plating in a kitchen (black and white)",
+      "roles": [
+        "person:woman",
+        "age:30s"
+      ],
+      "crop": "attention",
+      "quality": 4
+    },
+    "4e286e97c3f57c2963a05db797216ea56b829d9abc577a26cb04002e2925039d": {
+      "accepted": false,
+      "reason": "distant kitchen scene"
+    },
+    "7498b91b1e9f658d9b354204824d4ebd5f47b4d674a334019517e66e93915bc8": {
+      "accepted": false,
+      "reason": "three people in frame"
+    },
+    "2ad6ad69bea4ac904a514957a5d41cdae06047a9a1d122244060700c2b16f409": {
+      "accepted": false,
+      "reason": "cropped sports photo, soft focus"
+    },
+    "c5c69b3c1debbdc2b532e568d77a15c5ee69afb18c3c9be53e63bfcbf5ed63e3": {
+      "accepted": false,
+      "reason": "three people in frame"
+    },
+    "a9e3faa1f5aace1b18331ece4e8c19eca4d0df5d9b1506de0e93ec8aa0f61d0d": {
+      "accepted": false,
+      "reason": "the face is hidden behind a camera"
+    },
+    "06401f924e9d944b394549d77b1e159ee3684683858e5b652743e898382c5ed2": {
+      "accepted": false,
+      "reason": "illustration, not a photograph"
+    },
+    "ca2bc1f99ed0c8e8cd12c3703614c6780de427419b80aa614be042d379c89e01": {
+      "accepted": false,
+      "reason": "the face is hidden by hair in motion"
+    },
+    "f2881a6cdcc2612ea3a20d3395519988dd4c51c98ed4c6d29d7895ea28a0b3ea": {
+      "accepted": false,
+      "reason": "group walking on a street"
+    },
+    "fd5737c73cc5c35a034d98c43eac9a98acdcf77d6aa97db280a0b6315948b4fb": {
+      "accepted": true,
+      "subjectKo": "어두운 배경에서 정면을 응시하는 20대 여성",
+      "subjectEn": "Young woman facing the camera against a dark background",
+      "roles": [
+        "person:woman",
+        "age:20s"
+      ],
+      "crop": "attention",
+      "quality": 5
+    },
+    "34d743cbc9c5afc538194f199a649889ec565ab3fd6410669023d97ab096b7eb": {
+      "accepted": false,
+      "reason": "historical studio photograph of a full figure"
+    },
+    "ecfb1ae38fc272580d966eedd3c01f28b00a470595995b7bf4d120024b81ced2": {
+      "accepted": false,
+      "reason": "the subject is turned away from the camera"
+    },
+    "0c147bcd6c26e08f45f963b3ae2e9a69bbd7adc8e868effe7536b72a037cdaa4": {
+      "accepted": false,
+      "reason": "night-market scene, several people"
+    },
+    "64748a6fb597827160219f1feb683e2cf7e09fcd668f8e59ac3f6c9609ba77e0": {
+      "accepted": true,
+      "subjectKo": "안경을 쓰고 식당에 앉아 있는 30대 여성",
+      "subjectEn": "Woman with glasses seated in a restaurant",
+      "roles": [
+        "person:woman",
+        "age:30s"
+      ],
+      "crop": "attention",
+      "quality": 4
+    },
+    "6f1f455e1d320bc312f2ee0041fb63f481ede8253452321a2f342ac50791f856": {
+      "accepted": false,
+      "reason": "same model as 64748a — one portrait per person"
+    },
+    "1fc0c80547aa75b1e283883a7d1f16fb915e164ec43e932db1f42f75de9426ee": {
+      "accepted": false,
+      "reason": "silhouette against the sun, no face"
+    },
+    "3b23ea97fa9a568886fef9dd3909d4fee9cdcc9bb2596f19a8274cca0120d7da": {
+      "accepted": false,
+      "reason": "same model as 64748a, tongue-out expression"
+    },
+    "2261f7943ae5673875e208aec11a99671c39897c6e2e3c6bd4991b001717fb13": {
+      "accepted": false,
+      "reason": "cigarette in frame — not wanted on a demo profile"
+    },
+    "28e1354ad347dd49e39c7fa8b8414ef25a559b6ad9acad7a64f22011bc958f86": {
+      "accepted": true,
+      "subjectKo": "겨울 나무 아래에서 위를 올려다보는 20대 남성 (흑백)",
+      "subjectEn": "Young man looking up under winter trees (black and white)",
+      "roles": [
+        "person:man",
+        "age:20s"
+      ],
+      "crop": "attention",
+      "quality": 3
+    },
+    "bbc9c0fb01bf1edcf3b031d9ee45bdc5e5953c9139a164d98d50f97c3fe4b514": {
+      "accepted": true,
+      "subjectKo": "거리에서 고개를 든 20대 남성 (흑백)",
+      "subjectEn": "Young man looking up on the street (black and white)",
+      "roles": [
+        "person:man",
+        "age:20s"
+      ],
+      "crop": "attention",
+      "quality": 3
+    },
+    "9bcf7f4aae5334f655db635955f10a22015d9065b92e18c42833809eb9278d77": {
+      "accepted": true,
+      "subjectKo": "선술집에서 웃고 있는 30대 남성 (흑백)",
+      "subjectEn": "Man laughing in a bar (black and white)",
+      "roles": [
+        "person:man",
+        "age:30s"
+      ],
+      "crop": "attention",
+      "quality": 4
+    },
+    "a3e21a3242426530e802d7035f981012091a3e08824180d99cc14e73164db20d": {
+      "accepted": true,
+      "subjectKo": "모자를 쓰고 나무 아래 선 20대 남성 (흑백)",
+      "subjectEn": "Young man in a cap under a tree (black and white)",
+      "roles": [
+        "person:man",
+        "age:20s"
+      ],
+      "crop": "attention",
+      "quality": 3
+    },
+    "1b857366ab90495da6190294d9b753f517363896afe8e3c922d1856d5d68eb43": {
+      "accepted": false,
+      "reason": "pool player bent over the table, no face"
+    },
+    "50d5fd49ea59ce47a3d61af5a013bbbd5c836a10cd8046b7b61531d03457a5a4": {
+      "accepted": false,
+      "reason": "mural wall, no person"
+    },
+    "87dc21dec160857decbf0d9371fe11e4f3b5b0b6bc0860628ebbf7d20ad8a6ae": {
+      "accepted": false,
+      "reason": "ink illustration, not a photograph"
+    },
+    "34f26d2b8e5735a1465d9d7d132dc3bd7e8953fef098057906119231aff937d9": {
+      "accepted": false,
+      "reason": "renaissance hat badge, not a person"
+    },
+    "8b250cb42fbf67908000ce7dfeae67d469ef27b587ba32455576a478516cb7fa": {
+      "accepted": false,
+      "reason": "miniature painting, not a photograph"
+    },
+    "2875bf17d1cf4be180106b71a072c1e7ca3ede2c8b87128848fd8bdee951d4c9": {
+      "accepted": true,
+      "subjectKo": "회색 배경 앞에 선 안경 쓴 30대 남성",
+      "subjectEn": "Man with glasses standing against a grey backdrop",
+      "roles": [
+        "person:man",
+        "age:30s"
+      ],
+      "crop": "attention",
+      "quality": 5
+    },
+    "22c23a97a22f0dee0f8a606c5bab77d9eb0ce3f3af77b9a3547551175523caae": {
+      "accepted": true,
+      "subjectKo": "회색 재킷을 입고 미소 짓는 30대 인물",
+      "subjectEn": "Person in a grey lapel jacket, smiling",
+      "roles": [
+        "person:woman",
+        "age:30s"
+      ],
+      "crop": "attention",
+      "quality": 5
+    },
+    "8381251812dd8b94118179f7bdde57b409031ace71c8dbb5effd1de3b2158da9": {
+      "accepted": true,
+      "subjectKo": "사무실 책상에서 안경을 쓰고 일하는 40대 여성",
+      "subjectEn": "Woman with glasses working at an office desk",
+      "roles": [
+        "person:woman",
+        "age:40s"
+      ],
+      "crop": "attention",
+      "quality": 4
+    },
+    "e837ec1eaadd5648aaba85764f452dd8fc9ec31f5372e6d393bf72facf612a7f": {
+      "accepted": false,
+      "reason": "face in profile behind a laptop"
+    },
+    "985cdc668c6e30ef4174a25790d859523283cbc58dde8bc0483ec94c2571015c": {
+      "accepted": false,
+      "reason": "two people, faces turned away"
+    },
+    "0fd0a4b04384a89844b9b82b142664ead56d0c34a239de72715e7f098d60f64a": {
+      "accepted": false,
+      "reason": "two people, faces turned away"
+    },
+    "4aac3924d86cd48f4575b57eb09a0f31b725255385be1ee9c172405f8c444634": {
+      "accepted": true,
+      "subjectKo": "붉은 스웨터를 입고 팔짱을 낀 30대 여성",
+      "subjectEn": "Woman in a red sweater with her arms folded",
+      "roles": [
+        "person:woman",
+        "age:30s"
+      ],
+      "crop": "attention",
+      "quality": 5
+    },
+    "a5cf2605c6732e7201437b2d3eeed52d3fe40d444d630678a3dc3a718d12fcd7": {
+      "accepted": false,
+      "reason": "same model as 1f35a2 — one portrait per person"
+    },
+    "ab5f9df5f1c6f4cba0be29d1f1320b9d0fc365be82b8fcc68d9def043b6a9891": {
+      "accepted": false,
+      "reason": "group around a meeting table"
+    },
+    "1f35a286aed9d01b2536efccb307307500d9d7e08a24157757c5046cea499135": {
+      "accepted": true,
+      "subjectKo": "노란 스웨터를 입은 은발의 60대 여성",
+      "subjectEn": "Silver-haired woman in a yellow jumper",
+      "roles": [
+        "person:woman",
+        "age:60s"
+      ],
+      "crop": "attention",
+      "quality": 5
+    },
+    "f30604da71954e04dc2bb4d4797ada394b3f9a436219843deebeaa5ecc0302be": {
+      "accepted": false,
+      "reason": "same model as 1f35a2, with a group behind her"
+    },
+    "0a6b9872d33433b50f8025254cbbdea6061e01463cd532ff9656de11e5da4f33": {
+      "accepted": true,
+      "subjectKo": "선글라스를 머리에 올린 30대 여성",
+      "subjectEn": "Woman with sunglasses pushed up on her head",
+      "roles": [
+        "person:woman",
+        "age:30s"
+      ],
+      "crop": "attention",
+      "quality": 4
+    },
+    "a760ee153896d6661da8d835b8a831daa43d7526c1866ac8aa05eac2b9332941": {
+      "accepted": false,
+      "reason": "exaggerated expression pulling at her glasses"
+    },
+    "1cde2f2139704fe9a77d352de1459514e8113768ce691146a0cf72cf75b9f6fc": {
+      "accepted": false,
+      "reason": "family group including a child"
+    },
+    "5a3df15b2bf16d9c1afb2822d1e4f5e7d485571c8cb541c2223e062a683c6cd6": {
+      "accepted": false,
+      "reason": "the subject is a child"
+    },
+    "4127e41e73d39c1d6a7d55f54fb4871e2b568db1d793db54fa832dbf0ed63315": {
+      "accepted": false,
+      "reason": "mid-distance picnic photo, the face is partly cut"
+    },
+    "9d03ca64ace4695cb0937880b92250cd586e3a8cb48ad25f2718e9863004334b": {
+      "accepted": false,
+      "reason": "skateboarder mid-trick, no face"
+    },
+    "257ea9785fa32983384b0730d2d8a554e6b973ec4558b12888349615f90dce93": {
+      "accepted": false,
+      "reason": "painting, not a photograph"
+    },
+    "da966ada8e95121578eea5d633b466a13c6ab94a18bc731f12b98cc3e874922b": {
+      "accepted": false,
+      "reason": "named speaker at a conference, mid-distance"
+    },
+    "69dc80e7191d52f1340fe3543f6cd284aac68c01893744f4c5bf0cc14e1239b9": {
+      "accepted": false,
+      "reason": "painting, not a photograph"
+    },
+    "c5b1da0439c2dc79a4afddff2a38d54c25b1aca0394199d20b355183d6b812bd": {
+      "accepted": false,
+      "reason": "painting, not a photograph"
+    },
+    "9ae99a78dcb135c91cfd28f8a3d13b6fdc0f346b465235825bd07474dc9ba88b": {
+      "accepted": false,
+      "reason": "painting, not a photograph"
+    },
+    "16e183198915b01e92222ad0acbf7c39c472a38ccd5bb101ceafbe8db515a6ed": {
+      "accepted": false,
+      "reason": "painting, not a photograph"
+    },
+    "864e330582298ed4abbda714c88306105e55459f8140f20881e5de6bf8d24f17": {
+      "accepted": false,
+      "reason": "painted portraits of named politicians"
+    },
+    "ef59f4f9795b37a27214ce04c35f4e7f2df8a8a9f86972c0bec071fdffb14350": {
+      "accepted": false,
+      "reason": "caught mid-yawn"
+    },
+    "d500c306276629bda977176ecfa28f5fe268981935ef6762681aecd1761925b3": {
+      "accepted": true,
+      "subjectKo": "사무실 복도에서 생각에 잠긴 40대 남성",
+      "subjectEn": "Man in a blazer thinking in an office corridor",
+      "roles": [
+        "person:man",
+        "age:40s"
+      ],
+      "crop": "attention",
+      "quality": 4
+    },
+    "e9fc119a2d2d125b732bafb07641b73b18af4f31da395a82c74a8550fa1d37db": {
+      "accepted": false,
+      "reason": "photograph of a sculpture in a frame"
+    },
+    "7d2e677fc427d2315cbfa20a94f972222276dd4562674d71f4ae4b537f8085d7": {
+      "accepted": false,
+      "reason": "extreme close-up, the face is cut off"
+    },
+    "8bc151a71412124e96f9d1884bb1f6ef35225fa256976f257bcd93b277fbf483": {
+      "accepted": true,
+      "subjectKo": "붉은 니트를 입고 웃는 수염 난 30대 남성",
+      "subjectEn": "Bearded man in a red jumper, smiling",
+      "roles": [
+        "person:man",
+        "age:30s"
+      ],
+      "crop": "attention",
+      "quality": 5
+    },
+    "03817061cd315e17aaea107786e20a8acc63fa3c8abb371129673a70f484b7f2": {
+      "accepted": false,
+      "reason": "same model as 8bc151 — one portrait per person"
+    },
+    "8946c1a4f82e434d9471655dcbff15a3e53182707e37dd1e843749254c8b945f": {
+      "accepted": false,
+      "reason": "same model as 8bc151 — one portrait per person"
+    },
+    "dd1bb9563ea26892f370a4c3824296522104c71f4e3dadd5a125fbda2a5ab156": {
+      "accepted": true,
+      "subjectKo": "흰 벽 앞에서 미소 짓는 30대 남성",
+      "subjectEn": "Man smiling against a white wall",
+      "roles": [
+        "person:man",
+        "age:30s"
+      ],
+      "crop": "attention",
+      "quality": 5
+    },
+    "c01d28e8688a808174f09f2d9c2c378af509ea00e35f8afda8f72c8f24ed4aba": {
+      "accepted": false,
+      "reason": "same model as dd1bb9 — one portrait per person"
+    },
+    "458965ccc5f4c9589397a0c4e90ed2ad1b62edfad25ec714551409ae524922f4": {
+      "accepted": true,
+      "subjectKo": "길가에 선 흰 셔츠 차림의 20대 남성",
+      "subjectEn": "Young man in a white shirt on a street",
+      "roles": [
+        "person:man",
+        "age:20s"
+      ],
+      "crop": "right",
+      "quality": 3
+    },
+    "1b902cb0469893d4882efda7b5d3d2527d0581efc04568b4299a94fa853e8b7b": {
+      "accepted": true,
+      "subjectKo": "야외 테라스에 앉은 40대 남성",
+      "subjectEn": "Man seated on an outdoor terrace",
+      "roles": [
+        "person:man",
+        "age:40s"
+      ],
+      "crop": "attention",
+      "quality": 4
+    },
+    "4bda770946c047db1e5a4fe322acde1ed9c805da7c74b6727651856abb7887cb": {
+      "accepted": false,
+      "reason": "face hidden by a hat and a mask"
+    },
+    "5b76493019f9b3906a4c4e4bd7d9ddeafd480f3d7fb8191ccc3aa35d49510a03": {
+      "accepted": false,
+      "reason": "shirtless, two people in frame"
+    },
+    "11c9d02ee1e25a044995b141355b54686748d829faace9fa2406ae9613fda25e": {
+      "accepted": false,
+      "reason": "painted self-portrait"
+    },
+    "3e45c3b5883bbb086c66a22df9f4ad90b2f4ac9831fe8ee7962f51090b246684": {
+      "accepted": false,
+      "reason": "historical figure (Rasputin)"
+    },
+    "f302406d6b5039fe6c705cbc0b100d69b70fb4d2d336e25ea23c31394b0591b3": {
+      "accepted": true,
+      "subjectKo": "모자를 쓴 흰 수염의 노년 남성",
+      "subjectEn": "Older man with a white beard and a hat",
+      "roles": [
+        "person:man",
+        "age:70s"
+      ],
+      "crop": "attention",
+      "quality": 4
+    },
+    "55c4c136f84453de48ce547d07f5f7075141fa485e63f1d6a830a984833afd2a": {
+      "accepted": false,
+      "reason": "historical studio photograph"
+    },
+    "a96f4578701f00ec6ea758f1c45ef8a7443465f8ae6bd1d30066f55762246e2d": {
+      "accepted": false,
+      "reason": "portrait of a named public figure — not a stand-in for a fictional persona"
+    },
+    "825a608b870c68e0f59aa8699421d2aaffc1ae61db0fb282daa6400cce8a7558": {
+      "accepted": false,
+      "reason": "portrait of a named public figure — not a stand-in for a fictional persona"
+    }
+  }
+}

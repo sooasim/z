@@ -248,7 +248,7 @@ function Detail({ r }: { r: any }) {
             {host && (
               <section className="card stack">
                 <div className="row nowrap" style={{ gap: 12 }}>
-                  <Avatar name={str(host, 'displayName')} size={48} verified={!!f(host, 'identityVerified', 'verified')} />
+                  <Avatar name={str(host, 'displayName')} personId={str(host, 'userId', 'hostId', 'id')} size={48} verified={!!f(host, 'identityVerified', 'verified')} />
                   <div className="grow">
                     <div className="xs muted">{L('호스트', 'Host')}</div>
                     <strong>{str(host, 'displayName')}</strong>

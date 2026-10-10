@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { assetId, canonicalUrl, cityPhoto, credit, creditedPhotos, guideCover, imgProps, indexMediaMap, setMediaMap, stripBase, withBase, pick, archive } from '@/lib/media';
+import { assetId, canonicalUrl, cityPhoto, credit, creditedPhotos, guideCover, imgProps, indexMediaMap, personPhoto, safeImageSrc, setMediaMap, stripBase, withBase, pick, archive } from '@/lib/media';
 import { canonicalPlace } from '@/lib/places';
 import { postcardFor, realize, isArt } from '@/lib/art';
 import { markdownExcerpt, markdownMedia, parseMarkdown } from '@/components/media/markdown';
@@ -21,6 +21,11 @@ const MAP = {
   legacy: { '/legacy/cccccccccccc/960.webp': { srcset: '/legacy/cccccccccccc/480.webp 480w, /legacy/cccccccccccc/960.webp 960w', alt: '원치승 대표', width: 1000, height: 692 } },
   cities: { Jeju: '/photos/aaaaaaaaaaaa/960.webp', 'Chiang Mai': '/photos/bbbbbbbbbbbb/960.webp' },
   guides: { 'user-1': '/photos/bbbbbbbbbbbb/960.webp' },
+  people: {
+    byId: { 'user-1': '/photos/aaaaaaaaaaaa/960.webp' },
+    byName: { '서울 호스트': '/photos/bbbbbbbbbbbb/960.webp' },
+    pool: ['/photos/aaaaaaaaaaaa/960.webp', '/photos/bbbbbbbbbbbb/960.webp'],
+  },
   hero: ['/legacy/cccccccccccc/960.webp'],
   charter: ['/photos/aaaaaaaaaaaa/960.webp'],
   archive: [{ url: '/legacy/cccccccccccc/960.webp', alt: 'x', page: '/about_ceo' }],
@@ -66,6 +71,28 @@ describe('media map', () => {
     expect(cityPhoto('chiang-mai')).toBe('/photos/bbbbbbbbbbbb/960.webp');
     expect(cityPhoto('Atlantis')).toBeUndefined();
     expect(guideCover('user-1')).toBe('/photos/bbbbbbbbbbbb/960.webp');
+  });
+
+  it('resolves profile photos by user id, display name and a stable pool pick', () => {
+    expect(personPhoto('user-1')).toBe('/photos/aaaaaaaaaaaa/960.webp');
+    expect(personPhoto(undefined, '서울 호스트')).toBe('/photos/bbbbbbbbbbbb/960.webp');
+    // an unknown person still gets a face, and always the same one
+    const unknown = personPhoto('user-99', '이서연');
+    expect(unknown).toBeTruthy();
+    expect(personPhoto('user-99', '이서연')).toBe(unknown);
+    expect(personPhoto('', null)).toBeUndefined();
+    // no portraits in the map → the caller falls back to the initial
+    setMediaMap({ ...MAP, people: { byId: {}, byName: {}, pool: [] } });
+    expect(personPhoto('user-1', '서울 호스트')).toBeUndefined();
+    setMediaMap(MAP);
+  });
+
+  it('renders only http(s), blob and root-relative image URLs', () => {
+    expect(safeImageSrc('https://cdn.example.com/a.jpg')).toBe('https://cdn.example.com/a.jpg');
+    expect(safeImageSrc('blob:http://localhost:3000/9f2a')).toBe('blob:http://localhost:3000/9f2a');
+    expect(safeImageSrc('/photos/aaaaaaaaaaaa/960.webp')).toBe('/photos/aaaaaaaaaaaa/960.webp');
+    for (const bad of [' javascript:alert(1)', 'JavaScript:alert(1)', 'vbscript:msgbox', 'data:text/html,<script>', '//evil.example.com/a.jpg', '', null, undefined])
+      expect(safeImageSrc(bad)).toBeUndefined();
   });
 
   it('exposes credits for licensed photos only', () => {
@@ -132,7 +159,7 @@ describe('markdown (migrated CMS bodies)', () => {
     expect(b.filter((x) => x.t === 'p' && x.lines[0].startsWith('▶'))).toHaveLength(0);
     expect(b.find((x) => x.t === 'ul')).toEqual({ t: 'ul', items: ['하나', '둘'] });
     const media = b.flatMap((x) => (x.t === 'images' ? x.images.map((i) => i.src) : x.t === 'video' ? [x.thumb ?? ''] : []));
-    expect(media.some((u) => u.startsWith('javascript:'))).toBe(false);
+    expect(media.some((u) => /^\s*(javascript|data|vbscript):/i.test(u))).toBe(false);
     expect(b[b.length - 1]).toMatchObject({ t: 'p', note: true });
   });
 

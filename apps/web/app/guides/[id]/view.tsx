@@ -140,7 +140,7 @@ export default function GuideProfileView() {
               </div>
               <div className="row" style={{ padding: '0 var(--sp-5) var(--sp-5)', alignItems: 'flex-end', gap: 16, marginTop: -44 }}>
                 <span style={{ borderRadius: '50%', boxShadow: '0 0 0 4px var(--surface)' }}>
-                  <Avatar name={g.name} src={g.avatar || undefined} size={96} verified={g.verified} decorative />
+                  <Avatar name={g.name} personId={g.id} src={g.avatar || undefined} size={96} verified={g.verified} decorative />
                 </span>
                 <div className="grow" style={{ minWidth: 220, paddingTop: 48 }}>
                   <div className={s.titleRow}>

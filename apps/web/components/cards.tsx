@@ -120,7 +120,7 @@ export function GuideCard({ g }: { g: any }) {
         {v.id && <HeartButton targetType="GUIDE" targetId={v.id} />}
       </div>
       <div className="who">
-        <Avatar name={v.name} src={v.avatar || undefined} size={64} verified={v.verified} />
+        <Avatar name={v.name} personId={v.id} src={v.avatar || undefined} size={64} verified={v.verified} />
         <div className="grow">
           <AutoHeading className="gcard-title">
             <Link href={`/guides/${v.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>

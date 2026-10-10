@@ -31,6 +31,10 @@
 
 이메일 코드 로그인, MFA 코드는 아무 6자리 숫자나 통과합니다. 소셜 로그인 버튼은 게스트로 로그인됩니다.
 
+데모 계정의 **프로필 사진**은 오픈 라이선스(CC BY · CC BY-SA · CC0 · PDM) 실제 인물 사진입니다
+(`data/media/people.json`, `scripts/legacy/fetch-people.mjs`). 사진 속 인물은 그 호스트·가이드·여행자 본인이 아니라
+페르소나를 대신하는 예시이며, 출처는 `/credits`에 모두 표기됩니다.
+
 ### 한계
 - **정적 사이트**입니다. 실제 백엔드·DB·PG가 없습니다. 데이터는 녹화 시점(`recordedAt`)의 스냅샷이며, 이후 변경은 **이 브라우저에만** 저장됩니다(다른 기기·사용자와 공유되지 않음).
 - 결제는 **테스트(MOCK) 모드**입니다. 토스페이먼츠 SDK를 불러오지 않고 웹의 MOCK 경로(결제 성공 리다이렉트 → 서버 승인 흉내)를 그대로 탑니다.
@@ -86,6 +90,10 @@ A static, server-less build of the **real `apps/web` UI** that you can click thr
 ### Demo accounts
 All use the password `Jetpool!2026dev`: `guest@`, `host.seoul@`, `host.jeju@`, `exchange.busan@`, `friend.guide@`,
 `pro.guide@`, `supplier@`, `admin@jetpool.dev` (admin signs in already stepped-up to AAL2). Email OTP / MFA accept any 6 digits.
+
+The **profile pictures** of those accounts are openly-licensed real portraits (CC BY · CC BY-SA · CC0 · PDM) published by
+`scripts/legacy/fetch-people.mjs` into `data/media/people.json`. Each one stands in for a persona — it is not a photo of
+that host, guide or traveller — and every one of them is credited on `/credits`.
 
 ### Limits
 - **Static site** — no backend, database or payment gateway. Data is a snapshot taken at `recordedAt`; your changes live

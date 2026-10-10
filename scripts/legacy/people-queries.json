@@ -1,0 +1,41 @@
+{
+  "note": "Openly-licensed REAL portrait photos (Openverse: Flickr CC, Wikimedia Commons) used as the demo profile pictures of seeded hosts, guides and travellers. Only licenses allowing commercial use and derivatives (crop) are requested; every photo keeps its attribution and is listed on /credits. Portraits are stand-ins — the person shown is not the demo persona.",
+  "perQuery": 6,
+  "minWidth": 600,
+  "groups": {
+    "woman": [
+      "korean woman portrait",
+      "asian woman portrait smiling",
+      "woman portrait outdoors",
+      "young woman portrait",
+      "senior woman portrait",
+      "woman barista cafe portrait",
+      "korean woman hanbok",
+      "japanese woman portrait",
+      "asian woman headshot",
+      "woman headshot studio",
+      "woman portrait white background",
+      "businesswoman portrait",
+      "woman smiling office portrait",
+      "woman portrait glasses",
+      "woman teacher portrait"
+    ],
+    "man": [
+      "korean man portrait",
+      "asian man portrait smiling",
+      "man portrait outdoors",
+      "young man portrait",
+      "senior man portrait",
+      "man chef portrait",
+      "korean man hanbok",
+      "japanese man portrait",
+      "asian man headshot",
+      "man headshot studio",
+      "man portrait white background",
+      "businessman portrait",
+      "man smiling office portrait",
+      "man portrait glasses",
+      "man teacher portrait"
+    ]
+  }
+}
