@@ -78,8 +78,14 @@ jobs:
             if [ "$code" = "200" ] && grep -q 'JETPOOL' page.html; then break; fi
             echo "attempt $i: HTTP $code"; sleep 15
           done
+          # The wait above only proves Pages is up — the PREVIOUS deployment already answers "/" with 200, so a
+          # path this deploy adds can still 404 for a minute. Give every path the same retry budget.
           for path in "" "stay/" "exchange/" "guide-friends/" "travel/" "login/" "about/" "archive/" "credits/" "opengraph-image.png" "media-map.json" "demo-backend.js" "demo-fixtures.json"; do
-            code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/$path")
+            for i in $(seq 1 20); do
+              code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/$path")
+              if [ "$code" = "200" ]; then break; fi
+              sleep 15
+            done
             echo "$code $BASE/$path"
             test "$code" = "200"
           done
