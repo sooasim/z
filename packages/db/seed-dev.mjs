@@ -1533,8 +1533,9 @@ try {
   const added = Object.entries(counts).filter(([, n]) => n > 0).map(([k, n]) => `${k}+${n}`).join(', ');
   console.log(added ? `new rows: ${added}` : 'nothing new (already seeded)');
   if (skipped.length) console.log(`skipped (dates already taken in this database): ${skipped.join('; ')}`);
-  console.log(`login with e.g. guest@jetpool.dev / ${PASSWORD}`);
-  console.log(`admin console: /admin/login — ${ADMIN_USERNAME} / ${ADMIN_PASSWORD} (then enroll MFA; staff actions need AAL2)`);
+  // The passwords themselves are never printed (docs/CONVENTIONS.md) — the defaults are in README / docs/DEMO.md.
+  console.log('login with e.g. guest@jetpool.dev — password: $SEED_PASSWORD (default at the top of this file)');
+  console.log('admin console: /admin/login — id: $SEED_ADMIN_USERNAME, password: $SEED_ADMIN_PASSWORD (then enroll MFA; staff actions need AAL2)');
 } catch (e) {
   await db.query('ROLLBACK');
   console.error(e);
