@@ -65,6 +65,12 @@ export default function CreditsView() {
             'The photos below are Creative Commons (CC BY · CC BY-SA) or public-domain (CC0 · PDM). They were resized, cropped and converted to WebP for the web (changes made). No-derivatives (ND) photos are never used. Spotted a credit problem? Tell our help center.',
           )}
         </p>
+        <p className="small muted">
+          {L(
+            '데모 계정의 프로필 사진도 같은 오픈 라이선스 인물 사진이에요. 사진 속 인물은 해당 호스트·가이드·여행자 본인이 아니며, 예시로 쓰인 사진입니다. 사진이 내려지길 원하시면 고객센터로 알려 주세요.',
+            'The profile pictures of the demo accounts are openly-licensed portraits too. The person in a portrait is not the host, guide or traveller it illustrates — they stand in for a demo persona. Ask our help center if you want a portrait taken down.',
+          )}
+        </p>
       </section>
 
       {!mediaReady() ? (

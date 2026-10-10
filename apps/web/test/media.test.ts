@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { assetId, canonicalUrl, cityPhoto, credit, creditedPhotos, guideCover, imgProps, indexMediaMap, setMediaMap, stripBase, withBase, pick, archive } from '@/lib/media';
+import { assetId, canonicalUrl, cityPhoto, credit, creditedPhotos, guideCover, imgProps, indexMediaMap, personPhoto, setMediaMap, stripBase, withBase, pick, archive } from '@/lib/media';
 import { canonicalPlace } from '@/lib/places';
 import { postcardFor, realize, isArt } from '@/lib/art';
 import { markdownExcerpt, markdownMedia, parseMarkdown } from '@/components/media/markdown';
@@ -21,6 +21,11 @@ const MAP = {
   legacy: { '/legacy/cccccccccccc/960.webp': { srcset: '/legacy/cccccccccccc/480.webp 480w, /legacy/cccccccccccc/960.webp 960w', alt: '원치승 대표', width: 1000, height: 692 } },
   cities: { Jeju: '/photos/aaaaaaaaaaaa/960.webp', 'Chiang Mai': '/photos/bbbbbbbbbbbb/960.webp' },
   guides: { 'user-1': '/photos/bbbbbbbbbbbb/960.webp' },
+  people: {
+    byId: { 'user-1': '/photos/aaaaaaaaaaaa/960.webp' },
+    byName: { '서울 호스트': '/photos/bbbbbbbbbbbb/960.webp' },
+    pool: ['/photos/aaaaaaaaaaaa/960.webp', '/photos/bbbbbbbbbbbb/960.webp'],
+  },
   hero: ['/legacy/cccccccccccc/960.webp'],
   charter: ['/photos/aaaaaaaaaaaa/960.webp'],
   archive: [{ url: '/legacy/cccccccccccc/960.webp', alt: 'x', page: '/about_ceo' }],
@@ -66,6 +71,20 @@ describe('media map', () => {
     expect(cityPhoto('chiang-mai')).toBe('/photos/bbbbbbbbbbbb/960.webp');
     expect(cityPhoto('Atlantis')).toBeUndefined();
     expect(guideCover('user-1')).toBe('/photos/bbbbbbbbbbbb/960.webp');
+  });
+
+  it('resolves profile photos by user id, display name and a stable pool pick', () => {
+    expect(personPhoto('user-1')).toBe('/photos/aaaaaaaaaaaa/960.webp');
+    expect(personPhoto(undefined, '서울 호스트')).toBe('/photos/bbbbbbbbbbbb/960.webp');
+    // an unknown person still gets a face, and always the same one
+    const unknown = personPhoto('user-99', '이서연');
+    expect(unknown).toBeTruthy();
+    expect(personPhoto('user-99', '이서연')).toBe(unknown);
+    expect(personPhoto('', null)).toBeUndefined();
+    // no portraits in the map → the caller falls back to the initial
+    setMediaMap({ ...MAP, people: { byId: {}, byName: {}, pool: [] } });
+    expect(personPhoto('user-1', '서울 호스트')).toBeUndefined();
+    setMediaMap(MAP);
   });
 
   it('exposes credits for licensed photos only', () => {

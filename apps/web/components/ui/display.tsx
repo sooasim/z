@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { hashString } from '@/lib/art';
 import { formatMoney } from '@/lib/format';
+import { imgProps, personPhoto, useMediaMap } from '@/lib/media';
 import { DateText } from './base';
 import { StatusPill } from './status';
 
@@ -11,14 +12,20 @@ const AVATAR_BG = ['#1f4e7a', '#bf3f2a', '#2b6296', '#6d3fd6', '#166534', '#9a58
 /**
  * Initial/photo avatar. Exposed as one image to assistive tech ("홍길동, 본인 확인됨"); the verified tick is
  * decorative. `decorative` hides it entirely (when the name is already in adjacent text).
+ *
+ * Without an uploaded `src` the profile photo comes from the media map (`personId` / name → an openly-licensed real
+ * portrait standing in for the demo persona, credited on /credits); only when the map has none is the initial shown.
  */
-export function Avatar({ name, src, size = 40, verified, decorative }: { name: string; src?: string; size?: number; verified?: boolean; decorative?: boolean }) {
+export function Avatar({ name, src, size = 40, verified, decorative, personId }: { name: string; src?: string; size?: number; verified?: boolean; decorative?: boolean; personId?: string }) {
   const { L } = useI18n();
+  useMediaMap();
   const bg = AVATAR_BG[hashString(name || '?') % AVATAR_BG.length];
   const label = `${name || '?'}${verified ? `, ${L('본인 확인됨', 'verified')}` : ''}`;
+  const photo = src || personPhoto(personId, name);
+  const p = photo ? imgProps(photo, { sizes: `${size}px`, alt: '', placeholder: false }) : null;
   return (
     <span className="avatar" style={{ width: size, height: size, background: bg, fontSize: size * 0.42 }} {...(decorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': label })}>
-      {src ? <img src={src} alt="" /> : <span aria-hidden="true">{(name || '?').trim().slice(0, 1).toUpperCase()}</span>}
+      {p ? <img src={p.src} srcSet={p.srcSet} sizes={p.sizes} alt="" /> : <span aria-hidden="true">{(name || '?').trim().slice(0, 1).toUpperCase()}</span>}
       {verified && (
         <span className="verified" title={L('본인 확인됨', 'Verified')} aria-hidden="true">
           <svg viewBox="0 0 24 24" width="70%" height="70%" fill="none" stroke="#fff" strokeWidth="4" aria-hidden="true">

@@ -113,11 +113,21 @@ export interface EmbedItem {
   description?: string;
   page?: string;
 }
+/**
+ * Profile photos: openly-licensed real portraits standing in for the demo people. `byId` / `byName` are the seeded
+ * hosts, guides and travellers; `pool` is every published portrait, used for anyone else (review authors, staff).
+ */
+export interface PeopleMap {
+  byId: Record<string, string>;
+  byName: Record<string, string>;
+  pool: string[];
+}
 export interface MediaMap {
   photos: Record<string, MediaEntry>;
   legacy: Record<string, MediaEntry>;
   cities: Record<string, string>;
   guides: Record<string, string>;
+  people: PeopleMap;
   hero: string[];
   charter: string[];
   archive: ArchiveItem[];
@@ -165,7 +175,7 @@ export function assetId(url: string | null | undefined): string | null {
 export const isLicensedPhoto = (url: string | null | undefined) => assetId(url)?.startsWith('photos/') ?? false;
 export const isLegacyAsset = (url: string | null | undefined) => assetId(url)?.startsWith('legacy/') ?? false;
 
-const EMPTY: MediaMap = { photos: {}, legacy: {}, cities: {}, guides: {}, hero: [], charter: [], archive: [], embeds: [] };
+const EMPTY: MediaMap = { photos: {}, legacy: {}, cities: {}, guides: {}, people: { byId: {}, byName: {}, pool: [] }, hero: [], charter: [], archive: [], embeds: [] };
 
 interface Indexed {
   map: MediaMap;
@@ -210,6 +220,11 @@ export function indexMediaMap(raw: unknown): Indexed {
     legacy: asRecord<MediaEntry>(r.legacy),
     cities: asRecord<string>(r.cities),
     guides: asRecord<string>(r.guides),
+    people: {
+      byId: asRecord<string>(asRecord<unknown>(r.people).byId),
+      byName: asRecord<string>(asRecord<unknown>(r.people).byName),
+      pool: asList<string>(asRecord<unknown>(r.people).pool).filter((x) => typeof x === 'string'),
+    },
     hero: asList<string>(r.hero).filter((x) => typeof x === 'string'),
     charter: asList<string>(r.charter).filter((x) => typeof x === 'string'),
     archive: asList<ArchiveItem>(r.archive).filter((x) => x && typeof x.url === 'string'),
@@ -384,6 +399,24 @@ export function cityPhoto(city: string | null | undefined, resolve?: (s: string)
 }
 
 export const guideCover = (guideId: string | null | undefined): string | undefined => (guideId && active()?.map.guides[guideId]) || undefined;
+
+/**
+ * Profile photo of a person who has not uploaded one: the portrait the pipeline assigned to that user id or display
+ * name, else a stable pick from the portrait pool (same key ⇒ same face on every page). The portraits are
+ * openly-licensed real photos standing in for the demo personas — credited, like every other photo, on /credits.
+ */
+export function personPhoto(...keys: (string | null | undefined)[]): string | undefined {
+  const p = active()?.map.people;
+  if (!p) return undefined;
+  for (const k of keys) {
+    const key = String(k ?? '').trim();
+    if (!key) continue;
+    const hit = p.byId[key] ?? p.byName[key];
+    if (hit) return hit;
+  }
+  const seed = keys.map((k) => String(k ?? '').trim()).find(Boolean);
+  return seed ? pick(p.pool, seed) : undefined;
+}
 export const heroPhotos = (): string[] => active()?.map.hero ?? [];
 export const charterPhotos = (): string[] => active()?.map.charter ?? [];
 export const archive = (): ArchiveItem[] => active()?.map.archive ?? [];

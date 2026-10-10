@@ -5,7 +5,11 @@
 //  - every seeded stay (packages/db/seed-dev.mjs PROPERTIES) gets 5 photos: an exterior / neighbourhood photo that matches
 //    its city and type (hanok → hanok lanes, villa → villa/pool, beach apartments → ocean view; never the same cover twice)
 //    followed by 4 interiors (living, bedroom, kitchen, bathroom/balcony/pool) picked least-used-first
-//  - guides get a cover photo matching their interests/city (scenes only — never a stranger's portrait)
+//  - guides get a cover photo matching their interests/city (scenes only — the portrait goes on the profile instead)
+//  - every seeded person (host, guide, traveller) gets a profile photo: a real, openly-licensed portrait from
+//    data/media/people.json that fits the persona's age and description. It is a STAND-IN, never a photo of that
+//    person, and it is credited on /credits like every other licensed photo. Unassigned portraits stay in a pool the
+//    web uses for people the seed does not know (review authors, demo staff)
 //  - travel products get theme photos; the past WONT tour products become products with their legacy images
 //  - CMS destinations get city photos, stories legacy images or city photos, the charter page charter photos + legacy
 //    aircraft images, the home hero the best hero candidates + legacy brand heroes
@@ -24,6 +28,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const CHECK = process.argv.includes('--check');
 const CATALOG = path.join(ROOT, 'data/media/catalog.json');
+const PEOPLE = path.join(ROOT, 'data/media/people.json');
 const OUT_ASSIGN = path.join(ROOT, 'data/media/assignments.json');
 const OUT_MAP = path.join(ROOT, 'apps/web/public/media-map.json');
 const PUBLIC = path.join(ROOT, 'apps/web/public');
@@ -46,8 +51,11 @@ const clip = (s, n) => {
 
 // ───────────────────────────────────────────────────────────── inputs
 const catalog = JSON.parse(readFileSync(CATALOG, 'utf8'));
+const peopleDoc = existsSync(PEOPLE) ? JSON.parse(readFileSync(PEOPLE, 'utf8')) : { photos: {} };
 const LEG = catalog.legacy.assets; // sha256 → legacy asset
-const PH = catalog.photos; // sha256 → photo
+// sha256 → photo: the scene photos of the catalog plus the portraits of data/media/people.json (collection 'person'),
+// which carry the same fields (src, srcset, placeholder, credit, roles…) and are credited the same way.
+const PH = { ...catalog.photos, ...peopleDoc.photos };
 const legacyBy12 = new Map(Object.entries(LEG).map(([sha, a]) => [a.sha12, { sha, ...a }]));
 const photoBy12 = new Map(Object.entries(PH).map(([sha, p]) => [p.sha12, { sha, ...p }]));
 const legacyPages = catalog.legacy.pages;
@@ -80,6 +88,8 @@ function seedArray(name) {
 const PROPERTIES = seedArray('PROPERTIES');
 const GUIDES = seedArray('GUIDES');
 const PRODUCTS = seedArray('PRODUCTS');
+const TRAVELERS = seedArray('TRAVELERS');
+const NEW_HOSTS = seedArray('NEW_HOSTS');
 
 // ───────────────────────────────────────────────────────────── served files (size, sha256, dimensions)
 function dims(buf, ext) {
@@ -287,6 +297,75 @@ for (const g of GUIDES) {
   if (!p) fail(`no guide cover for ${g.key}`);
   useAt(p.src, `guide:${g.key}`);
   guides[g.key] = { userId: uid(`user:${g.key}`), city: g.city, url: p.src, alt: p.alt };
+}
+
+// ───────────────────────────────────────────────────────────── people (profile photos)
+// Every seeded person — host, guide, traveller — gets a real portrait from data/media/people.json instead of an
+// initial. The portrait is a STAND-IN chosen to fit the persona's age and the way the demo describes them; it is
+// never a photo of that person, and its credit is shown on /credits like every other licensed photo.
+const PERSON_PHOTOS = {
+  // hosts
+  'host-a': '8381251812dd', // 서울 호스트 — woman at an office desk, 40s
+  'host-b': '9bcf7f4aae53', // 제주 호스트 — man laughing, 30s
+  exchanger: '0a6b9872d334', // 부산 교환회원 — woman with sunglasses pushed up, 30s
+  'host-gangwon': '8bc151a71412', // 강원 바다숲 스테이 — bearded man in a red jumper, 30s
+  'host-hanok': '6fe27bf8d7f1', // 한옥스테이 소담 — elderly woman in a lane
+  'host-namhae': 'f302406d6b50', // 남해안 오션스테이 — older man with a hat
+  // guides
+  'guide-friend': '6fefb3ad4091', // Local Friend Mina — young woman smiling outdoors
+  'guide-pro': '38dd30a01d43', // Pro Guide Jun — older man in a jacket
+  'guide-busan': 'c01253346c86', // 해설봉사 현우 — older man waving in an alley
+  'guide-jeju': 'fd5737c73cc5', // 제주 친구 소라 — young woman, dark background
+  'guide-gyeongju': '28e1354ad347', // 경주 문화해설 지훈 — young man under winter trees
+  'guide-jeonju': 'f24b53f7e1cd', // 전주 한옥 지킴이 은영 — woman laughing, 50s
+  'guide-gangneung': 'a3e21a324242', // 강릉 커피 큐레이터 도윤 — young man in a cap
+  'guide-jejupro': '64748a6fb597', // Jeju Pro Guide Grace — woman with glasses
+  // travellers
+  'traveler-seoyeon': 'b8ebb7de4cde', // 이서연 — young woman, pink backdrop
+  'traveler-junho': '1b902cb04698', // 박준호 — man on a terrace, 40s
+  'traveler-emma': '4aac3924d86c', // Emma Wilson — woman in a red sweater
+  'traveler-minji': '22c23a97a22f', // 최민지 — person in a grey jacket
+  'traveler-takeshi': 'bbc9c0fb01bf', // Takeshi Sato — young man on the street
+  'traveler-haneul': '458965ccc5f4', // 정하늘 — young man in a white shirt
+  'traveler-lucas': '2875bf17d1cf', // Lucas Martin — man with glasses
+  'traveler-jiwoo': 'd44f23e3cb25', // 한지우 — woman in a kitchen
+  guest: 'd500c3062766', // 여행자 김 — man in a blazer, 40s
+};
+// the two legacy guides are named where seed-dev creates their user, not in the GUIDES array
+const GUIDE_SEED_NAMES = { 'guide-friend': 'Local Friend Mina', 'guide-pro': 'Pro Guide Jun' };
+const PERSONS = [
+  ...[['host-a', '서울 호스트'], ['host-b', '제주 호스트'], ['exchanger', '부산 교환회원']].map(([key, name]) => ({ key, name, role: 'host' })),
+  ...NEW_HOSTS.map(([key, , name]) => ({ key, name, role: 'host' })),
+  ...GUIDES.map((g) => ({ key: g.key, name: g.name ?? GUIDE_SEED_NAMES[g.key], role: 'guide' })),
+  ...TRAVELERS.map(([key, , name]) => ({ key, name, role: 'traveler' })),
+  { key: 'guest', name: '여행자 김', role: 'traveler' },
+];
+const portraits = accepted.filter((p) => p.collection === 'person').sort((a, b) => a.sha12.localeCompare(b.sha12));
+// every published portrait is reachable (assigned below, or picked by the web for a person the seed does not know)
+portraits.forEach((p) => useAt(p.src, 'person:pool'));
+const portraitUsed = new Set();
+/** Curated portrait for a person, else the least-used one picked deterministically from the person's key. */
+function portraitFor(key) {
+  const curated = PERSON_PHOTOS[key];
+  if (curated) return photo(curated);
+  if (!portraits.length) fail(`no portraits available for ${key} — run node scripts/legacy/fetch-people.mjs publish`);
+  const free = portraits.filter((p) => !portraitUsed.has(p.sha12));
+  const pool = free.length ? free : portraits;
+  let h = 2166136261;
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
+  return pool[(h >>> 0) % pool.length];
+}
+const people = {};
+if (portraits.length) {
+  for (const { key, name, role } of PERSONS) {
+    const p = portraitFor(key);
+    if (p.collection !== 'person') fail(`portrait of ${key} (${p.sha12}) is not a person photo`);
+    portraitUsed.add(p.sha12);
+    useAt(p.src, `person:${key}`);
+    people[key] = { userId: uid(`user:${key}`), name, role, url: p.src, alt: p.alt };
+  }
+  const dup = Object.entries(people).filter(([, a], i, xs) => xs.findIndex(([, b]) => b.url === a.url) !== i);
+  if (dup.length) fail(`two people share a portrait: ${dup.map(([k]) => k).join(', ')}`);
 }
 
 // ───────────────────────────────────────────────────────────── travel products (seed-dev catalogue)
@@ -707,6 +786,8 @@ const coverage = {
   stayPhotos: Object.values(stays).reduce((n, s) => n + s.photos.length, 0),
   distinctStayCovers: new Set(covers).size,
   guides: Object.keys(guides).length,
+  people: Object.keys(people).length,
+  portraits: portraits.length,
   products: Object.keys(products).length,
   legacyProducts: legacyProducts.length,
   cmsEntries: cms.length,
@@ -715,13 +796,20 @@ const coverage = {
 
 const assignments = {
   version: 1,
-  generatedFrom: { catalog: 'data/media/catalog.json', catalogGeneratedAt: catalog.generatedAt, seed: 'packages/db/seed-dev.mjs' },
+  generatedFrom: {
+    catalog: 'data/media/catalog.json',
+    catalogGeneratedAt: catalog.generatedAt,
+    people: 'data/media/people.json',
+    seed: 'packages/db/seed-dev.mjs',
+  },
   readme:
     'Generated by scripts/legacy/assign.mjs — do not edit by hand. Applied to the database by packages/db/seed-media.mjs (seed-dev.mjs calls it). ' +
-    'Public URLs are without the web basePath. stays[slug].photos[0] is the cover; assets[url] holds the served file facts for media_assets rows.',
+    'Public URLs are without the web basePath. stays[slug].photos[0] is the cover; people[key] is a seeded person’s profile photo ' +
+    '(an openly-licensed portrait standing in for the persona); assets[url] holds the served file facts for media_assets rows.',
   coverage,
   stays,
   guides,
+  people,
   products,
   legacyProducts,
   destinations,
@@ -765,6 +853,12 @@ const mediaMap = {
   legacy: Object.fromEntries(Object.values(LEG).map((a) => [a.src, legacyEntry(a)]).sort((a, b) => a[0].localeCompare(b[0]))),
   cities,
   guides: Object.fromEntries(Object.values(guides).map((g) => [g.userId, g.url])),
+  // profile photos: by user id, by display name (the web usually only knows the name) and a pool for everyone else
+  people: {
+    byId: Object.fromEntries(Object.values(people).map((p) => [p.userId, p.url])),
+    byName: Object.fromEntries(Object.values(people).filter((p) => p.name).map((p) => [p.name, p.url])),
+    pool: portraits.map((p) => p.src),
+  },
   hero,
   charter,
   archive,
@@ -785,7 +879,8 @@ const mediaMap = {
     hero,
   },
 };
-for (const u of [...hero, ...charter, ...Object.values(cities), ...Object.values(mediaMap.guides), ...Object.values(mediaMap.pools).flat(), ...Object.values(mediaMap.products).flat()]) {
+for (const u of [...hero, ...charter, ...Object.values(cities), ...Object.values(mediaMap.guides), ...Object.values(mediaMap.people.byId), ...mediaMap.people.pool,
+  ...Object.values(mediaMap.pools).flat(), ...Object.values(mediaMap.products).flat()]) {
   if (!mediaMap.photos[u] && !mediaMap.legacy[u]) fail(`media-map references unknown url ${u}`);
 }
 
@@ -804,7 +899,8 @@ if (CHECK) {
   console.log(`assign: wrote ${path.relative(ROOT, OUT_ASSIGN)} (${(outA.length / 1024).toFixed(0)} KB) and ${path.relative(ROOT, OUT_MAP)} (${(outM.length / 1024).toFixed(0)} KB)`);
 }
 console.log(
-  `assign: ${coverage.stays} stays × 5 photos (${coverage.distinctStayCovers} distinct covers), ${coverage.guides} guides, ${coverage.products}+${coverage.legacyProducts} products, ` +
+  `assign: ${coverage.stays} stays × 5 photos (${coverage.distinctStayCovers} distinct covers), ${coverage.guides} guides, ` +
+    `${coverage.people} profile photos of ${coverage.portraits} portraits, ${coverage.products}+${coverage.legacyProducts} products, ` +
     `${coverage.cmsEntries} CMS entries, ${coverage.redirects} redirects; legacy ${coverage.contextual}/${coverage.legacyMediaTotal} placed in context, ` +
     `${coverage.archived}/${coverage.legacyMediaTotal} in the archive; ${coverage.photosUsed} licensed photos used, all credited`,
 );

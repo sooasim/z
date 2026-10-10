@@ -73,7 +73,7 @@ function HostTrust({ host, pid }: { host: any; pid: string }) {
     <Section title={L('호스트 소개', 'Meet your host')}>
       <div className="card raised row nowrap" style={{ alignItems: 'flex-start', gap: 20, flexWrap: 'wrap' }}>
         <div className="center" style={{ minWidth: 120 }}>
-          <Avatar name={name} size={84} verified={verified} src={str(host, 'avatarUrl') || undefined} decorative />
+          <Avatar name={name} personId={str(host, 'userId', 'hostId', 'id')} size={84} verified={verified} src={str(host, 'avatarUrl') || undefined} decorative />
           <strong style={{ display: 'block', marginTop: 8 }}>{name}</strong>
           {verified && (
             <span className="badge ok" style={{ marginTop: 4 }}>

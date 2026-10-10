@@ -12,7 +12,8 @@
 //  - property_media of every seeded stay: 5 real photos (seed-owned links to the old postcard art are replaced; photos a
 //    host uploaded are kept) + a search-projection outbox event when a stay's photo list changed
 //  - travel_products.media_ids (while empty or seed-owned), the past WONT tour products (ARCHIVED; the recruiting one
-//    PUBLISHED without departures), user_profiles.avatar_media_id of seeded guides (scene photos; only while empty/seeded)
+//    PUBLISHED without departures), user_profiles.avatar_media_id of every seeded person — host, guide, traveller —
+//    with an openly-licensed real portrait standing in for the persona (AVATAR; only while empty or seed-owned)
 //  - the migrated wontc.co.kr CMS entries (PAGE / STORY / LEGACY_CONTENT + PAGE brand-archive) with cms_external_refs
 //    (LEGACY_WONT); seed-dev's destinations / stories / pages get real covers where theirs is generated art
 //  - seo_redirects legacy path → new path (exact matches approved)
@@ -142,20 +143,30 @@ export async function seedMedia({ connectionString, assignmentsPath = DEFAULT_AS
       );
     }
 
-    // ---- guides: scene cover → avatar_media_id (only while empty or seed-owned)
+    // ---- guides: the scene photo of the guide's city/interest (their cover; the web reads it from media-map.json)
     for (const [key, g] of Object.entries(A.guides)) {
       if (!(await one(`SELECT 1 FROM guide_profiles WHERE user_id = $1`, [g.userId]))) {
         missing.push(`guide ${key}`);
         continue;
       }
-      const mid = await media(uid(`media:guide:${key}`), `seed-media/guide/${key}`, g.url, 'GUIDE', g.userId);
+      await media(uid(`media:guide:${key}`), `seed-media/guide/${key}`, g.url, 'GUIDE', g.userId);
+    }
+
+    // ---- people: a real licensed portrait as the profile photo of every seeded host / guide / traveller
+    // (a stand-in for the persona, never a photo of them). Only written while the profile has no avatar of its own.
+    for (const [key, p] of Object.entries(A.people ?? {})) {
+      if (!(await one(`SELECT 1 FROM user_profiles WHERE user_id = $1`, [p.userId]))) {
+        missing.push(`person ${key}`);
+        continue;
+      }
+      const mid = await media(uid(`media:person:${key}`), `seed-media/person/${key}`, p.url, 'AVATAR', p.userId);
       bump(
-        'guide covers (avatar_media_id)',
+        'profile photos (avatar_media_id)',
         (await q(
           `UPDATE user_profiles SET avatar_media_id = $2
             WHERE user_id = $1 AND avatar_media_id IS DISTINCT FROM $2
               AND (avatar_media_id IS NULL OR EXISTS (SELECT 1 FROM media_assets m WHERE m.id = user_profiles.avatar_media_id AND ${SEED_OWNED_SQL('m.storage_key')}))`,
-          [g.userId, mid],
+          [p.userId, mid],
         )).rowCount,
       );
     }

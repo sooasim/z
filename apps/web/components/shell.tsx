@@ -118,7 +118,7 @@ function UserMenu() {
         }}
       >
         <Icon name="menu" size={16} />
-        <Avatar name={user.displayName} size={30} verified={user.aal === 'aal2'} decorative />
+        <Avatar name={user.displayName} personId={user.id} size={30} verified={user.aal === 'aal2'} decorative />
         <span className="sr-only">{L('사용자 메뉴', 'User menu')}</span>
       </button>
       {p.open && (
