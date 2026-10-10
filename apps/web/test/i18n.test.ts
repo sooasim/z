@@ -6,6 +6,7 @@ import { LANGS, isLang, langInfo, pickLang } from '@/lib/langs';
 import { PHRASES, SAME_AS_ENGLISH, pickText, translate } from '@/lib/phrases';
 import { formatMoney, formatRange, intlLocale, nightsText, type Lang } from '@/lib/format';
 import { statusLabel } from '@/components/ui/status';
+import { contentQuery } from '@/lib/hooks';
 
 const CODES = LANGS.map((l) => l.code);
 
@@ -155,6 +156,27 @@ describe('formatters follow the language', () => {
     }
     expect(formatRange('2026-11-10', '2026-11-13', 'ja')).toMatch(/11月10日/);
     expect(formatRange('2026-11-10', '2026-11-13', 'zh')).toMatch(/11月10日/);
+  });
+});
+
+describe('CMS reads ask for the reader language', () => {
+  it('adds the locale to /v1/content requests, per language', () => {
+    for (const l of LANGS) {
+      expect(contentQuery('/v1/content/page', { limit: 50 }, l.code), l.code).toEqual({ limit: 50, locale: l.locale });
+      expect(contentQuery('/v1/content/page/brand-archive', undefined, l.code), l.code).toEqual({ locale: l.locale });
+    }
+  });
+
+  it('leaves non-CMS requests and explicit locales alone', () => {
+    expect(contentQuery('/v1/properties', { limit: 10 }, 'ja')).toEqual({ limit: 10 });
+    expect(contentQuery(null, { limit: 10 }, 'ja')).toEqual({ limit: 10 });
+    expect(contentQuery('/v1/content/page', { locale: 'ko-KR' }, 'ja')).toEqual({ locale: 'ko-KR' });
+    expect(contentQuery('/v1/properties', undefined, 'ja')).toBeUndefined();
+  });
+
+  it('sends a tag the API accepts', () => {
+    // apps/api CMS routes validate `locale` as /^[a-z]{2}-[A-Z]{2}$/.
+    for (const l of LANGS) expect(l.locale, l.code).toMatch(/^[a-z]{2}-[A-Z]{2}$/);
   });
 });
 
