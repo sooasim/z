@@ -12,8 +12,12 @@ export const metadata: Metadata = {
   description: '한달살기 홈 맞교환, 검증된 숙소, 로컬 가이드 프렌드, 여행 상품과 전세기 공유까지. WONT Travel Club의 새로운 이름 JETPOOL.',
   applicationName: 'JETPOOL',
   manifest: '/manifest.webmanifest',
-  icons: { icon: '/icons/icon.svg', apple: '/icons/icon.svg' },
+  // Safari ignores an SVG apple-touch-icon, so the home-screen icon has to be the PNG;
+  // both come off the same geometry in scripts/brand/app-icon.py.
+  icons: { icon: '/icons/icon.svg', apple: '/icons/apple-touch-icon.png' },
   openGraph: { type: 'website', siteName: 'JETPOOL', locale: 'ko_KR' },
+  // The share card (app/opengraph-image.tsx) is 1200×630: ask X for the large card rather than a thumbnail.
+  twitter: { card: 'summary_large_image' },
   alternates: { canonical: '/' },
 };
 
