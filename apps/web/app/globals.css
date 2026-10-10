@@ -398,12 +398,26 @@ hr { border: 0; border-top: 1px solid var(--border); margin: var(--sp-5) 0; }
 }
 :root[data-theme='dark'] .wordmark .logo { background-image: url('/brand/jetpool-wordmark-dark.png'); }
 :root[data-theme='dark'] .wordmark.lockup .logo { background-image: url('/brand/jetpool-logo-dark.png'); }
-.main-nav { display: none; gap: 2px; }
-.main-nav a { color: var(--text); text-decoration: none; padding: 8px 12px; border-radius: var(--r-full); font-weight: var(--fw-semibold); font-size: var(--fs-sm); transition: background var(--dur-fast) var(--ease); }
-.main-nav a:hover { background: var(--surface-3); }
-.main-nav a[aria-current='page'] { background: var(--brand-soft); color: var(--brand); }
+.main-nav { display: none; gap: 2px; align-items: center; }
+.main-nav a, .main-nav .nav-trigger { color: var(--text); text-decoration: none; white-space: nowrap; padding: 8px 12px; border-radius: var(--r-full); font-weight: var(--fw-semibold); font-size: var(--fs-sm); transition: background var(--dur-fast) var(--ease); }
+.main-nav a:hover, .main-nav .nav-trigger:hover { background: var(--surface-3); }
+.main-nav a[aria-current='page'], .main-nav .nav-trigger[data-active] { background: var(--brand-soft); color: var(--brand); }
+/* Dropdown trigger that must read as one of the nav links (brand/About menu). */
+.main-nav .nav-trigger { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; font-family: inherit; line-height: inherit; cursor: pointer; white-space: nowrap; }
+.main-nav .nav-trigger[aria-expanded='true'] { background: var(--surface-3); }
+.main-nav .nav-trigger[aria-expanded='true'] svg { rotate: 180deg; }
 @media (min-width: 1024px) { .main-nav { display: flex; } .menu-toggle { display: none !important; } }
+/* Log in / Sign up is one unit: `.row` wraps by default, so flexbox happily shrinks it below its content and
+   stacks the two buttons as soon as the nav gets long (ja, vi). */
+.site-header .bar > .row { flex-shrink: 0; }
+/* Six nav items plus the language, theme and auth controls are a tight fit in the 1024–1151px band: tighten
+   the nav and let the language button fall back to its globe icon, as it already does on phones. */
+@media (min-width: 1024px) and (max-width: 1151px) {
+  .main-nav a, .main-nav .nav-trigger { padding: 8px 6px; }
+  .site-header .bar .btn.ghost.sm .hide-mobile { display: none; }
+}
 .mobile-nav { display: grid; gap: 2px; padding: var(--sp-2) 0 var(--sp-4); }
+.mobile-nav .nav-group { margin: 2px 8px 2px; font-size: var(--fs-xs); font-weight: var(--fw-bold); letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--text-muted); }
 .mobile-nav a { padding: 12px 8px; border-radius: var(--r-sm); color: var(--text); text-decoration: none; font-weight: 500; }
 .mobile-nav a:hover { background: var(--surface-3); }
 .mobile-nav a { display: flex; align-items: center; gap: 12px; }

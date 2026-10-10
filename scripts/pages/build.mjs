@@ -208,7 +208,9 @@ for (const f of files) {
 }
 log(`basePath-aware assets in ${patchedAssets} files, location helpers in ${patchedLoc} files`);
 
-for (const meta of ['sitemap.ts', 'robots.ts', 'manifest.ts']) {
+// Metadata routes (sitemap/robots/manifest and the generated share images) are rejected by `output: 'export'`
+// unless they declare force-static — which the route-segment strip above has just removed from the copy.
+for (const meta of ['sitemap.ts', 'robots.ts', 'manifest.ts', 'opengraph-image.tsx', 'twitter-image.tsx']) {
   const f = path.join(COPY, 'app', meta);
   if (existsSync(f)) await writeFile(f, `export const dynamic = 'force-static';\n` + (await readFile(f, 'utf8')));
 }
@@ -296,17 +298,32 @@ if (!existsSync(path.join(OUT, '404.html'))) {
     }
   }
 }
+// Generated share images (app/opengraph-image.tsx, app/twitter-image.tsx) need two fixes a static export on a
+// project page cannot do itself: the exported file has no extension (GitHub Pages would serve it as
+// application/octet-stream, which crawlers reject), and Next resolves the route against metadataBase — which
+// already ends in the basePath — so the tags point at /<base>/<base>/opengraph-image.
+const ogRewrites = [];
+for (const name of ['opengraph-image', 'twitter-image']) {
+  const src = path.join(OUT, name);
+  if (!existsSync(src)) continue;
+  await cp(src, `${src}.png`);
+  await rm(src);
+  if (BASE) ogRewrites.push([`${BASE}${BASE}/${name}`, `${BASE}/${name}.png`]);
+  else ogRewrites.push([`/${name}?`, `/${name}.png?`]);
+}
 // The runtime must run before any Next chunk: put a parser-blocking copy at the very top of every <head>
 // (React 19 skips unknown head nodes on hydration; the layout's own tag then no-ops thanks to the boot guard).
 let injected = 0;
 for (const f of (await walk(OUT)).filter((x) => x.endsWith('.html'))) {
   const html = await readFile(f, 'utf8');
-  if (html.includes('data-jetpool-demo-early')) continue;
-  const next = html.replace(/<head>/, `<head><script src="${runtimeSrc}" data-jetpool-demo-early="" data-fixtures="${fixturesSrc}"></script>`);
-  if (next !== html) {
-    await writeFile(f, next);
-    injected++;
+  let next = html;
+  for (const [from, to] of ogRewrites) next = next.split(from).join(to);
+  if (!html.includes('data-jetpool-demo-early')) {
+    const withRuntime = next.replace(/<head>/, `<head><script src="${runtimeSrc}" data-jetpool-demo-early="" data-fixtures="${fixturesSrc}"></script>`);
+    if (withRuntime !== next) injected++;
+    next = withRuntime;
   }
+  if (next !== html) await writeFile(f, next);
 }
 log(`runtime injected at the top of <head> in ${injected} HTML files`);
 const all = await walk(OUT);

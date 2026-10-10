@@ -14,6 +14,8 @@ export const metadata: Metadata = {
   manifest: '/manifest.webmanifest',
   icons: { icon: '/icons/icon.svg', apple: '/icons/icon.svg' },
   openGraph: { type: 'website', siteName: 'JETPOOL', locale: 'ko_KR' },
+  // The share card (app/opengraph-image.tsx) is 1200×630: ask X for the large card rather than a thumbnail.
+  twitter: { card: 'summary_large_image' },
   alternates: { canonical: '/' },
 };
 

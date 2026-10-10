@@ -78,7 +78,7 @@ jobs:
             if [ "$code" = "200" ] && grep -q 'JETPOOL' page.html; then break; fi
             echo "attempt $i: HTTP $code"; sleep 15
           done
-          for path in "" "stay/" "exchange/" "guide-friends/" "travel/" "login/" "about/" "archive/" "credits/" "media-map.json" "demo-backend.js" "demo-fixtures.json"; do
+          for path in "" "stay/" "exchange/" "guide-friends/" "travel/" "login/" "about/" "archive/" "credits/" "opengraph-image.png" "media-map.json" "demo-backend.js" "demo-fixtures.json"; do
             code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/$path")
             echo "$code $BASE/$path"
             test "$code" = "200"

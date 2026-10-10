@@ -40,6 +40,14 @@ export function Wordmark({ lockup = false }: { lockup?: boolean }) {
 
 type MenuLink = [href: string, label: string, icon: IconName];
 
+/** The brand ("About") section: one source for the footer column, the header menu and the mobile drawer. */
+const brandLinks = (L: (ko: string, en: string) => string): MenuLink[] => [
+  ['/about', L('브랜드 이야기', 'Our story'), 'sparkle'],
+  ['/about/about-ceo', L('CEO 원치승', 'CEO Michael Won'), 'user'],
+  ['/archive', L('브랜드 아카이브', 'Brand archive'), 'image'],
+  ['/credits', L('사진 출처·라이선스', 'Photo credits'), 'camera'],
+];
+
 /**
  * Shared `role=menu` keyboard behaviour: ↑/↓/Home/End move, Space activates, Esc closes and refocuses the
  * button, Tab closes. Used by the user menu and the language menu so they stay consistent.
@@ -129,13 +137,10 @@ function LangMenu() {
 }
 
 /**
- * WAI-ARIA menu button: role=menu on the list, menuitems are links (middle-click works), ↑/↓/Home/End move,
- * Space/Enter activate and close, Esc closes and returns focus to the button, Tab closes.
+ * WAI-ARIA menu button, shared by the user menu and the brand menu: role=menu on the list, menuitems are links
+ * (middle-click works), keys from menuKeys(), and ↑/↓ on the button itself opens the menu at its first/last item.
  */
-function UserMenu() {
-  const { user, logout, isStaff, hasRole } = useAuth();
-  const { t, L } = useI18n();
-  const router = useRouter();
+function useMenuButton() {
   const p = usePopover();
   const menuId = useId();
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -143,12 +148,74 @@ function UserMenu() {
   const popRef = useRef<HTMLDivElement>(null);
   const focusOnOpen = useRef<'first' | 'last' | null>(null);
   useFitPopover(p.open, popRef);
+  const itemsOf = () => Array.from(listRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
   useEffect(() => {
     if (!p.open || !focusOnOpen.current) return;
-    const els = listRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]');
-    (focusOnOpen.current === 'last' ? els?.[els.length - 1] : els?.[0])?.focus();
+    const els = itemsOf();
+    (focusOnOpen.current === 'last' ? els[els.length - 1] : els[0])?.focus();
     focusOnOpen.current = null;
   }, [p.open]);
+  const close = (refocus = false) => {
+    p.setOpen(false);
+    if (refocus) btnRef.current?.focus();
+  };
+  const onMenuKey = menuKeys(listRef, close);
+  const onButtonKey = (e: KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    focusOnOpen.current = e.key === 'ArrowDown' ? 'first' : 'last';
+    if (p.open) {
+      const els = itemsOf();
+      (e.key === 'ArrowDown' ? els[0] : els[els.length - 1])?.focus();
+    } else p.setOpen(true);
+  };
+  const buttonProps = {
+    ref: btnRef,
+    type: 'button' as const,
+    'aria-expanded': p.open,
+    'aria-haspopup': 'menu' as const,
+    'aria-controls': p.open ? menuId : undefined,
+    onClick: () => p.setOpen(!p.open),
+    onKeyDown: onButtonKey,
+  };
+  return { p, menuId, listRef, popRef, close, onMenuKey, buttonProps };
+}
+
+/** Brand pages (the footer "About" column) as a header dropdown, so they are reachable from the main menu. */
+function BrandMenu({ path }: { path: string }) {
+  const { L } = useI18n();
+  const m = useMenuButton();
+  const links = brandLinks(L);
+  const label = L('브랜드', 'About');
+  const onBrandPage = links.some(([href]) => path === href || path.startsWith(href + '/'));
+  return (
+    <div className="popover-anchor" ref={m.p.ref}>
+      <button {...m.buttonProps} className="nav-trigger" data-active={onBrandPage || undefined}>
+        {label}
+        <Icon name="down" size={14} />
+      </button>
+      {m.p.open && (
+        <div className="popover" ref={m.popRef} style={{ minWidth: 232, padding: 4 }}>
+          <ul className="menu" role="menu" id={m.menuId} aria-label={label} ref={m.listRef} onKeyDown={m.onMenuKey}>
+            {links.map(([href, text, icon]) => (
+              <li key={href} role="none">
+                <Link href={href} role="menuitem" tabIndex={-1} aria-current={path === href ? 'page' : undefined} onClick={() => m.close()}>
+                  <Icon name={icon} size={18} /> {text}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UserMenu() {
+  const { user, logout, isStaff, hasRole } = useAuth();
+  const { t, L } = useI18n();
+  const router = useRouter();
+  const m = useMenuButton();
   if (!user) return null;
   const links: MenuLink[] = [
     ['/trips', t('nav.trips'), 'bag'],
@@ -164,46 +231,23 @@ function UserMenu() {
   if (hasRole('SUPPLIER')) partner.push(['/supplier/products', L('공급사 센터', 'Supplier center'), 'ticket']);
   if (hasRole('HOST') || hasRole('GUIDE') || hasRole('SUPPLIER')) partner.push(['/earnings', L('정산', 'Earnings'), 'coin']);
   if (isStaff) partner.push(['/admin', t('nav.admin'), 'chart']);
-  const close = (refocus = false) => {
-    p.setOpen(false);
-    if (refocus) btnRef.current?.focus();
-  };
-  const onMenuKey = menuKeys(listRef, close);
   return (
-    <div className="popover-anchor" ref={p.ref}>
-      <button
-        ref={btnRef}
-        type="button"
-        className="user-chip"
-        aria-expanded={p.open}
-        aria-haspopup="menu"
-        aria-controls={p.open ? menuId : undefined}
-        onClick={() => p.setOpen(!p.open)}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-            e.preventDefault();
-            focusOnOpen.current = e.key === 'ArrowDown' ? 'first' : 'last';
-            if (p.open) {
-              const els = listRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]');
-              (e.key === 'ArrowDown' ? els?.[0] : els?.[els.length - 1])?.focus();
-            } else p.setOpen(true);
-          }
-        }}
-      >
+    <div className="popover-anchor" ref={m.p.ref}>
+      <button {...m.buttonProps} className="user-chip">
         <Icon name="menu" size={16} />
         <Avatar name={user.displayName} size={30} verified={user.aal === 'aal2'} decorative />
         <span className="sr-only">{L('사용자 메뉴', 'User menu')}</span>
       </button>
-      {p.open && (
-        <div className="popover right" ref={popRef} style={{ minWidth: 260, padding: 8 }}>
+      {m.p.open && (
+        <div className="popover right" ref={m.popRef} style={{ minWidth: 260, padding: 8 }}>
           <div style={{ padding: '8px 12px 10px' }}>
             <strong>{user.displayName}</strong>
             <div className="xs muted">{user.email}</div>
           </div>
-          <ul className="menu" role="menu" id={menuId} aria-label={L('사용자 메뉴', 'User menu')} ref={listRef} onKeyDown={onMenuKey}>
+          <ul className="menu" role="menu" id={m.menuId} aria-label={L('사용자 메뉴', 'User menu')} ref={m.listRef} onKeyDown={m.onMenuKey}>
             {links.map(([href, label, icon]) => (
               <li key={href} role="none">
-                <Link href={href} role="menuitem" tabIndex={-1} onClick={() => close()}>
+                <Link href={href} role="menuitem" tabIndex={-1} onClick={() => m.close()}>
                   <Icon name={icon} size={18} /> {label}
                 </Link>
               </li>
@@ -211,7 +255,7 @@ function UserMenu() {
             <li role="separator" />
             {partner.map(([href, label, icon]) => (
               <li key={href} role="none">
-                <Link href={href} role="menuitem" tabIndex={-1} onClick={() => close()}>
+                <Link href={href} role="menuitem" tabIndex={-1} onClick={() => m.close()}>
                   <Icon name={icon} size={18} /> {label}
                 </Link>
               </li>
@@ -223,7 +267,7 @@ function UserMenu() {
                 role="menuitem"
                 tabIndex={-1}
                 onClick={async () => {
-                  close();
+                  m.close();
                   await logout();
                   router.push('/');
                 }}
@@ -255,6 +299,7 @@ export function Header() {
               {t(n.key)}
             </Link>
           ))}
+          <BrandMenu path={path} />
         </nav>
         <div className="grow" />
         {user && isStaff && (
@@ -302,6 +347,13 @@ export function Header() {
           <Link href="/support" onClick={() => setOpen(false)}>
             <Icon name="support" size={18} /> {L('고객센터', 'Help')}
           </Link>
+          <hr />
+          <h3 className="nav-group">{L('브랜드', 'About')}</h3>
+          {brandLinks(L).map(([href, label, icon]) => (
+            <Link key={href} href={href} aria-current={path === href ? 'page' : undefined} onClick={() => setOpen(false)}>
+              <Icon name={icon} size={18} /> {label}
+            </Link>
+          ))}
           {!user && (
             <div className="stack" style={{ marginTop: 12 }}>
               <Link className="btn accent block" href="/signup" onClick={() => setOpen(false)}>
@@ -461,10 +513,11 @@ export function Footer() {
           </nav>
           <nav aria-labelledby="ft-brand">
             <h2 className="footer-h" id="ft-brand">{L('브랜드', 'About')}</h2>
-            <Link href="/about">{L('브랜드 이야기', 'Our story')}</Link>
-            <Link href="/about/about-ceo">{L('CEO 원치승', 'CEO Michael Won')}</Link>
-            <Link href="/archive">{L('브랜드 아카이브', 'Brand archive')}</Link>
-            <Link href="/credits">{L('사진 출처·라이선스', 'Photo credits')}</Link>
+            {brandLinks(L).map(([href, label]) => (
+              <Link key={href} href={href}>
+                {label}
+              </Link>
+            ))}
           </nav>
           <nav aria-labelledby="ft-support">
             <h2 className="footer-h" id="ft-support">{L('지원', 'Support')}</h2>
