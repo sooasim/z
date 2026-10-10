@@ -1,0 +1,15 @@
+{
+  "name": "JETPOOL — 여행 마켓플레이스",
+  "short_name": "JETPOOL",
+  "description": "숙소, 한달살기 홈 맞교환, 가이드 프렌드, 여행 상품을 한 곳에서",
+  "lang": "ko-KR",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0e2a47",
+  "icons": [
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons/maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
