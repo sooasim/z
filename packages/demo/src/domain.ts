@@ -2,7 +2,7 @@
  * Stateful demo behaviour for the core flows. Every handler returns a Response, or `null` to fall through to
  * the recorded fixtures. Shapes mirror the real API DTOs (apps/api) as captured in the fixtures/templates.
  */
-import { F, anyBody, lookup, lookupFor, userName } from './fixtures';
+import { F, anyBody, lookup, lookupFor, narrow, userName } from './fixtures';
 import { persona, personaByUserId, type Persona } from './auth';
 import { QuoteError, catalog, computeQuote, hostIdOf, invalidateCatalog, propertyDetail, publicCalendar, searchItemOf, searchProperties, suggest, locallyBookedNights } from './catalog';
 import { S, entities, entity, putEntity, save, type Kind } from './store';
@@ -1378,6 +1378,80 @@ function allGuides(): Obj[] {
   const h = lookupFor('anon', '/v1/search/guides', new URLSearchParams());
   return itemsOf(h?.body).map((x) => x.guide ?? x);
 }
+
+// ============================================================================================ CMS entries
+/**
+ * Enough of OPS-03 for the admin's main-page editor (`/admin/home`) to be real in the static demo: entries the
+ * editor creates or edits live in localStorage, are merged into the admin list, and — once PUBLISHED — into the
+ * public `/v1/content/<type>` list the home page reads. Recorded CMS entries stay read-only.
+ */
+const CMS_EDITOR_ROLES = ['ADMIN', 'EDITOR'];
+const cmsEditor = (c: Ctx) => !!c.p && c.p.roles.some((r) => CMS_EDITOR_ROLES.includes(r));
+const cmsEntryDto = (e: Obj) => ({ ...e, demo: true });
+/** `type` / `locale` / `status` filtering, as the API's querystring does it. */
+function cmsFilter(rows: Obj[], q: URLSearchParams): Obj[] {
+  let out = rows;
+  for (const k of ['type', 'locale', 'status'] as const) {
+    const v = q.get(k);
+    if (v) out = out.filter((r) => String(r[k] ?? '').toUpperCase() === v.toUpperCase());
+  }
+  return out;
+}
+
+on('GET', /^\/v1\/admin\/cms\/entries$/, (c) => {
+  if (!cmsEditor(c)) return null; // fall through to the recorded 401/403 for everyone else
+  const rows = mergeById(entities('cmsEntry'), recordedItems(c, '/v1/admin/cms/entries', c.query), 'cmsEntry');
+  return ok({ items: cmsFilter(rows, c.query), nextCursor: null });
+});
+
+on('POST', /^\/v1\/admin\/cms\/entries$/, (c) => {
+  if (!cmsEditor(c)) return unauth();
+  const b = c.body ?? {};
+  const slug = String(b.slug ?? '');
+  const locale = String(b.locale ?? 'ko-KR');
+  if (!slug) return problem(400, 'VALIDATION_FAILED', 'slug is required');
+  const existing = entities('cmsEntry').find((e) => e.slug === slug && e.locale === locale);
+  if (existing) return problem(409, 'CONFLICT', '같은 slug/언어의 콘텐츠가 이미 있습니다 / An entry with this slug and locale already exists');
+  const now = nowIso();
+  const e = putEntity('cmsEntry', { id: uuid(), type: b.type ?? 'PAGE', slug, locale, title: b.title ?? slug, summary: b.summary ?? null, bodyMd: b.bodyMd ?? null, seo: b.seo ?? {}, data: b.data ?? {}, status: 'DRAFT', publishedAt: null, updatedAt: now, createdAt: now });
+  return created({ item: cmsEntryDto(e) });
+});
+
+on('PATCH', /^\/v1\/admin\/cms\/entries\/([^/]+)$/, (c, id) => {
+  if (!cmsEditor(c)) return unauth();
+  const e = entity('cmsEntry', id);
+  if (!e) return notFound('Content');
+  const b = c.body ?? {};
+  for (const k of ['title', 'summary', 'bodyMd', 'seo', 'data', 'locale', 'slug']) if (b[k] !== undefined) e[k] = b[k];
+  e.updatedAt = nowIso();
+  putEntity('cmsEntry', e);
+  return ok({ item: cmsEntryDto(e) });
+});
+
+on('POST', /^\/v1\/admin\/cms\/entries\/([^/]+)\/(publish|unpublish|archive|restore)$/, (c, id, action) => {
+  if (!cmsEditor(c)) return unauth();
+  const e = entity('cmsEntry', id);
+  if (!e) return notFound('Content');
+  const status = action === 'publish' ? 'PUBLISHED' : action === 'archive' ? 'ARCHIVED' : 'DRAFT';
+  e.status = status;
+  e.publishedAt = status === 'PUBLISHED' ? nowIso() : null;
+  e.updatedAt = nowIso();
+  putEntity('cmsEntry', e);
+  return ok({ item: cmsEntryDto(e) });
+});
+
+on('GET', /^\/v1\/content\/([a-z-]+)$/, (c, type) => {
+  const local = entities('cmsEntry').filter((e) => e.status === 'PUBLISHED' && String(e.type).toUpperCase() === type.toUpperCase());
+  if (!local.length) return null; // nothing authored in this browser → recorded content as before
+  const h = recorded(c);
+  const rows = h && h.status < 300 ? narrow(h.body, c.query).items ?? [] : [];
+  const locale = c.query.get('locale');
+  // The API prefers the requested locale per slug and falls back to ko-KR; mirror that for local entries only.
+  const slugs = new Set(local.map((e) => e.slug));
+  const preferred = locale ? local.filter((e) => e.locale === locale) : local;
+  const chosen = [...preferred, ...local.filter((e) => e.locale === 'ko-KR' && !preferred.some((p) => p.slug === e.slug))];
+  return ok({ items: [...chosen.map(cmsEntryDto), ...rows.filter((r: Obj) => !slugs.has(r.slug))], nextCursor: null });
+});
 
 // ============================================================================================ misc
 on('POST', /^\/v1\/analytics\/events$/, () => json(202, { accepted: true }));

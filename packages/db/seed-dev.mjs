@@ -4,7 +4,8 @@
 // require legal/tax approval (Release Gate G9) and must be entered through the admin approval workflow.
 //
 // What this seeds (every id is a deterministic uid(...) and every insert is idempotent — a re-run adds nothing):
-//  - the 9 login personas (emails/password unchanged) plus demo hosts, travelers and guides
+//  - the 9 login personas (emails/password unchanged; the admin also gets the `admin` console handle)
+//    plus demo hosts, travelers and guides
 //  - 24 published stays: Seoul (6 gu), Busan, Jeju, Gangneung, Sokcho, Gyeongju, Jeonju, Yeosu
 //  - 8 published guides, 8 travel products with departures, legacy WONT Travel Club CMS content
 //  - transactions with full state_transitions history: completed stays → reviews, upcoming confirmed stays,
@@ -32,6 +33,14 @@ const db = new pg.Client({ connectionString: url });
 await db.connect();
 
 const PASSWORD = process.env.SEED_PASSWORD ?? 'Jetpool!2026dev';
+/**
+ * The admin console sign-in (`/admin/login`). A short handle and a short password are deliberate — this is the
+ * DEV/STAGING demo console and this script refuses to run with NODE_ENV=production. Override both on any
+ * database that is reachable from outside the developer's machine; `admin1234` is below the API's own
+ * password policy (10+ chars, letters + digit/symbol) and can only exist because the seed writes the hash.
+ */
+const ADMIN_USERNAME = process.env.SEED_ADMIN_USERNAME ?? 'admin';
+const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? 'admin1234';
 function hashPassword(pw) {
   const salt = randomBytes(16);
   const hash = scryptSync(pw, salt, 32, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
@@ -145,10 +154,14 @@ try {
 async function user(key, email, name, roles = [], verified = true, opts = {}) {
   const id = uid(`user:${key}`);
   await db.query(
-    `INSERT INTO users(id, email, password_hash, display_name, email_verified_at, identity_verified_at, locale, created_at)
-     VALUES ($1,$2,$3,$4, coalesce($7::timestamptz, now()), CASE WHEN $5 THEN coalesce($7::timestamptz, now()) END, $6, coalesce($7::timestamptz, now()))
-     ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name`,
-    [id, email, pwHash, name, verified, opts.locale ?? 'ko-KR', opts.since ?? null],
+    `INSERT INTO users(id, email, username, password_hash, display_name, email_verified_at, identity_verified_at, locale, created_at)
+     VALUES ($1,$2,$3,$4,$5, coalesce($8::timestamptz, now()), CASE WHEN $6 THEN coalesce($8::timestamptz, now()) END, $7, coalesce($8::timestamptz, now()))
+     ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name,
+       username = coalesce(EXCLUDED.username, users.username),
+       -- an account with its OWN password (the admin console login) converges to it on every re-run;
+       -- everyone else keeps the hash already in the row, as the rest of this seed does
+       password_hash = CASE WHEN $9 THEN EXCLUDED.password_hash ELSE users.password_hash END`,
+    [id, email, opts.username ?? null, opts.password ? hashPassword(opts.password) : pwHash, name, verified, opts.locale ?? 'ko-KR', opts.since ?? null, !!opts.password],
   );
   await db.query(`INSERT INTO user_profiles(user_id, preferred_name, languages) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [id, name, opts.languages ?? ['ko', 'en']]);
   if (opts.bio || opts.country) {
@@ -548,7 +561,7 @@ const UPCOMING_ORDERS = [
 // ------------------------------------------------------------------------------------------------ seed
 await db.query('BEGIN');
 try {
-  const admin = await user('admin', 'admin@jetpool.dev', 'JETPOOL Admin', ['ADMIN', 'COMPLIANCE', 'ACCOUNTING', 'SUPPORT', 'EDITOR']);
+  const admin = await user('admin', 'admin@jetpool.dev', 'JETPOOL Admin', ['ADMIN', 'COMPLIANCE', 'ACCOUNTING', 'SUPPORT', 'EDITOR'], true, { username: ADMIN_USERNAME, password: ADMIN_PASSWORD });
   const accountant = await user('accountant', 'accounting@jetpool.dev', '정산 담당', ['ACCOUNTING']);
   const hostA = await user('host-a', 'host.seoul@jetpool.dev', '서울 호스트', ['HOST'], true, { bio: '북촌·성수·망원·잠실, 동네마다 다른 서울의 일상을 소개하는 호스트입니다.' });
   const hostB = await user('host-b', 'host.jeju@jetpool.dev', '제주 호스트', ['HOST'], true, { bio: '제주 이주 8년 차, 돌집과 바다를 사랑하는 호스트예요.' });
@@ -1520,7 +1533,9 @@ try {
   const added = Object.entries(counts).filter(([, n]) => n > 0).map(([k, n]) => `${k}+${n}`).join(', ');
   console.log(added ? `new rows: ${added}` : 'nothing new (already seeded)');
   if (skipped.length) console.log(`skipped (dates already taken in this database): ${skipped.join('; ')}`);
-  console.log(`login with e.g. guest@jetpool.dev / ${PASSWORD} (admin@jetpool.dev must enroll MFA for admin actions)`);
+  // The passwords themselves are never printed (docs/CONVENTIONS.md) — the defaults are in README / docs/DEMO.md.
+  console.log('login with e.g. guest@jetpool.dev — password: $SEED_PASSWORD (default at the top of this file)');
+  console.log('admin console: /admin/login — id: $SEED_ADMIN_USERNAME, password: $SEED_ADMIN_PASSWORD (then enroll MFA; staff actions need AAL2)');
 } catch (e) {
   await db.query('ROLLBACK');
   console.error(e);

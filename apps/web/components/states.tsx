@@ -17,11 +17,12 @@ function StateHeading({ as = 'h2', children }: { as?: Heading; children: ReactNo
   return <H>{children}</H>;
 }
 
-export function LoginLink({ children }: { children?: ReactNode }) {
+/** `href` points somewhere other than the member login — the admin console sends staff to `/admin/login`. */
+export function LoginLink({ children, href = '/login' }: { children?: ReactNode; href?: string }) {
   const path = usePathname();
   const { t } = useI18n();
   return (
-    <Link className="btn primary" href={`/login?next=${encodeURIComponent(path || '/')}`}>
+    <Link className="btn primary" href={`${href}?next=${encodeURIComponent(path || '/')}`}>
       {children ?? t('nav.login')}
     </Link>
   );

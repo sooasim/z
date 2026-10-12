@@ -59,6 +59,20 @@ export function personaByEmail(email: string): Persona | null {
   return a ? persona(a.key) : null;
 }
 
+/**
+ * Login handles (`users.username` in the real API) and the password that goes with them. The admin console
+ * (`/admin/login`) signs in with `admin` / `admin1234`; the shared demo password works there too.
+ */
+export const PERSONA_USERNAME: Record<string, string> = { admin: 'admin' };
+export const USERNAME_PASSWORD: Record<string, string> = { admin: 'admin1234' };
+
+export function personaByUsername(name: string): Persona | null {
+  const n = (name || '').trim().toLowerCase();
+  if (!n) return null;
+  for (const [k, u] of Object.entries(PERSONA_USERNAME)) if (u === n && F.personas[k]) return persona(k);
+  return null;
+}
+
 export function personaByUserId(id: string): Persona | null {
   for (const k of Object.keys(F.personas)) if (F.personas[k].userId === id) return persona(k);
   const a = accounts().find((x) => x.userId === id);
@@ -133,6 +147,11 @@ function loginBody(s: Session): Obj {
 const DEMO_EMAILS = () => Object.values(F.personas).map((p) => p.email);
 const invalid = () =>
   problem(401, 'INVALID_CREDENTIALS', `이메일 또는 비밀번호가 올바르지 않습니다. 데모 계정: ${DEMO_EMAILS().join(', ')} / 비밀번호 ${F.password}`, { demoAccounts: DEMO_EMAILS(), demoPassword: F.password });
+/** Handle sign-in (`/admin/login`) — the hint names the handles, not the member emails. */
+const invalidHandle = () => {
+  const list = Object.entries(PERSONA_USERNAME).map(([k, u]) => `${u} / ${USERNAME_PASSWORD[k] ?? F.password}`);
+  return problem(401, 'INVALID_CREDENTIALS', `아이디 또는 비밀번호가 올바르지 않습니다. 데모 관리자 계정: ${list.join(', ')}`, { demoAdminLogins: list });
+};
 
 function startSession(key: string, aal?: 'aal1' | 'aal2'): Response {
   // Demo shortcut: personas with an authenticator are signed in at AAL2 right away (no TOTP device in a static demo).
@@ -157,11 +176,13 @@ export function handleBff(sub: string, method: string, body: Obj, base: string):
       if (!s) return json(200, { accessToken: null, authenticated: false }, { 'cache-control': 'no-store' });
       return json(200, { accessToken: tokenFor(s), tokenType: 'Bearer', expiresIn: 86400 * 30, aal: s.aal, sessionId: s.sid, user: userOf(persona(s.persona)!) }, { 'cache-control': 'no-store' });
     case 'login': {
-      const p = personaByEmail(String(body.email || ''));
-      if (!p) return invalid();
+      const handle = String(body.username || '');
+      const p = handle ? personaByUsername(handle) : personaByEmail(String(body.email || ''));
+      if (!p) return handle ? invalidHandle() : invalid();
       const acct = accounts().find((a) => a.key === p.key);
       const pw = String(body.password || '');
-      if (acct ? pw !== acct.password && pw !== F.password : pw !== F.password) return invalid();
+      const accepted = [F.password, acct?.password, USERNAME_PASSWORD[p.key]].filter(Boolean) as string[];
+      if (!accepted.includes(pw)) return handle ? invalidHandle() : invalid();
       return startSession(p.key);
     }
     case 'logout':

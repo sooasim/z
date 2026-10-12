@@ -31,6 +31,10 @@
 
 이메일 코드 로그인, MFA 코드는 아무 6자리 숫자나 통과합니다. 소셜 로그인 버튼은 게스트로 로그인됩니다.
 
+**관리자 콘솔은 `/admin/login`** 에서 아이디 `admin` / 비밀번호 `admin1234` 로 들어갑니다(이메일로도 로그인됩니다).
+첫 페이지(`/`)의 문구·바로가기·추천 여행지·섹션 노출·브랜드 블록·안심 약속은 **관리자 → 콘텐츠 → 메인 첫 페이지**
+(`/admin/home`)에서 편집하고 **게시**하면 반영됩니다.
+
 데모 계정의 **프로필 사진**은 오픈 라이선스(CC BY · CC BY-SA · CC0 · PDM) 실제 인물 사진입니다
 (`data/media/people.json`, `scripts/legacy/fetch-people.mjs`). 사진 속 인물은 그 호스트·가이드·여행자 본인이 아니라
 페르소나를 대신하는 예시이며, 출처는 `/credits`에 모두 표기됩니다.
@@ -90,6 +94,12 @@ A static, server-less build of the **real `apps/web` UI** that you can click thr
 ### Demo accounts
 All use the password `Jetpool!2026dev`: `guest@`, `host.seoul@`, `host.jeju@`, `exchange.busan@`, `friend.guide@`,
 `pro.guide@`, `supplier@`, `admin@jetpool.dev` (admin signs in already stepped-up to AAL2). Email OTP / MFA accept any 6 digits.
+
+The **admin console signs in at `/admin/login`** with the id `admin` and the password `admin1234` (its email works
+too). **Admin → Content → Main page** (`/admin/home`) edits the home page itself — hero copy, shortcut chips, featured
+destinations, which rails are shown, brand blocks and the safety promise — and the change lands once the entry is
+**published**. Blank fields keep the built-in copy, which is translated into all five UI languages; text typed there
+applies to the language being edited only, while show/hide applies to every language.
 
 The **profile pictures** of those accounts are openly-licensed real portraits (CC BY · CC BY-SA · CC0 · PDM) published by
 `scripts/legacy/fetch-people.mjs` into `data/media/people.json`. Each one stands in for a persona — it is not a photo of
