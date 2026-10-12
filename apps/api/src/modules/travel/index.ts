@@ -5,6 +5,7 @@ import { getActor, hasRole, requireAuth, requireRole } from '../../platform/auth
 import { ctxFromRequest, systemCtx } from '../../platform/context.js';
 import { maybeOne, one, q, withTx } from '../../platform/db.js';
 import { badRequest, conflict, notFound } from '../../platform/errors.js';
+import { contentLocale, contentTranslation, localize } from '../../platform/content-locale.js';
 import { idempotencyKeyFrom, withIdempotency } from '../../platform/idempotency.js';
 import { assertEnabled } from '../../platform/flags.js';
 import { emit } from '../../platform/outbox.js';
@@ -75,6 +76,10 @@ const supplierDto = (s: any) => ({
   status: s.status,
   createdAt: s.created_at,
 });
+
+/** Supplier-written text in the public product DTOs. */
+const PRODUCT_LIST_TEXT = ['items[].title', 'items[].summary'] as const;
+const PRODUCT_TEXT = ['item.title', 'item.summary', 'item.description', 'item.cancellationTerms'] as const;
 
 const productDto = (p: any, extra: Record<string, unknown> = {}) => ({
   id: p.id,
@@ -478,7 +483,10 @@ export default async function travelModule(app: FastifyInstance) {
         ],
       );
       const pg = page(rows, f.limit);
-      return { items: pg.items.map((p: any) => productDto(p, { fromPriceMinor: p.from_price_minor ?? p.base_price_minor })), nextCursor: pg.nextCursor };
+      // Product copy is supplier-written, so a reader in another language gets it translated.
+      const body = { items: pg.items.map((p: any) => productDto(p, { fromPriceMinor: p.from_price_minor ?? p.base_price_minor })), nextCursor: pg.nextCursor };
+      const locale = contentLocale(req);
+      return localize(await contentTranslation(ctxFromRequest(req), locale), body, PRODUCT_LIST_TEXT, locale);
     },
   );
 
@@ -491,7 +499,9 @@ export default async function travelModule(app: FastifyInstance) {
       (actor && (out.row.owner_user_id === actor.userId || (hasRole(actor, 'ADMIN', 'EDITOR', 'COMPLIANCE') && actor.aal === 'aal2')));
     if (!visible) throw notFound('Product');
     const deps = await q(pool, `SELECT * FROM travel_departures WHERE product_id = $1 AND starts_at > now() AND status IN ('OPEN','GUARANTEED') ORDER BY starts_at LIMIT 50`, [out.row.id]);
-    return { item: productDto(out.row, { options: out.options.filter((o) => o.active), departures: deps.map(departureDto) }) };
+    const body = { item: productDto(out.row, { options: out.options.filter((o) => o.active), departures: deps.map(departureDto) }) };
+    const locale = contentLocale(req);
+    return localize(await contentTranslation(ctxFromRequest(req), locale), body, PRODUCT_TEXT, locale);
   });
 
   // ------------------------------------------------------------------ TRAVEL-02 departures

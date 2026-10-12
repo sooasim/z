@@ -1555,3 +1555,21 @@ if (!process.exitCode && existsSync(MEDIA_ASSIGNMENTS_FILE)) {
     process.exitCode = 1;
   }
 }
+
+// Demo translations for the member-written copy above (data/translations/demo.json). The read path fills this
+// cache from the model when ANTHROPIC_API_KEY is set; seeding it keeps the static Pages demo — which has no
+// server and replays recorded fixtures — able to show the feature at all. Idempotent and additive.
+if (!process.exitCode) {
+  try {
+    const { seedTranslations, readDemoTranslations } = await import('./seed-translations.mjs');
+    const client = new pg.Client({ connectionString: url });
+    await client.connect();
+    const written = await seedTranslations(client);
+    await client.end();
+    const all = readDemoTranslations();
+    if (all.length) console.log(`[seed-translations] ${all.length} demo translation(s) — ${written} new`);
+  } catch (e) {
+    console.error(`[seed-translations] failed, nothing written: ${e.stack ?? e.message}`);
+    process.exitCode = 1;
+  }
+}

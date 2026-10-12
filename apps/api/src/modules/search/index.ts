@@ -6,11 +6,15 @@ import { ctxFromRequest } from '../../platform/context.js';
 import { onEvent, emit } from '../../platform/outbox.js';
 import { registerJob } from '../../platform/jobs.js';
 import { audit } from '../../platform/audit.js';
+import { contentLocale, contentTranslation, localize } from '../../platform/content-locale.js';
 import { SEARCH_ADAPTER } from './adapter.js';
 import { createSearchAdapter, flushPendingProjections, projectProperty, propertyIdsForEvent, rebuildIndex, reconcileIndex, searchAdapterOf, searchProperties, suggest } from './service.js';
 
 /** Events that change what a property's search document looks like. */
 const PROJECTION_EVENTS = ['property.*', 'listing.blocked', 'media.ready', 'availability.changed', 'review.*', 'reputation.*', 'compliance.*'];
+
+/** Host-written text on a search card. */
+const CARD_TEXT = ['items[].title', 'items[].summary'] as const;
 
 /** STAY-04 Stay Search & Discovery + PLAT-01 Search Projection. */
 export default async function searchModule(app: FastifyInstance) {
@@ -58,7 +62,13 @@ export default async function searchModule(app: FastifyInstance) {
         limit: z.coerce.number().int().min(1).max(50).default(20),
       }),
     },
-  }, async (req) => searchProperties(app.ctx, req.query));
+  }, async (req) => {
+    // Card titles and summaries are host-written, so a reader in another language gets them translated
+    // (content.auto_translate); anything not cached yet stays in the source language.
+    const body = await searchProperties(app.ctx, req.query);
+    const locale = contentLocale(req);
+    return localize(await contentTranslation(ctxFromRequest(req), locale), body, CARD_TEXT, locale);
+  });
 
   r.get('/v1/search/suggest', {
     schema: { tags: ['STAY-04'], summary: 'Autocomplete (places, cities, listing titles)', querystring: z.object({ q: z.string().max(100), limit: z.coerce.number().int().min(1).max(10).default(5) }) },

@@ -1,4 +1,6 @@
 /** Small helpers shared by the demo runtime. */
+import { readerLocale, translateBody } from './translate.js';
+
 export type Obj = Record<string, any>;
 
 export const nativeFetch: typeof fetch = window.fetch.bind(window);
@@ -6,7 +8,10 @@ export const nativeFetch: typeof fetch = window.fetch.bind(window);
 export function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
   const h = new Headers({ 'content-type': status >= 400 ? 'application/problem+json' : 'application/json', 'x-jetpool-demo': '1', ...headers });
   if (status === 204 || body === undefined) return new Response(null, { status: status === 204 ? 204 : status, headers: h });
-  return new Response(JSON.stringify(body), { status, headers: h });
+  // Every demo response goes through here, which makes it the one place to mirror the API's content
+  // translation. Errors keep their recorded wording: they are UI copy, which the web app localizes itself.
+  const out = status >= 400 ? body : translateBody(body, readerLocale());
+  return new Response(JSON.stringify(out), { status, headers: h });
 }
 
 export function problem(status: number, code: string, detail?: string, extra: Obj = {}): Response {

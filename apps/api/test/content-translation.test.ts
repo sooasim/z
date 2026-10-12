@@ -1,8 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createTestApp, call, createUser, type TestApp } from './helpers.js';
-import { contentLocale, contentTranslation, localize, SUPPORTED_LOCALES } from '../src/platform/content-locale.js';
+import { contentLocale, contentTranslation, localize, SOURCE_LOCALE, SUPPORTED_LOCALES } from '../src/platform/content-locale.js';
 import { collect, sourceHash, storeTranslations, translatable, translateMany, applyTranslations, type Translator } from '../src/platform/translate.js';
 import { TranslationQueue } from '../src/platform/translate-queue.js';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+// @ts-expect-error -- plain .mjs seeder shared with packages/db, no types
+import { readDemoTranslations, seedTranslations } from '../../../packages/db/seed-translations.mjs';
 
 let t: TestApp;
 beforeAll(async () => {
@@ -245,6 +249,46 @@ describe('read paths', () => {
   it('never translates into the source language', async () => {
     await enable();
     expect(await contentTranslation(t.ctx(), 'ko-KR')).toBeNull();
+  });
+});
+
+describe('demo translations (data/translations/demo.json)', () => {
+  const root = path.resolve(__dirname, '../../..');
+  const seedSrc = () => readFileSync(path.join(root, 'packages/db/seed-dev.mjs'), 'utf8');
+  const rows = () => readDemoTranslations(path.join(root, 'data/translations/demo.json'));
+
+  it('covers every shipped language but the source one, with the same sources in each', () => {
+    const byLocale = new Map<string, Set<string>>();
+    for (const r of rows()) {
+      if (!byLocale.has(r.locale)) byLocale.set(r.locale, new Set());
+      byLocale.get(r.locale)!.add(r.source);
+    }
+    expect([...byLocale.keys()].sort()).toEqual(SUPPORTED_LOCALES.filter((l) => l !== SOURCE_LOCALE).slice().sort());
+    const [first, ...rest] = [...byLocale.values()].map((s) => [...s].sort());
+    for (const other of rest) expect(other).toEqual(first);
+    expect(first.length).toBeGreaterThan(20);
+  });
+
+  it('only describes copy the dev seed actually creates, so it cannot drift', () => {
+    const seed = seedSrc();
+    const stale = [...new Set(rows().map((r) => r.source))].filter((s) => !seed.includes(s));
+    expect(stale).toEqual([]);
+  });
+
+  it('never leaves a translation equal to its source or empty', () => {
+    for (const r of rows()) {
+      expect(r.translated.trim(), `${r.locale}: ${r.source}`).toBeTruthy();
+      expect(r.translated, `${r.locale}: ${r.source}`).not.toBe(r.source);
+    }
+  });
+
+  it('loads into the same cache the read path uses, idempotently', async () => {
+    const first = await seedTranslations(t.pool);
+    expect(first).toBeGreaterThan(0);
+    expect(await seedTranslations(t.pool)).toBe(0);
+    const sample = rows().find((r) => r.locale === 'ja-JP')!;
+    const map = await translateMany({ db: t.pool }, [sample.source], 'ja-JP');
+    expect(map.get(sample.source)).toBe(sample.translated);
   });
 });
 

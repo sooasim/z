@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { requireAuth, getActor } from '../../platform/auth.js';
 import { ctxFromRequest } from '../../platform/context.js';
+import { contentLocale, contentTranslation, localize } from '../../platform/content-locale.js';
 import { withTx } from '../../platform/db.js';
 import { idParams } from '../../platform/http.js';
 import { idempotencyKeyFrom, withIdempotency } from '../../platform/idempotency.js';
@@ -35,6 +36,9 @@ import {
   withdrawExchange,
 } from './service.js';
 
+/** Owner-written text on an exchange home card. */
+const HOME_TEXT = ['items[].title', 'items[].summary'] as const;
+
 /**
  * EXCH-01..06 Home Exchange — independent FSM 'EXCHANGE' (never a reservation).
  * Feature flag `exchange.enabled` gates entering/advancing the funnel (discover, request, counter, accept,
@@ -59,7 +63,10 @@ export default async function exchangeModule(app: FastifyInstance) {
   r.get('/v1/exchange/homes', { schema: { summary: 'Browse homes open to exchange', tags: ['EXCH-01'], querystring: s.homesQuery }, preHandler: requireAuth }, async (req) => {
     const actor = getActor(req);
     await assertEnabled(pool, EXCHANGE_FLAG, { userId: actor.userId, roles: actor.roles });
-    return discoverHomes(pool, ctxFromRequest(req), req.query);
+    // Home listings carry the owner's own title and summary.
+    const body = await discoverHomes(pool, ctxFromRequest(req), req.query);
+    const locale = contentLocale(req);
+    return localize(await contentTranslation(ctxFromRequest(req), locale), body, HOME_TEXT, locale);
   });
 
   // ---- EXCH-02 request & counter
