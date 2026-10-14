@@ -275,6 +275,32 @@ CSP에 박히므로 `up` 이 아니라 `deploy` 여야 합니다). IP 모드는 
 
 ---
 
+## CI에서 배포하기 (사람이 SSH 하지 않고)
+
+`.github/workflows/single-server.yml` 의 `deploy` 잡이 GitHub 러너에서 SSH로 `install.sh` 를 돌립니다.
+러너는 외부 통신 제한이 없으므로, 보안 그룹 뒤에 있는 서버에 닿으면서 PR에서 구동할 수 있는 유일한
+경로입니다. 같은 워크플로의 `verify` 잡은 자격증명 없이 도메인·포트를 **밖에서** 점검합니다.
+
+서버에서 한 번만:
+
+```bash
+./infra/single-server/jetpool.sh deploy-key
+```
+
+전용 ed25519 키를 만들어 공개키를 `authorized_keys` 에 넣고, 등록할 시크릿 네 개를 화면에 찍습니다.
+**개인키는 출력 직후 서버에서 삭제**되므로 그 화면에서 복사해야 하며, 이후 키는 리포지토리 시크릿에만
+존재합니다. 출력된 값을 **Settings → Secrets and variables → Actions** 에 그대로 넣으세요
+(`JETPOOL_SSH_HOST` / `JETPOOL_SSH_USER` / `JETPOOL_SSH_HOST_KEY` / `JETPOOL_SSH_KEY`).
+
+이후 Actions 탭에서 `single-server` 워크플로를 `deploy = true` 로 실행하면 배포가 끝까지 돌고, 마지막에
+서버의 `doctor` 결과까지 출력합니다. 접근을 끊으려면 `~/.ssh/authorized_keys` 에서 해당
+`jetpool-deploy-*` 줄을 지우고 시크릿을 삭제하면 됩니다 — 비밀번호와 달리 한 줄 삭제로 폐기됩니다.
+
+> `workflow_dispatch` 는 워크플로 파일이 **기본 브랜치에 있을 때만** 실행 버튼이 보입니다. 이 설정이
+> 담긴 PR을 머지한 뒤에 쓸 수 있습니다.
+
+---
+
 ## 평소 운영
 
 ```bash

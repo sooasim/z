@@ -7,6 +7,7 @@
 #   ./infra/single-server/jetpool.sh seed                           # demo content + demo logins
 #   ./infra/single-server/jetpool.sh logins                         # print the generated logins
 #   ./infra/single-server/jetpool.sh doctor                          # why isn't it opening? run this
+#   ./infra/single-server/jetpool.sh deploy-key                      # mint the key the CI deploy job needs
 #   ./infra/single-server/jetpool.sh ps | logs [svc] | smoke | backup | update | down
 #
 # `init` is safe to re-run: it rewrites the public addresses and never regenerates a secret that already
@@ -246,6 +247,66 @@ cmd_smoke() {
       fi
     done
   fi
+}
+
+# ------------------------------------------------------------------ deploy-key
+# Mints the credential the GitHub Actions deploy job needs, and prints exactly what to paste where.
+# The private half is shown once and then deleted from this server: only authorized_keys stays here,
+# so the key lives in the repository secret and nowhere else. Losing it means re-running this.
+cmd_deploy_key() {
+  local label="${1:-github-actions}"
+  command -v ssh-keygen >/dev/null 2>&1 || { log "installing openssh-client"; apt-get update -qq && apt-get install -y -qq openssh-client; }
+
+  local tmp key
+  tmp="$(mktemp -d)"
+  key="$tmp/jetpool-deploy-$label"
+  ssh-keygen -t ed25519 -N '' -C "jetpool-deploy-$label" -f "$key" >/dev/null
+
+  install -m 700 -d "$HOME/.ssh"
+  touch "$HOME/.ssh/authorized_keys"
+  chmod 600 "$HOME/.ssh/authorized_keys"
+  if grep -qF "$(cut -d' ' -f2 "$key.pub")" "$HOME/.ssh/authorized_keys" 2>/dev/null; then
+    log "that public key is already authorised"
+  else
+    cat "$key.pub" >> "$HOME/.ssh/authorized_keys"
+    log "public key appended to $HOME/.ssh/authorized_keys"
+  fi
+
+  local host host_key svc
+  host=""
+  for svc in https://api.ipify.org https://checkip.amazonaws.com https://ifconfig.me/ip; do
+    host="$(curl -fsS --max-time 6 "$svc" 2>/dev/null | tr -d '[:space:]' || true)"
+    [[ "$host" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && break || host=""
+  done
+  [[ -n "$host" ]] || host="<this server's public IP — read it from the console>"
+  host_key=""
+  if [[ -r /etc/ssh/ssh_host_ed25519_key.pub ]]; then
+    host_key="$host $(cut -d' ' -f1,2 /etc/ssh/ssh_host_ed25519_key.pub)"
+  fi
+
+  # Every value below is printed flush-left and alone on its lines: an indented PEM is an invalid PEM.
+  echo
+  bold "Add these as repository secrets — Settings → Secrets and variables → Actions → New repository secret"
+  echo
+  bold "--- JETPOOL_SSH_HOST ---"
+  echo "$host"
+  echo
+  bold "--- JETPOOL_SSH_USER ---"
+  id -un
+  echo
+  if [[ -n "$host_key" ]]; then
+    bold "--- JETPOOL_SSH_HOST_KEY ---  (pins this server, so the job cannot be pointed at an impostor)"
+    echo "$host_key"
+    echo
+  fi
+  bold "--- JETPOOL_SSH_KEY ---  (copy from BEGIN through END inclusive; no leading spaces)"
+  cat "$key"
+  echo
+  rm -rf "$tmp"
+  bold "The private key above is now deleted from this server — copy it before you lose this screen."
+  echo "  Then run the 'single-server' workflow with deploy = true."
+  echo "  To revoke this access later: remove the matching 'jetpool-deploy-$label' line from"
+  echo "  $HOME/.ssh/authorized_keys, and delete the secrets."
 }
 
 # ------------------------------------------------------------------ doctor
@@ -522,6 +583,7 @@ case "${1:-help}" in
   logins)  cmd_logins ;;
   smoke)   ensure_docker_access "$@"; cmd_smoke ;;
   doctor)  ensure_docker_access "$@"; cmd_doctor ;;
+  deploy-key) shift; cmd_deploy_key "$@" ;;
   backup)  ensure_docker_access "$@"; cmd_backup ;;
   ps)      ensure_docker_access "$@"; dc ps ;;
   logs)    ensure_docker_access "$@"; shift; dc logs -f --tail 200 "$@" ;;
