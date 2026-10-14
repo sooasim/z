@@ -39,11 +39,15 @@ MinIO 콘솔은 호스트 포트에 아예 노출되지 않고, API와 MinIO의 
 
 ## 0단계 — 클라우드 콘솔에서 먼저 할 일
 
-지금 이 서버에는 **공인 IP가 없습니다**(사설 192.168.x.x 만 있음). 공인 IP가 없으면 외부에서 접속도,
-Let's Encrypt 인증서 발급도 불가능합니다.
+### 공인 IP
 
-1. **공인 IP 할당** — 콘솔에서 이 서버(`Server-261014134258`)에 공인 IP를 붙입니다.
-2. **보안 그룹 인바운드 허용** — 보안 그룹에 아래 3개를 엽니다.
+서버에 **공인 IP가 붙어 있어야** 합니다. 콘솔의 서버 상세에 사설 IP(`192.168.x.x` 등)만 보이고 공인 IP
+칸이 비어 있으면, 외부 접속도 인증서 발급도 불가능합니다 — 공인 IP를 생성해 서버에 **연결**하세요.
+사설 IP를 공인 IP로 착각해 DNS에 넣는 것이 가장 흔한 실수입니다(2단계 경고 참고).
+
+서버 안에서 교차 확인: `curl -fsS https://api.ipify.org` 결과가 콘솔의 공인 IP와 같아야 합니다.
+
+### 보안 그룹 인바운드
 
 | 포트 | 프로토콜 | 원본 | 왜 |
 |---|---|---|---|
@@ -57,8 +61,62 @@ Let's Encrypt 인증서 발급도 불가능합니다.
 > 입력한 사용자에게는 **그냥 "안 열리는 사이트"** 로 보입니다. HTTP-01 실패 재시도로 발급이 느려지고
 > 로그도 지저분해집니다.
 
-3. **비밀번호 로그인 → SSH 키**로 바꾸는 것을 권합니다. 지금 쓰고 있는 비밀번호는 채팅/메모에 한 번
-   노출되었으므로, 접속 후 `passwd` 로 즉시 교체하고 키 기반 로그인으로 전환하세요.
+**열지 말아야 할 것:** `3389`(MS-WBT-SERVER / 원격 데스크톱)는 Linux 서버에 쓸 일이 없습니다. 기본
+룰셋에 들어 있는 경우가 있으니 삭제하세요. PostgreSQL(5432)·Redis(6379)·Meilisearch(7700)·
+MinIO(9000/9001)도 **절대 열지 마세요** — 이 구성은 그 포트들을 호스트에 노출하지 않으며, Caddy의
+80/443만으로 동작합니다.
+
+가비아 클라우드에서는 **보안 그룹 → 해당 그룹 → 룰셋 추가**에서 타입 `HTTP`(tcp 80~80), IP/CIDR
+`0.0.0.0/0` 를 넣으면 됩니다. 현재 룰셋은 같은 화면에서 xlsx로 내려받아 확인할 수 있고, 그 파일에
+`tcp: 80~80` 줄이 있는지 보는 것이 가장 확실한 점검입니다.
+
+### 로그인 — 키 페어로 만들었다면 비밀번호는 통하지 않습니다
+
+콘솔에 "비밀번호 접속"으로 표시돼 있어도, **키 페어를 발급해 만든 인스턴스는 서버 안 sshd 설정이
+`PasswordAuthentication no` / `PermitRootLogin prohibit-password`** 인 경우가 대부분입니다(Ubuntu
+클라우드 이미지 기본값). 콘솔 표시와 실제 설정이 다른 상태이고, 이때 비밀번호는 몇 번을 넣어도
+거부됩니다. 받은 `.pem` 키로 접속하세요.
+
+```bash
+# macOS / Linux
+chmod 600 ~/Downloads/<키파일>.pem
+ssh -i ~/Downloads/<키파일>.pem ubuntu@<공인-IP>      # 안 되면 root@ 로도 시도
+```
+
+```powershell
+# Windows PowerShell (ssh 내장)
+icacls .\<키파일>.pem /inheritance:r /grant:r "$($env:USERNAME):(R)"
+ssh -i .\<키파일>.pem ubuntu@<공인-IP>
+```
+
+권한을 안 좁히면 `UNPROTECTED PRIVATE KEY FILE` 로 거부됩니다. PuTTY는 PuTTYgen으로 `.pem` → `.ppk`
+변환이 먼저 필요합니다. RSA 키에서 `no mutual signature algorithm` 이 나오면
+`-o PubkeyAcceptedKeyTypes=+ssh-rsa` 를 붙이세요.
+
+접속이 안 될 때 메시지로 원인이 갈립니다.
+
+| 메시지 | 원인 |
+|---|---|
+| `Permission denied (publickey)` | 비밀번호 인증이 꺼져 있음 → 키로 접속 |
+| `Permission denied (publickey,password)` | 비밀번호는 받지만 틀렸거나 사용자명이 다름 (`ubuntu` ↔ `root`) |
+| `Connection timed out` | 보안 그룹에 22가 없거나 원본 IP 제한에 걸림 |
+| `Connection refused` | 포트는 닿지만 sshd가 안 돌고 있음 |
+
+비밀번호 로그인을 굳이 켜야 한다면 키로 들어간 뒤:
+
+```bash
+sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+sudo grep -rl PasswordAuthentication /etc/ssh/sshd_config.d/ 2>/dev/null \
+  | xargs -r sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/'
+sudo systemctl restart ssh
+```
+
+클라우드 이미지는 `/etc/ssh/sshd_config.d/` 안의 파일이 본 설정을 덮어쓰므로 두 번째 줄이 필요합니다.
+다만 22가 전 세계에 열린 상태에서 비밀번호 로그인을 켜는 것은 권하지 않습니다 — 자동화된 브루트포스의
+표적이 됩니다. 키로 접속되면 키만 쓰고, 22는 본인 IP로 좁히세요.
+
+> 개인키(`.pem`)와 서버 비밀번호는 채팅·이슈·문서에 붙여넣지 마세요. 한 번 노출된 키는 폐기 대상입니다
+> — 새 키쌍을 만들어 `~/.ssh/authorized_keys` 를 교체하고 노출된 키는 버리세요.
 
 ---
 
