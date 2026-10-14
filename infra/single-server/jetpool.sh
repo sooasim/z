@@ -102,6 +102,11 @@ cmd_init() {
     warn "and TCP 80 + 443 must be open, or Caddy cannot get certificates."
   else
     [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "'$ip' is not an IPv4 address"
+    case "$ip" in
+      10.*|127.*|169.254.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*|100.6[4-9].*|100.[7-9][0-9].*|100.1[0-1][0-9].*|100.12[0-7].*)
+        warn "$ip is a PRIVATE address. That is fine for a LAN-only demo, but the internet cannot reach it"
+        warn "and a DNS record pointing here can never work — attach a public IP in your cloud console first." ;;
+    esac
     set_env DEPLOY_MODE ip
     set_env CADDYFILE Caddyfile.ip
     set_env ROOT_DOMAIN "$ip"
@@ -255,6 +260,16 @@ cmd_doctor() {
   note() { printf '  \033[33m??\033[0m  %s\n' "$*"; warnings+=("$*"); }
   info() { printf '      %s\n' "$*"; }
 
+  # RFC1918 / loopback / link-local / CGNAT. An A record holding one of these can never be reached
+  # from the internet, which is a different mistake from an A record pointing at the wrong host.
+  is_private() {
+    case "$1" in
+      10.*|127.*|169.254.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*) return 0 ;;
+      100.6[4-9].*|100.[7-9][0-9].*|100.1[0-1][0-9].*|100.12[0-7].*) return 0 ;;
+    esac
+    return 1
+  }
+
   # dig is not on a minimal Ubuntu; getent uses the same resolver and is always there.
   resolve() { # <name> -> one address per line
     if command -v dig >/dev/null 2>&1; then dig +short +time=3 +tries=1 "$1" A 2>/dev/null | grep -E '^[0-9.]+$'
@@ -390,6 +405,8 @@ cmd_doctor() {
       answers="$(resolve "$name" | paste -sd, - || true)"
       if [[ -z "$answers" ]]; then
         bad "$name does not resolve — the A record is missing (or DNS has not propagated yet)"
+      elif is_private "${answers%%,*}"; then
+        bad "$name → $answers is a PRIVATE address (RFC1918/CGNAT), which the internet cannot route — the A record needs the server's PUBLIC IP${public_ip:+, which is $public_ip}"
       elif [[ -n "$public_ip" && "$answers" == "$public_ip" ]]; then
         ok "$name → $answers"
       elif [[ -n "$public_ip" ]]; then
