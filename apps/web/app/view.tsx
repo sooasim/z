@@ -71,7 +71,7 @@ function DestinationRail({ cfg }: { cfg: HomeConfig }) {
           <p>{L('JETPOOL 멤버들이 가장 많이 머무는 도시', 'Cities our members stay in most')}</p>
         </div>
         <div className="row" style={{ gap: 8 }}>
-          <Link href="/discover" className="btn ghost sm">
+          <Link href="/discover" className="btn outline sm">
             {L('여행지 더 보기', 'More destinations')}
           </Link>
           <RailNav target={ref} label={`${title} — ${L('목록 넘기기', 'Scroll list')}`} />

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { railNumbered, railPage, railPages } from '@/lib/rail';
+import { RAIL_AUTOPLAY_MS, railNextPage, railNumbered, railPage, railPages, railPrevPage } from '@/lib/rail';
 
 describe('railPages', () => {
   it('is one page when the row fits', () => {
@@ -66,5 +66,41 @@ describe('railNumbered', () => {
     expect(railNumbered(2)).toBe(true);
     expect(railNumbered(8)).toBe(true);
     expect(railNumbered(9)).toBe(false);
+  });
+});
+
+describe('railNextPage / railPrevPage', () => {
+  it('steps through the deck', () => {
+    expect(railNextPage(0, 4)).toBe(1);
+    expect(railNextPage(2, 4)).toBe(3);
+    expect(railPrevPage(3, 4)).toBe(2);
+    expect(railPrevPage(1, 4)).toBe(0);
+  });
+
+  it('wraps at both ends, so autoplay keeps cycling and neither arrow dead-ends', () => {
+    expect(railNextPage(3, 4)).toBe(0);
+    expect(railPrevPage(0, 4)).toBe(3);
+    expect(railNextPage(1, 2)).toBe(0);
+    expect(railPrevPage(0, 2)).toBe(1);
+  });
+
+  it('stays put when there is nothing to page through', () => {
+    expect(railNextPage(0, 1)).toBe(0);
+    expect(railPrevPage(0, 1)).toBe(0);
+    expect(railNextPage(0, 0)).toBe(0);
+    expect(railPrevPage(0, 0)).toBe(0);
+  });
+
+  it('comes back into range from a page index the deck no longer has', () => {
+    // A resize can shrink the deck between a tick being scheduled and it firing, so neither helper
+    // may hand back a page that does not exist.
+    expect(railNextPage(9, 3)).toBe(0);
+    expect(railPrevPage(9, 3)).toBe(1);
+    expect(railNextPage(-4, 3)).toBe(1);
+    expect(railPrevPage(-4, 3)).toBe(2);
+  });
+
+  it('holds each page long enough to read, per the request for a 2-second slide', () => {
+    expect(RAIL_AUTOPLAY_MS).toBe(2000);
   });
 });
