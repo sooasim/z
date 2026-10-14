@@ -16,6 +16,7 @@
 #   --domain <d> --email <e>   serve https://d, https://api.d, https://s3.d with Let's Encrypt certs
 #   --ip <addr>                serve http://addr only (first smoke test; no TLS)
 #   --seed                     also load the demo catalogue and print its logins
+#   --skip-dns-check           deploy in domain mode even if the DNS preflight objects
 #   --dir <path>               where the checkout is / should be (default: the repo this script is in)
 #   --branch <name>            branch to clone when --dir has no checkout (default: the branch below,
 #                              which carries this setup; pass the default branch once PR #18 is merged)
@@ -25,6 +26,7 @@ REPO_URL="${JETPOOL_REPO_URL:-https://github.com/sooasim/z.git}"
 BRANCH="claude/youthful-darwin-fueqrx"
 DIR=""
 SEED=0
+SKIP_DNS_CHECK=0
 MODE_ARGS=()
 
 log()  { printf '\n\033[1m=== %s\033[0m\n' "$*"; }
@@ -36,6 +38,7 @@ while [[ $# -gt 0 ]]; do
     --email)  MODE_ARGS+=(--email "${2:?--email needs a value}"); shift 2 ;;
     --ip)     MODE_ARGS+=(--ip "${2:?--ip needs a value}"); shift 2 ;;
     --seed)   SEED=1; shift ;;
+    --skip-dns-check) SKIP_DNS_CHECK=1; shift ;;
     --dir)    DIR="${2:?--dir needs a value}"; shift 2 ;;
     --branch) BRANCH="${2:?--branch needs a value}"; shift 2 ;;
     -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 0 ;;
@@ -70,6 +73,71 @@ else
 fi
 [[ -f "$DIR/infra/single-server/jetpool.sh" ]] || die "$DIR has no infra/single-server — wrong branch? (--branch)"
 cd "$DIR"
+
+# A domain whose A record is missing or private cannot pass Let's Encrypt's HTTP-01 challenge, and
+# every failed attempt counts against that domain's issuance rate limit. Catch it before deploying.
+# Only the unambiguous cases refuse: a mismatch against our EGRESS address is reported but allowed,
+# because behind some NAT setups the address we go out on is not the one traffic comes in on.
+preflight_dns() {
+  local domain="" i=0
+  for ((i = 0; i < ${#MODE_ARGS[@]}; i++)); do
+    [[ "${MODE_ARGS[i]}" == "--domain" ]] && domain="${MODE_ARGS[i + 1]}"
+  done
+  [[ -n "$domain" ]] || return 0
+
+  is_private() {
+    case "$1" in
+      10.*|127.*|169.254.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*) return 0 ;;
+      100.6[4-9].*|100.[7-9][0-9].*|100.1[0-1][0-9].*|100.12[0-7].*) return 0 ;;
+    esac
+    return 1
+  }
+  resolve1() { getent ahostsv4 "$1" 2>/dev/null | awk '{print $1; exit}' || true; }
+
+  local egress="" svc
+  for svc in https://api.ipify.org https://checkip.amazonaws.com; do
+    egress="$(curl -fsS --max-time 6 "$svc" 2>/dev/null | tr -d '[:space:]' || true)"
+    [[ "$egress" =~ ^[0-9.]+$ ]] && break || egress=""
+  done
+
+  local name addr bad=0
+  for name in "$domain" "api.$domain" "s3.$domain"; do
+    addr="$(resolve1 "$name")"
+    if [[ -z "$addr" ]]; then
+      echo "  $name does not resolve" >&2
+      bad=1
+    elif is_private "$addr"; then
+      echo "  $name → $addr is a PRIVATE address the internet cannot route" >&2
+      bad=1
+    elif [[ -n "$egress" && "$addr" != "$egress" ]]; then
+      echo "  $name → $addr (this server goes out as $egress — fine if inbound differs, but worth checking)"
+    else
+      echo "  $name → $addr"
+    fi
+  done
+
+  if [[ "$bad" -eq 1 ]]; then
+    cat >&2 <<EOF
+
+Refusing to deploy in domain mode: the DNS above cannot work.
+Let's Encrypt validates over HTTP to the address in the A record, so a missing or private
+record makes issuance fail, and repeated failures hit that domain's rate limit.
+
+Point these A records at this server's PUBLIC IP and wait for them to propagate:
+  $domain, www.$domain, api.$domain, s3.$domain
+
+To smoke-test without a domain in the meantime:
+  sudo bash $0 --ip <public-ip>
+Or, if you know the DNS is right and this check is wrong, re-run with --skip-dns-check.
+EOF
+    exit 1
+  fi
+}
+
+if [[ "$SKIP_DNS_CHECK" -eq 0 ]]; then
+  log "0.5/4  DNS preflight"
+  preflight_dns
+fi
 
 log "1/4  bootstrap — docker, swap, firewall, UTC clock"
 bash infra/single-server/bootstrap.sh
