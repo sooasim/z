@@ -73,10 +73,10 @@ function DestinationRail({ cfg }: { cfg: HomeConfig }) {
           <Link href="/discover" className="btn ghost sm">
             {L('여행지 더 보기', 'More destinations')}
           </Link>
-          <RailNav target={ref} />
+          <RailNav target={ref} label={`${title} — ${L('목록 넘기기', 'Scroll list')}`} />
         </div>
       </div>
-      <div className="rail" ref={ref} tabIndex={0} aria-label={`${title} — ${L('좌우로 스크롤', 'scroll horizontally')}`}>
+      <div className="rail has-pager" ref={ref} tabIndex={0} aria-label={`${title} — ${L('좌우로 스크롤', 'scroll horizontally')}`}>
         {cards.map((d) => (
           <Link key={d.key} href={`/stay?q=${encodeURIComponent(d.place)}`} className={s.destCard}>
             <Photo src={d.src} seed={d.key} alt="" sizes="(max-width: 640px) 78vw, 260px" />
