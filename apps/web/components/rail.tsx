@@ -26,8 +26,10 @@ export function Rail({ title, subtitle, path, query, render, href, emptyText, fa
           {subtitle && <p>{subtitle}</p>}
         </div>
         <div className="row" style={{ gap: 8 }}>
+          {/* Outline, not ghost: ghost has no background and no border, so next to a photo rail the
+              link all but disappears. This is the way out of the rail, so it has to be findable. */}
           {href && (
-            <Link href={href} className="btn ghost sm">
+            <Link href={href} className="btn outline sm">
               {L('전체 보기', 'See all')}
             </Link>
           )}

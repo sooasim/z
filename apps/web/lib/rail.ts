@@ -31,3 +31,23 @@ export function railPage(scrollLeft: number, clientWidth: number, pages: number)
 export function railNumbered(pages: number): boolean {
   return pages <= 8;
 }
+
+/** How long each page is held before the rail advances itself. One number to change. */
+export const RAIL_AUTOPLAY_MS = 2000;
+
+/**
+ * The next / previous page, wrapping at either end so the rail keeps cycling. The arrows wrap for the
+ * same reason autoplay does: a control that greys out at the last page both contradicts a carousel
+ * that loops past it and is harder to see, which is the opposite of what the arrows are for.
+ */
+export function railNextPage(current: number, pages: number): number {
+  if (pages <= 1) return 0;
+  const at = Math.max(0, Math.min(current, pages - 1));
+  return at + 1 >= pages ? 0 : at + 1;
+}
+
+export function railPrevPage(current: number, pages: number): number {
+  if (pages <= 1) return 0;
+  const at = Math.max(0, Math.min(current, pages - 1));
+  return at - 1 < 0 ? pages - 1 : at - 1;
+}

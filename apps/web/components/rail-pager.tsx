@@ -1,8 +1,60 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { Icon } from '@/components/ui';
-import { railNumbered, railPage, railPages } from '@/lib/rail';
+import { RAIL_AUTOPLAY_MS, railNextPage, railNumbered, railPage, railPages, railPrevPage } from '@/lib/rail';
+
+const reduceMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+/** Autoplay rides with the pager, which is desktop-only; on a phone the rail is swiped by hand. */
+const hasPager = () => typeof window !== 'undefined' && !!window.matchMedia?.('(min-width: 1024px)').matches;
+
+/**
+ * Advance the rail on a timer, and get out of the way the moment anyone touches it.
+ *
+ * Moving content needs a way to stop, so this pauses while the pointer is over the rail or the pager,
+ * while focus is inside either, for a beat after a touch, and whenever the tab is hidden — and it does
+ * not start at all for a visitor who asked for reduced motion.
+ */
+function useRailAutoplay(rail: React.RefObject<HTMLDivElement | null>, pager: React.RefObject<HTMLDivElement | null>, ms: number, go: (i: number) => void) {
+  useEffect(() => {
+    if (!ms || reduceMotion()) return;
+    const el = rail.current;
+    if (!el) return;
+
+    // Touch is the one pause that needs remembering; hover and focus are read live below, which is
+    // both shorter and self-healing — a pointerleave that never fires can't strand the timer.
+    let lastTouch = 0;
+    const touched = () => { lastTouch = Date.now(); };
+    const nodes = [el, pager.current].filter(Boolean) as HTMLElement[];
+    for (const n of nodes) {
+      for (const type of ['touchstart', 'touchmove', 'touchend'] as const) n.addEventListener(type, touched, { passive: true });
+    }
+
+    const held = () =>
+      document.hidden ||
+      // Checked per tick, not once: a window resized across the breakpoint must stop advancing
+      // without waiting for a re-render.
+      !hasPager() ||
+      Date.now() - lastTouch < 2 * ms ||
+      nodes.some((n) => n.matches(':hover') || (document.activeElement ? n.contains(document.activeElement) : false));
+
+    const id = window.setInterval(() => {
+      if (held()) return;
+      // Read the live geometry instead of closing over state: the breakpoint may have changed the
+      // page count, and the visitor may have scrolled by hand since the last tick.
+      const pages = railPages(el.scrollWidth, el.clientWidth);
+      if (pages <= 1) return;
+      go(railNextPage(railPage(el.scrollLeft, el.clientWidth, pages), pages));
+    }, ms);
+
+    return () => {
+      window.clearInterval(id);
+      for (const n of nodes) {
+        for (const type of ['touchstart', 'touchmove', 'touchend'] as const) n.removeEventListener(type, touched);
+      }
+    };
+  }, [rail, pager, ms, go]);
+}
 
 /**
  * Paging state for a horizontal `.rail`.
@@ -64,7 +116,7 @@ export function useRailPager(ref: React.RefObject<HTMLDivElement | null>) {
 
   // `page` is already clamped where it is set; re-clamp for the frame after `pages` shrinks on resize.
   const clamped = Math.max(0, Math.min(page, pages - 1));
-  return { page: clamped, pages, go, atStart: clamped <= 0, atEnd: clamped >= pages - 1 };
+  return { page: clamped, pages, go };
 }
 
 /**
@@ -75,15 +127,17 @@ export function useRailPager(ref: React.RefObject<HTMLDivElement | null>) {
  * Numbers up to eight pages, dots beyond that, because a row of eleven numbers stops being scannable.
  * Renders nothing when everything already fits.
  */
-export function RailPager({ target, label }: { target: React.RefObject<HTMLDivElement | null>; label?: string }) {
+export function RailPager({ target, label, autoPlayMs = RAIL_AUTOPLAY_MS }: { target: React.RefObject<HTMLDivElement | null>; label?: string; autoPlayMs?: number }) {
   const { L } = useI18n();
-  const { page, pages, go, atStart, atEnd } = useRailPager(target);
+  const { page, pages, go } = useRailPager(target);
+  const self = useRef<HTMLDivElement>(null);
+  useRailAutoplay(target, self, autoPlayMs, go);
   if (pages <= 1) return null;
   const numbered = railNumbered(pages);
   return (
-    <div className="rail-pager" role="group" aria-label={label ?? L('목록 넘기기', 'Scroll list')}>
-      <button type="button" className="btn icon sm" onClick={() => go(page - 1)} disabled={atStart} aria-label={L('이전', 'Previous')}>
-        <Icon name="left" size={16} />
+    <div className="rail-pager" ref={self} role="group" aria-label={label ?? L('목록 넘기기', 'Scroll list')}>
+      <button type="button" className="btn icon" onClick={() => go(railPrevPage(page, pages))} aria-label={L('이전', 'Previous')}>
+        <Icon name="left" size={18} />
       </button>
       <div className={numbered ? 'rail-pages' : 'rail-dots'}>
         {Array.from({ length: pages }, (_, i) => (
@@ -100,8 +154,8 @@ export function RailPager({ target, label }: { target: React.RefObject<HTMLDivEl
           </button>
         ))}
       </div>
-      <button type="button" className="btn icon sm" onClick={() => go(page + 1)} disabled={atEnd} aria-label={L('다음', 'Next')}>
-        <Icon name="right" size={16} />
+      <button type="button" className="btn icon" onClick={() => go(railNextPage(page, pages))} aria-label={L('다음', 'Next')}>
+        <Icon name="right" size={18} />
       </button>
     </div>
   );

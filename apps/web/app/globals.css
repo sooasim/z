@@ -797,16 +797,18 @@ body:has(.popover) .map-fab, body:has(.overlay) .map-fab { display: none; }
 
 /* Slide-style pager for a `.rail` — arrows with the page positions between them. Desktop only: a touch
    device swipes, and controls would just cover cards. See components/rail-pager.tsx. */
-.rail-pager { display: none; align-items: center; gap: 8px; }
+.rail-pager { display: none; align-items: center; gap: 6px; }
 @media (min-width: 1024px) { .rail-pager { display: flex; } }
-.rail-pager .btn.icon:disabled { opacity: 0.35; cursor: default; }
-.rail-pages, .rail-dots { display: flex; align-items: center; gap: 4px; }
-.rail-page { min-width: 28px; height: 28px; padding: 0 6px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text-muted); font: inherit; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; cursor: pointer; transition: background var(--dur-fast), color var(--dur-fast); }
-.rail-page:hover { background: var(--surface-2); color: var(--text); }
-.rail-page.on { background: var(--navy-900); color: #fff; font-weight: 600; }
-.rail-dots .rail-page { min-width: 0; width: 8px; height: 8px; padding: 0; border-radius: 50%; background: var(--surface-3); }
+/* The arrows wrap at both ends, so they are never disabled and never dimmed. */
+.rail-pager .btn.icon { box-shadow: var(--e1); }
+.rail-pager .btn.icon:hover { background: var(--navy-900); color: #fff; border-color: var(--navy-900); }
+.rail-pages, .rail-dots { display: flex; align-items: center; gap: 4px; margin: 0 2px; }
+.rail-page { min-width: 32px; height: 32px; padding: 0 8px; border: 1px solid transparent; border-radius: var(--r-sm); background: var(--surface-2); color: var(--text); font: inherit; font-size: var(--fs-sm); font-weight: var(--fw-bold); font-variant-numeric: tabular-nums; cursor: pointer; transition: background var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast); }
+.rail-page:hover { background: var(--surface-3); border-color: var(--border-strong); }
+.rail-page.on { background: var(--navy-900); color: #fff; border-color: var(--navy-900); }
+.rail-dots .rail-page { min-width: 0; width: 10px; height: 10px; padding: 0; border-radius: 50%; background: var(--surface-3); border-color: var(--border-strong); }
 .rail-dots .rail-page:hover { background: var(--text-muted); }
-.rail-dots .rail-page.on { background: var(--navy-900); }
+.rail-dots .rail-page.on { background: var(--navy-900); border-color: var(--navy-900); }
 /* The scrollbar is redundant noise once the pager shows position, but only where the pager exists. */
 @media (min-width: 1024px) {
   .rail.has-pager { scrollbar-width: none; }
