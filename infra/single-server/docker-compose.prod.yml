@@ -31,12 +31,18 @@ x-api-env: &api-env
   REDIS_URL: redis://redis:6379
   MEILI_HOST: http://meilisearch:7700
   MEILI_API_KEY: ${MEILI_MASTER_KEY:?set MEILI_MASTER_KEY}
-  # Presigned upload URLs are handed to the browser, so S3_ENDPOINT must be the PUBLIC MinIO address
-  # (SigV4 covers the host and path — an internal endpoint here makes every upload 403).
-  S3_ENDPOINT: ${S3_ENDPOINT:?set S3_ENDPOINT}
+  # Media storage. STORAGE_MODE=local (the default) leaves every S3_* blank, which makes the API pick its
+  # disk-backed adapter: the browser PUTs to the API itself and the API serves public media, so there is no
+  # object-storage service and no third-party image in the critical path. The bytes live on the `mediadata`
+  # volume via TMPDIR, so they survive restarts.
+  # STORAGE_MODE=minio fills these in and starts MinIO (the `minio` compose profile). Then S3_ENDPOINT must
+  # be the PUBLIC address: presigned URLs go to the browser and SigV4 covers the host, so an internal
+  # endpoint makes every upload 403.
+  TMPDIR: /data
+  S3_ENDPOINT: ${S3_ENDPOINT:-}
   S3_REGION: ${S3_REGION:-ap-northeast-2}
-  S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
-  S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+  S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+  S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
   S3_BUCKET_PRIVATE: jetpool-private
   S3_BUCKET_PUBLIC: jetpool-public
   CDN_BASE_URL: ${CDN_BASE_URL:?set CDN_BASE_URL}
@@ -124,10 +130,14 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  # ---------------------------------------------------------------------------------------------------
+  # Object storage is OPTIONAL and OFF by default (profile "minio", selected by STORAGE_MODE=minio).
+  # MinIO withdrew its images from Docker Hub (minio/minio and minio/mc both 404 there) and quay.io
+  # answered 401 for `latest`, which cost two failed deploys. STORAGE_MODE=local needs neither image.
+  # If you enable this, set MINIO_IMAGE / MINIO_MC_IMAGE to a tag you have confirmed you can pull.
+  # ---------------------------------------------------------------------------------------------------
   minio:
-    # MinIO pulled its images from Docker Hub (minio/minio and minio/mc now 404 there), so the registry
-    # is a knob: if it moves again, change MINIO_IMAGE / MINIO_MC_IMAGE in .env instead of this file.
-    # `latest` disappearing is what broke the first deploy — pin a RELEASE.* tag once you have one that works.
+    profiles: ["minio"]
     image: ${MINIO_IMAGE:-quay.io/minio/minio:latest}
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
@@ -146,6 +156,7 @@ services:
 
   minio-init:
     # private = originals and ID documents (never public) · public = processed media behind the CDN host
+    profiles: ["minio"]
     image: ${MINIO_MC_IMAGE:-quay.io/minio/mc:latest}
     depends_on:
       minio: { condition: service_healthy }
@@ -186,11 +197,13 @@ services:
     environment: *api-env
     # Published on loopback only — Caddy reaches it over the compose network. DEPLOY_MODE=ip opens it.
     ports: ["${API_BIND:-127.0.0.1}:4000:4000"]
+    # In local storage mode this volume IS the media store (TMPDIR=/data), so it must outlive the
+    # container; the worker mounts the same one because both sides touch the media pipeline.
+    volumes: [mediadata:/data]
     depends_on:
       migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
       meilisearch: { condition: service_healthy }
-      minio-init: { condition: service_completed_successfully }
     restart: unless-stopped
     logging: *logging
 
@@ -199,6 +212,7 @@ services:
     image: jetpool-api:${IMAGE_TAG:-local}
     command: ["worker"]
     environment: *api-env
+    volumes: [mediadata:/data]
     depends_on:
       migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
@@ -214,9 +228,10 @@ services:
         # Inlined into the browser bundle at BUILD time, and it also feeds the CSP connect-src allowlist.
         # Change the domain => rebuild this image.
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?set NEXT_PUBLIC_API_URL}
-        # Browsers PUT uploads straight to MinIO and load public media from it, so its origin has to be
-        # in the page's own CSP (connect-src / img-src) or every upload is blocked.
-        NEXT_PUBLIC_MEDIA_ORIGIN: ${S3_ENDPOINT:?set S3_ENDPOINT}
+        # The origin the browser uploads to and loads public media from has to be in the page's own CSP
+        # (connect-src / img-src) or every upload is blocked. In local storage mode that is the API
+        # itself, which is already allowed, so this stays empty.
+        NEXT_PUBLIC_MEDIA_ORIGIN: ${S3_ENDPOINT:-}
         GIT_SHA: ${GIT_SHA:-unknown}
     image: jetpool-web:${IMAGE_TAG:-local}
     environment:
@@ -224,7 +239,7 @@ services:
       TZ: UTC
       API_INTERNAL_URL: http://api:4000
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?set NEXT_PUBLIC_API_URL}
-      NEXT_PUBLIC_MEDIA_ORIGIN: ${S3_ENDPOINT:?set S3_ENDPOINT}
+      NEXT_PUBLIC_MEDIA_ORIGIN: ${S3_ENDPOINT:-}
     depends_on:
       api: { condition: service_healthy }
     restart: unless-stopped
@@ -283,6 +298,8 @@ volumes:
   pgdata: {}
   redisdata: {}
   meilidata: {}
+  # Media in local storage mode. Back this up alongside the database — it holds the uploaded originals.
+  mediadata: {}
   miniodata: {}
   caddydata: {}
   caddyconfig: {}

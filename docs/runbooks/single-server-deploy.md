@@ -21,19 +21,32 @@ PostgreSQL, Redis, Meilisearch, MinIO, Caddy)이 돌아갑니다. 관리형 환�
 
 ## 무엇이 어디로 열리는가
 
-인터넷에서 접근 가능한 것은 **Caddy의 80 / 443 뿐**입니다. PostgreSQL · Redis · Meilisearch ·
-MinIO 콘솔은 호스트 포트에 아예 노출되지 않고, API와 MinIO의 S3 포트는 `127.0.0.1` 에만 묶입니다
-(서버 안에서 `curl` 로 확인하거나 SSH 터널로 볼 때만 사용).
+인터넷에서 접근 가능한 것은 **Caddy의 80 / 443 뿐**입니다. PostgreSQL · Redis · Meilisearch는 호스트
+포트에 아예 노출되지 않고, API는 `127.0.0.1` 에만 묶입니다(서버 안에서 `curl` 로 확인하거나 SSH
+터널로 볼 때만 사용).
 
 | 주소 | 가는 곳 | 비고 |
 |---|---|---|
 | `https://도메인` | web (Next.js) | `www.` 는 여기로 301 |
-| `https://api.도메인` | api (Fastify) | `/metrics`, `/docs` 는 edge에서 404로 차단 |
-| `https://s3.도메인` | MinIO | 브라우저 직접 업로드(presigned PUT) + 공개 미디어 |
+| `https://api.도메인` | api (Fastify) | `/metrics`, `/docs` 는 edge에서 404로 차단. 미디어 업로드·조회도 여기 |
 
-`s3.도메인` 이 왜 공개되어야 하는지: 사진·서류 업로드는 웹서버를 거치지 않고 브라우저가 스토리지로
-바로 PUT 합니다(STAY-02). presigned 서명에 **호스트와 경로가 포함**되므로 내부 주소로 바꿔치기할 수
-없고, 경로 앞에 `/s3` 같은 접두어를 붙여 프록시할 수도 없습니다.
+### 미디어 저장 — 기본은 오브젝트 스토리지 없음 (`STORAGE_MODE=local`)
+
+사진·서류는 **API가 직접** 받고(`/v1/media/dev-upload/:id`, HMAC 토큰) **API가 직접** 서빙합니다
+(`/media-dev/public/*`). 바이트는 `mediadata` 도커 볼륨에 남아 재시작을 견딥니다. 그래서 오브젝트
+스토리지 서비스도, 서드파티 이미지도, `s3.도메인` DNS 레코드도 필요하지 않습니다.
+
+이게 기본값인 이유는 실제로 배포가 두 번 깨졌기 때문입니다 — MinIO가 Docker Hub에서 이미지를
+철수(`minio/minio`·`minio/mc` 모두 404)했고, quay.io는 `latest` 에 401을 돌려줍니다. 통제할 수 없는
+레지스트리를 기동 경로에서 빼는 것이 맞습니다.
+
+`STORAGE_MODE=minio` 로 전환하면 MinIO가 `minio` 컴포즈 프로파일로 올라오고 `s3.도메인` 이 필요해집니다
+(`init --storage minio`, `Caddyfile.minio` 사용). 전환 전에 `docker pull` 로 이미지를 **직접 확인**하세요.
+
+> **`NODE_ENV=production` 으로 올릴 때 주의.** `createStorage()` 는 production이면 `STORAGE_MODE` 와
+> 무관하게 S3 어댑터를 강제합니다. 즉 production + local 저장은 **기동은 성공하고 첫 업로드에서
+> 실패**합니다(자격증명 없이 실제 AWS로 요청). `jetpool.sh check` 가 이 조합을 거부하니, production
+> 전에는 실제 S3(AWS 또는 확인된 MinIO)를 반드시 붙이세요.
 
 ---
 
@@ -176,7 +189,8 @@ Docker Engine + compose 플러그인 설치, **4 GB swap**(8 GB에서 Next.js �
 | `@` (또는 비워둠 / `example.com`) | A | `<공인-IP>` | 300 |
 | `www` | A | `<공인-IP>` | 300 |
 | `api` | A | `<공인-IP>` | 300 |
-| `s3` | A | `<공인-IP>` | 300 |
+
+(`STORAGE_MODE=minio` 로 쓸 때만 `s3` 레코드가 추가로 필요합니다. 기본값에서는 필요 없습니다.)
 
 - `@` 는 도메인 자체(apex)를 뜻합니다. 가비아 등 일부 UI에서는 호스트 칸을 **비워두거나** `@` 를 넣습니다.
 - `www`·`api`·`s3` 는 A 대신 `example.com` 을 가리키는 **CNAME**으로 해도 됩니다. apex(`@`)는 CNAME이
@@ -323,13 +337,11 @@ CSP에 박히므로 `up` 이 아니라 `deploy` 여야 합니다). IP 모드는 
    # 매일 03:10 UTC (12:10 KST)
    10 3 * * * cd /home/ubuntu/jetpool && ./infra/single-server/jetpool.sh backup >> /var/log/jetpool-backup.log 2>&1
    ```
-2. **미디어**: `miniodata` 도커 볼륨.
-   ```bash
-   docker run --rm -v jetpool_miniodata:/data:ro -v "$PWD/infra/single-server/backups:/out" \
-     alpine tar czf /out/media-$(date -u +%Y%m%d).tar.gz -C /data .
-   ```
-   두 백업 모두 **서버 밖**(오브젝트 스토리지, 다른 서버)으로 복사하세요. 서버가 통째로 사라지면
-   같은 디스크 위의 백업도 같이 사라집니다.
+2. **미디어**: `jetpool.sh backup` 이 DB와 함께 `mediadata` 볼륨까지 tar로 받습니다
+   (`STORAGE_MODE=minio` 면 `miniodata`). 별도 명령이 필요 없습니다.
+
+두 백업 모두 **서버 밖**(오브젝트 스토리지, 다른 서버)으로 복사하세요. 서버가 통째로 사라지면
+같은 디스크 위의 백업도 같이 사라집니다.
 
 복구 절차와 분기 리허설은 `docs/runbooks/db-restore-drill.md` 를 따릅니다.
 

@@ -16,6 +16,9 @@
 #   --domain <d> --email <e>   serve https://d, https://api.d, https://s3.d with Let's Encrypt certs
 #   --ip <addr>                serve http://addr only (first smoke test; no TLS)
 #   --seed                     also load the demo catalogue and print its logins
+#   --storage local|minio      media storage. local (default) keeps media on a disk volume served by
+#                              the API — no object-storage service and no third-party image. minio
+#                              starts MinIO and needs an image you have confirmed you can pull.
 #   --skip-dns-check           deploy in domain mode even if the DNS preflight objects
 #   --dir <path>               where the checkout is / should be (default: the repo this script is in)
 #   --branch <name>            branch to clone when --dir has no checkout (default: the branch below,
@@ -38,6 +41,7 @@ while [[ $# -gt 0 ]]; do
     --email)  MODE_ARGS+=(--email "${2:?--email needs a value}"); shift 2 ;;
     --ip)     MODE_ARGS+=(--ip "${2:?--ip needs a value}"); shift 2 ;;
     --seed)   SEED=1; shift ;;
+    --storage) MODE_ARGS+=(--storage "${2:?--storage needs local or minio}"); shift 2 ;;
     --skip-dns-check) SKIP_DNS_CHECK=1; shift ;;
     --dir)    DIR="${2:?--dir needs a value}"; shift 2 ;;
     --branch) BRANCH="${2:?--branch needs a value}"; shift 2 ;;
@@ -100,8 +104,11 @@ preflight_dns() {
     [[ "$egress" =~ ^[0-9.]+$ ]] && break || egress=""
   done
 
+  # s3.<domain> is only used when object storage is enabled; the default deploy has none.
+  local names=("$domain" "api.$domain")
+  [[ " ${MODE_ARGS[*]} " == *" --storage minio "* ]] && names+=("s3.$domain")
   local name addr bad=0
-  for name in "$domain" "api.$domain" "s3.$domain"; do
+  for name in "${names[@]}"; do
     addr="$(resolve1 "$name")"
     if [[ -z "$addr" ]]; then
       echo "  $name does not resolve" >&2
@@ -124,7 +131,7 @@ Let's Encrypt validates over HTTP to the address in the A record, so a missing o
 record makes issuance fail, and repeated failures hit that domain's rate limit.
 
 Point these A records at this server's PUBLIC IP and wait for them to propagate:
-  $domain, www.$domain, api.$domain, s3.$domain
+  ${names[*]}, www.$domain
 
 To smoke-test without a domain in the meantime:
   sudo bash $0 --ip <public-ip>

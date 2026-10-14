@@ -26,7 +26,11 @@ die()  { printf '\033[31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
 
 dc() {
   [[ -f "$ENV_FILE" ]] || die "no $ENV_FILE — run: $0 init --domain <your-domain> --email <you@example.com>"
-  docker compose --project-directory "$HERE" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" "$@"
+  # The object-storage services sit behind the `minio` profile, so STORAGE_MODE decides whether their
+  # images are ever pulled. Nothing in local mode references a third-party registry we do not control.
+  local profile=()
+  [[ "$(get_env STORAGE_MODE)" == "minio" ]] && profile=(--profile minio)
+  docker compose --project-directory "$HERE" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" "${profile[@]}" "$@"
 }
 
 # ------------------------------------------------------------------ env file helpers
@@ -62,15 +66,17 @@ fill() { # <key> <generator...>
 
 # ------------------------------------------------------------------ init
 cmd_init() {
-  local mode="" domain="" email="" ip=""
+  local mode="" domain="" email="" ip="" storage="local"
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --domain) mode=domain; domain="${2:?--domain needs a value}"; shift 2 ;;
-      --email)  email="${2:?--email needs a value}"; shift 2 ;;
-      --ip)     mode=ip; ip="${2:?--ip needs a value}"; shift 2 ;;
+      --domain)  mode=domain; domain="${2:?--domain needs a value}"; shift 2 ;;
+      --email)   email="${2:?--email needs a value}"; shift 2 ;;
+      --ip)      mode=ip; ip="${2:?--ip needs a value}"; shift 2 ;;
+      --storage) storage="${2:?--storage needs local or minio}"; shift 2 ;;
       *) die "unknown flag $1" ;;
     esac
   done
+  [[ "$storage" == local || "$storage" == minio ]] || die "--storage takes 'local' or 'minio', not '$storage'"
   [[ -n "$mode" ]] || die "pass --domain <example.com> --email <you@example.com>, or --ip <public-ip>"
   command -v openssl >/dev/null || die "openssl is required (apt-get install -y openssl)"
 
@@ -87,20 +93,35 @@ cmd_init() {
     [[ "$domain" == *.* ]] || die "'$domain' does not look like a domain"
     [[ "$domain" == http* ]] && die "pass the bare domain, not a URL"
     set_env DEPLOY_MODE domain
-    set_env CADDYFILE Caddyfile
     set_env ROOT_DOMAIN "$domain"
     set_env ACME_EMAIL "$email"
     set_env PUBLIC_WEB_URL "https://$domain"
     set_env PUBLIC_API_URL "https://api.$domain"
     set_env NEXT_PUBLIC_API_URL "https://api.$domain"
     set_env CORS_ORIGINS "https://$domain,https://www.$domain"
-    set_env S3_ENDPOINT "https://s3.$domain"
-    set_env CDN_BASE_URL "https://s3.$domain/jetpool-public"
     set_env API_BIND 127.0.0.1
     set_env MINIO_BIND 127.0.0.1
-    log "domain mode: https://$domain · https://api.$domain · https://s3.$domain"
-    warn "A records for $domain, www.$domain, api.$domain and s3.$domain must already point at this server,"
-    warn "and TCP 80 + 443 must be open, or Caddy cannot get certificates."
+    if [[ "$storage" == minio ]]; then
+      set_env STORAGE_MODE minio
+      set_env CADDYFILE Caddyfile.minio
+      set_env S3_ENDPOINT "https://s3.$domain"
+      set_env CDN_BASE_URL "https://s3.$domain/jetpool-public"
+      log "domain mode + MinIO: https://$domain · https://api.$domain · https://s3.$domain"
+      warn "A records for $domain, www., api. AND s3. must point here, and you must be able to pull"
+      warn "\$MINIO_IMAGE / \$MINIO_MC_IMAGE — MinIO withdrew its images from Docker Hub."
+    else
+      set_env STORAGE_MODE local
+      set_env CADDYFILE Caddyfile
+      # Blank S3_* is what makes the API choose its disk-backed adapter; uploads and media then go
+      # through the API host, which needs no object storage and no s3 DNS record.
+      set_env S3_ENDPOINT ""
+      set_env S3_ACCESS_KEY_ID ""
+      set_env S3_SECRET_ACCESS_KEY ""
+      set_env CDN_BASE_URL "https://api.$domain/media-dev"
+      log "domain mode: https://$domain · https://api.$domain  (media on the API, no object storage)"
+      warn "A records for $domain, www.$domain and api.$domain must already point at this server,"
+      warn "and TCP 80 + 443 must be open, or Caddy cannot get certificates."
+    fi
   else
     [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "'$ip' is not an IPv4 address"
     case "$ip" in
@@ -115,11 +136,20 @@ cmd_init() {
     set_env PUBLIC_API_URL "http://$ip:4000"
     set_env NEXT_PUBLIC_API_URL "http://$ip:4000"
     set_env CORS_ORIGINS "http://$ip"
-    set_env S3_ENDPOINT "http://$ip:9000"
-    set_env CDN_BASE_URL "http://$ip:9000/jetpool-public"
     set_env API_BIND 0.0.0.0
     set_env MINIO_BIND 0.0.0.0
-    log "IP mode: http://$ip (api :4000, media :9000) — no TLS"
+    if [[ "$storage" == minio ]]; then
+      set_env STORAGE_MODE minio
+      set_env S3_ENDPOINT "http://$ip:9000"
+      set_env CDN_BASE_URL "http://$ip:9000/jetpool-public"
+    else
+      set_env STORAGE_MODE local
+      set_env S3_ENDPOINT ""
+      set_env S3_ACCESS_KEY_ID ""
+      set_env S3_SECRET_ACCESS_KEY ""
+      set_env CDN_BASE_URL "http://$ip:4000/media-dev"
+    fi
+    log "IP mode: http://$ip (api :4000) — no TLS"
     warn "No TLS in IP mode: passwords and sessions travel in the clear. Use it only to smoke-test,"
     warn "then re-run 'init --domain ... --email ...' and 'deploy' before any real user signs in."
   fi
@@ -133,6 +163,13 @@ cmd_init() {
   fill MINIO_ROOT_PASSWORD  rand_hex 16
   fill SEED_PASSWORD        rand_pw
   fill SEED_ADMIN_PASSWORD  rand_pw
+
+  # After the secrets exist, not before: MinIO's password is generated above, so the API's S3
+  # credentials can only be copied from it here.
+  if [[ "$(get_env STORAGE_MODE)" == "minio" ]]; then
+    set_env S3_ACCESS_KEY_ID "$(get_env MINIO_ROOT_USER)"
+    set_env S3_SECRET_ACCESS_KEY "$(get_env MINIO_ROOT_PASSWORD)"
+  fi
 
   echo
   bold "Ready. Next:  $0 deploy"
@@ -155,6 +192,14 @@ cmd_check() {
   if [[ "$(get_env NODE_ENV)" == "production" ]]; then
     [[ "$(get_env PAYMENT_PROVIDER)" == "TOSS" ]] || die "NODE_ENV=production forbids PAYMENT_PROVIDER=MOCK"
     [[ "$(get_env OAUTH_MOCK)" == "false" ]] || die "NODE_ENV=production forbids OAUTH_MOCK=true"
+    # createStorage() forces the S3 adapter whenever NODE_ENV=production, regardless of STORAGE_MODE.
+    # So production + local storage boots happily and then fails on the first upload, talking to real
+    # AWS with no credentials. Catch it here instead, where the message can say what to do.
+    if [[ -z "$(get_env S3_ENDPOINT)" && -z "$(get_env S3_ACCESS_KEY_ID)" ]]; then
+      die "NODE_ENV=production needs real object storage: the API switches to its S3 adapter in production
+       whatever STORAGE_MODE says, so with S3_* blank every upload fails at runtime. Either configure
+       S3_* (AWS S3, or 'init --storage minio' with an image you can pull), or stay on NODE_ENV=staging."
+    fi
   fi
   dc config --quiet
   echo "  ok   $ENV_FILE and the compose file are consistent"
@@ -461,8 +506,11 @@ cmd_doctor() {
   fi
 
   if [[ -n "${root_domain:-}" && "${mode:-}" == "domain" ]]; then
+    # s3.<domain> only exists in minio mode; in local mode a missing record there is correct.
+    local names=("$root_domain" "www.$root_domain" "api.$root_domain")
+    [[ "$(get_env STORAGE_MODE)" == "minio" ]] && names+=("s3.$root_domain")
     local name answers
-    for name in "$root_domain" "www.$root_domain" "api.$root_domain" "s3.$root_domain"; do
+    for name in "${names[@]}"; do
       answers="$(resolve "$name" | paste -sd, - || true)"
       if [[ -z "$answers" ]]; then
         bad "$name does not resolve — the A record is missing (or DNS has not propagated yet)"
@@ -550,11 +598,30 @@ cmd_doctor() {
 cmd_backup() {
   cmd_check
   mkdir -p "$HERE/backups"
-  local out="$HERE/backups/jetpool-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
-  log "pg_dump → $out"
-  dc exec -T postgres pg_dump -U jetpool --format=plain jetpool | gzip -9 > "$out"
-  ls -lh "$out"
-  echo "  Media lives in the 'miniodata' docker volume — back that up too (see the runbook)."
+  local stamp; stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  local db="$HERE/backups/jetpool-$stamp.sql.gz"
+  log "pg_dump → $db"
+  dc exec -T postgres pg_dump -U jetpool --format=plain jetpool | gzip -9 > "$db"
+
+  # Media too, or a restore comes back with every photo missing. Uses postgres:17 purely because it is
+  # already on this host and has tar — no extra image to pull.
+  local vol media
+  vol="$(docker volume ls -q --filter "name=mediadata" | head -1)"
+  if [[ -n "$vol" ]]; then
+    media="$HERE/backups/media-$stamp.tar.gz"
+    log "media volume '$vol' → $media"
+    docker run --rm -v "$vol":/from:ro -v "$HERE/backups":/to postgres:17 \
+      tar czf "/to/$(basename "$media")" -C /from . 2>/dev/null \
+      || warn "could not archive the media volume; check 'docker volume ls'"
+  else
+    warn "no media volume found — nothing to archive (expected in STORAGE_MODE=minio, where it is 'miniodata')"
+    vol="$(docker volume ls -q --filter "name=miniodata" | head -1)"
+    [[ -n "$vol" ]] && warn "object storage lives in '$vol'; archive that the same way"
+  fi
+
+  ls -lh "$HERE/backups" | tail -5
+  echo
+  echo "  Copy these OFF this server. A backup on the same disk dies with the disk."
 }
 
 # bootstrap.sh puts the login user in the docker group, but group membership only applies to NEW logins,
