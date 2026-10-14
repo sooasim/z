@@ -17,6 +17,7 @@ import { cursorColumns, decodeCursor, idParams, isoDate, page, pagination } from
 import { grantRole } from '../roles/service.js';
 import {
   DepartureFSM,
+  OrderFSM,
   ProductFSM,
   SupplierFSM,
   auditSupplierDecision,
@@ -39,6 +40,9 @@ const T4 = 'TRAVEL-04';
 const datetime = z.iso.datetime({ offset: true });
 const TIME_OF_DAY = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 const productType = z.enum(['TOUR', 'TICKET', 'ACTIVITY', 'PACKAGE']);
+const productStatus = z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'PAUSED', 'ARCHIVED']);
+/** Escape LIKE wildcards in operator search terms so `%` matches a literal percent sign. */
+const likeEscape = (s: string) => s.replace(/[%_\\]/g, (m) => `\\${m}`);
 const tiers = z.array(z.object({ min_hours_before: z.number().int().min(0), refund_pct: z.number().int().min(0).max(100) })).max(10);
 const cancellationTerms = z.object({ tiers: tiers.optional(), fee_refundable: z.boolean().optional(), note: z.string().max(2000).optional() });
 const optionInput = z.object({ id: z.uuid().optional(), name: z.string().trim().min(1).max(200), priceMinor: minorSchema, active: z.boolean().default(true) });
@@ -56,6 +60,19 @@ const productBase = {
   mediaIds: z.array(z.uuid()).max(50).optional(),
   options: z.array(optionInput).max(50).optional(),
 };
+/** A departure as the supplier extranet and the backoffice both create it. */
+const departureBody = z
+  .object({
+    startsAt: datetime,
+    endsAt: datetime.optional(),
+    capacity: z.number().int().min(1).max(100000),
+    minParticipants: z.number().int().min(1).max(100000).default(1),
+    priceMinor: minorSchema.optional(),
+    cutoffAt: datetime.optional(),
+  })
+  .refine((d) => d.minParticipants <= d.capacity, { message: 'minParticipants must not exceed capacity', path: ['minParticipants'] })
+  .refine((d) => !d.endsAt || new Date(d.endsAt) > new Date(d.startsAt), { message: 'endsAt must be after startsAt', path: ['endsAt'] })
+  .refine((d) => !d.cutoffAt || new Date(d.cutoffAt) <= new Date(d.startsAt), { message: 'cutoffAt must be before startsAt', path: ['cutoffAt'] });
 const ITEM_REF_TABLE: Record<string, string | null> = {
   STAY: 'properties',
   EXCHANGE: 'exchange_requests',
@@ -380,15 +397,146 @@ export default async function travelModule(app: FastifyInstance) {
   // ------------------------------------------------------------------ TRAVEL-01 admin review
   r.get(
     '/v1/admin/travel-products',
-    { schema: { summary: 'List travel products', tags: [T1], querystring: z.object({ status: z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'PAUSED', 'ARCHIVED']).optional() }) }, preHandler: requireRole('ADMIN', 'EDITOR', 'COMPLIANCE') },
+    {
+      schema: { summary: 'List travel products',
+        tags: [T1],
+        querystring: z.object({
+          status: productStatus.optional(),
+          type: productType.optional(),
+          supplierId: z.uuid().optional(),
+          q: z.string().trim().min(1).max(100).optional(),
+        }),
+      },
+      preHandler: requireRole('ADMIN', 'EDITOR', 'COMPLIANCE'),
+    },
     async (req) => {
+      const f = req.query;
       const rows = await q(
         pool,
-        `SELECT p.*, s.name AS supplier_name, s.merchant_of_record FROM travel_products p JOIN suppliers s ON s.id = p.supplier_id
-          WHERE ($1::text IS NULL OR p.status = $1) ORDER BY p.updated_at DESC LIMIT 500`,
-        [req.query.status ?? null],
+        `SELECT p.*, s.name AS supplier_name, s.merchant_of_record,
+                (SELECT count(*)::int FROM travel_departures d WHERE d.product_id = p.id AND d.status IN ('OPEN','GUARANTEED') AND d.starts_at > now()) AS open_departures
+           FROM travel_products p JOIN suppliers s ON s.id = p.supplier_id
+          WHERE ($1::text IS NULL OR p.status = $1)
+            AND ($2::text IS NULL OR p.type = $2)
+            AND ($3::uuid IS NULL OR p.supplier_id = $3)
+            AND ($4::text IS NULL OR p.title ILIKE '%' || $4 || '%' OR s.name ILIKE '%' || $4 || '%')
+          ORDER BY p.updated_at DESC LIMIT 500`,
+        [f.status ?? null, f.type ?? null, f.supplierId ?? null, f.q ? likeEscape(f.q) : null],
       );
-      return { items: rows.map((p) => productDto(p)) };
+      return { items: rows.map((p) => productDto(p, { openDepartures: p.open_departures, supplierName: p.supplier_name })) };
+    },
+  );
+
+  /** TRAVEL-01 backoffice product detail: every option and departure, whatever the status (the supplier extranet
+   *  and the public catalog both hide archived/past rows — an operator reviewing a product needs to see them). */
+  r.get('/v1/admin/travel-products/:id', { schema: { summary: 'Get a travel product with its options and departures', tags: [T1], params: idParams }, preHandler: requireRole('ADMIN', 'EDITOR', 'COMPLIANCE') }, async (req) => {
+    const out = await productWithOptions(pool, req.params.id);
+    if (!out) throw notFound('Product');
+    const deps = await q(pool, `SELECT * FROM travel_departures WHERE product_id = $1 ORDER BY starts_at DESC LIMIT 500`, [req.params.id]);
+    return { item: productDto(out.row, { options: out.options, departures: deps.map(departureDto), supplierName: out.row.supplier_name, supplierStatus: out.row.supplier_status }) };
+  });
+
+  /** TRAVEL-01 backoffice registration: an operator enters a product for a supplier that cannot use the extranet
+   *  (phone/fax onboarding). It lands in DRAFT like any supplier draft and still goes through publish review. */
+  r.post(
+    '/v1/admin/travel-products',
+    { schema: { summary: 'Register a travel product on behalf of a supplier', tags: [T1], body: z.object({ ...productBase, supplierId: z.uuid() }) }, preHandler: requireRole('ADMIN', 'EDITOR') },
+    async (req, reply) => {
+      const ctx = ctxFromRequest(req);
+      const b = req.body;
+      const id = await withTx(pool, async (tx) => {
+        const s = await maybeOne(tx, `SELECT id, status FROM suppliers WHERE id = $1`, [b.supplierId]);
+        if (!s) throw badRequest('INVALID_SUPPLIER', 'Supplier not found');
+        if (s.status === 'REJECTED') throw conflict('SUPPLIER_REJECTED', 'A rejected supplier cannot own products');
+        const p = await one(
+          tx,
+          `INSERT INTO travel_products(supplier_id, type, title, summary, description, city, country, duration_minutes, base_price_minor, currency, cancellation_terms, media_ids)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+          [s.id, b.type, b.title, b.summary ?? null, b.description ?? null, b.city ?? null, b.country ?? 'KR', b.durationMinutes ?? null, b.basePriceMinor ?? null, b.currency ?? 'KRW', JSON.stringify(b.cancellationTerms ?? {}), b.mediaIds ?? []],
+        );
+        if (b.options?.length) await upsertOptions(tx, p.id, b.options);
+        await recordTransition(tx, ctx, { aggregateType: 'travel_product', aggregateId: p.id, from: null, to: 'DRAFT', reason: 'CREATED_BY_STAFF' });
+        await audit(tx, ctx, { action: 'travel_product.staff_created', resourceType: 'travel_product', resourceId: p.id, category: 'CONTENT', after: { supplierId: s.id, title: b.title, type: b.type } });
+        return p.id as string;
+      });
+      const out = await productWithOptions(pool, id);
+      return reply.status(201).send({ item: productDto(out!.row, { options: out!.options }) });
+    },
+  );
+
+  /** TRAVEL-01 backoffice edit. Unlike the supplier PATCH this never withdraws the product from review: the editor
+   *  IS the reviewer here, so sending it back to its own queue would deadlock the fix-then-publish flow. A published
+   *  product edited by staff therefore stays published — which is why every change is audited with before/after. */
+  r.patch(
+    '/v1/admin/travel-products/:id',
+    { schema: { summary: 'Edit a travel product as staff', tags: [T1], params: idParams, body: z.object(productBase).partial().omit({ type: true }).extend({ reason: z.string().min(3).max(500) }) }, preHandler: requireRole('ADMIN', 'EDITOR') },
+    async (req) => {
+      const b = req.body;
+      const ctx = ctxFromRequest(req);
+      await withTx(pool, async (tx) => {
+        const p = await maybeOne(tx, `SELECT * FROM travel_products WHERE id = $1 FOR UPDATE`, [req.params.id]);
+        if (!p) throw notFound('Product');
+        if (p.status === 'ARCHIVED') throw conflict('PRODUCT_ARCHIVED', 'Archived products cannot be edited');
+        const map: Record<string, [string, unknown]> = {
+          title: ['title', b.title],
+          summary: ['summary', b.summary],
+          description: ['description', b.description],
+          city: ['city', b.city],
+          country: ['country', b.country],
+          durationMinutes: ['duration_minutes', b.durationMinutes],
+          basePriceMinor: ['base_price_minor', b.basePriceMinor],
+          currency: ['currency', b.currency],
+          cancellationTerms: ['cancellation_terms', b.cancellationTerms === undefined ? undefined : JSON.stringify(b.cancellationTerms)],
+          mediaIds: ['media_ids', b.mediaIds],
+        };
+        const sets: string[] = [];
+        const params: unknown[] = [p.id];
+        const after: Record<string, unknown> = {};
+        for (const [k, [col, val]] of Object.entries(map)) {
+          if ((b as any)[k] === undefined) continue;
+          params.push(val);
+          sets.push(`${col} = $${params.length}`);
+          // the audit record holds the value as the caller sent it, so before/after compare like for like
+          // (`cancellation_terms` goes to SQL as a JSON string but is a jsonb object on the row)
+          after[col] = (b as any)[k];
+        }
+        if (sets.length) await tx.query(`UPDATE travel_products SET ${sets.join(', ')} WHERE id = $1`, params);
+        if (b.options) await upsertOptions(tx, p.id, b.options);
+        await audit(tx, ctx, {
+          action: 'travel_product.staff_edited',
+          resourceType: 'travel_product',
+          resourceId: p.id,
+          category: 'CONTENT',
+          reason: b.reason,
+          before: Object.fromEntries(Object.keys(after).map((c) => [c, p[c]])),
+          after,
+        });
+        if (sets.length || b.options) {
+          await emit(tx, ctx, { aggregateType: 'travel_product', aggregateId: p.id, eventType: 'travel.product.edited', payload: { productId: p.id, supplierId: p.supplier_id, by: 'STAFF' } });
+        }
+      });
+      const out = await productWithOptions(pool, req.params.id);
+      return { item: productDto(out!.row, { options: out!.options }) };
+    },
+  );
+
+  /** Staff counterpart of `/v1/supplier/products/:id/submit`: an operator-registered product has no supplier at the
+   *  keyboard to submit it, so it still reaches the review queue instead of skipping DRAFT → PUBLISHED. Publishing
+   *  stays the separate audited step below, so a product never becomes public in one unreviewed write. */
+  r.post(
+    '/v1/admin/travel-products/:id/submit',
+    { schema: { summary: 'Put a travel product into review as staff', tags: [T1], params: idParams, body: z.object({ reason: z.string().min(3).max(500) }) }, preHandler: requireRole('ADMIN', 'EDITOR') },
+    async (req) => {
+      const ctx = ctxFromRequest(req);
+      const row = await withTx(pool, async (tx) => {
+        const p = await maybeOne(tx, `SELECT status FROM travel_products WHERE id = $1`, [req.params.id]);
+        if (!p) throw notFound('Product');
+        const { row } = await ProductFSM.transition(tx, ctx, { table: 'travel_products', id: req.params.id, from: ['DRAFT', 'PAUSED'], to: 'IN_REVIEW', reason: `STAFF: ${req.body.reason}` });
+        await audit(tx, ctx, { action: 'travel_product.staff_submitted', resourceType: 'travel_product', resourceId: req.params.id, category: 'CONTENT', reason: req.body.reason, before: { status: p.status }, after: { status: 'IN_REVIEW' } });
+        await emit(tx, ctx, { aggregateType: 'travel_product', aggregateId: req.params.id, eventType: 'travel.product.review_required', payload: { productId: req.params.id, from: p.status, to: 'IN_REVIEW' } });
+        return row;
+      });
+      return { item: productDto(row) };
     },
   );
 
@@ -531,18 +679,7 @@ export default async function travelModule(app: FastifyInstance) {
       schema: { summary: 'Create a departure for a travel product',
         tags: [T2],
         params: idParams,
-        body: z
-          .object({
-            startsAt: datetime,
-            endsAt: datetime.optional(),
-            capacity: z.number().int().min(1).max(100000),
-            minParticipants: z.number().int().min(1).max(100000).default(1),
-            priceMinor: minorSchema.optional(),
-            cutoffAt: datetime.optional(),
-          })
-          .refine((d) => d.minParticipants <= d.capacity, { message: 'minParticipants must not exceed capacity', path: ['minParticipants'] })
-          .refine((d) => !d.endsAt || new Date(d.endsAt) > new Date(d.startsAt), { message: 'endsAt must be after startsAt', path: ['endsAt'] })
-          .refine((d) => !d.cutoffAt || new Date(d.cutoffAt) <= new Date(d.startsAt), { message: 'cutoffAt must be before startsAt', path: ['cutoffAt'] }),
+        body: departureBody,
       },
       preHandler: supplierOnly,
     },
@@ -599,6 +736,75 @@ export default async function travelModule(app: FastifyInstance) {
         const d = await maybeOne(tx, `SELECT d.id, p.supplier_id FROM travel_departures d JOIN travel_products p ON p.id = d.product_id WHERE d.id = $1 FOR UPDATE OF d`, [req.params.id]);
         if (!d || d.supplier_id !== s.id) throw notFound('Departure');
         return cancelDeparture(tx, ctx, d.id, `SUPPLIER_CANCELLED: ${req.body.reason}`);
+      });
+      const d = await maybeOne(pool, `SELECT * FROM travel_departures WHERE id = $1`, [req.params.id]);
+      return { item: departureDto(d), cancelledOrders: n };
+    },
+  );
+
+  // ------------------------------------------------------------------ TRAVEL-02 backoffice departures
+  // Same inventory rules as the supplier routes above (capacity never below booked seats, cancel refunds the orders
+  // it kills); the difference is the actor, so each one carries an audited reason.
+  r.post(
+    '/v1/admin/travel-products/:id/departures',
+    { schema: { summary: 'Create a departure as staff', tags: [T2], params: idParams, body: departureBody }, preHandler: requireRole('ADMIN', 'EDITOR') },
+    async (req, reply) => {
+      const ctx = ctxFromRequest(req);
+      const b = req.body;
+      if (new Date(b.startsAt).getTime() <= Date.now()) throw badRequest('DEPARTURE_IN_PAST', 'startsAt must be in the future');
+      const row = await withTx(pool, async (tx) => {
+        const p = await maybeOne(tx, `SELECT supplier_id, status FROM travel_products WHERE id = $1`, [req.params.id]);
+        if (!p) throw notFound('Product');
+        if (p.status === 'ARCHIVED') throw conflict('PRODUCT_ARCHIVED', 'Archived product');
+        const d = await one(
+          tx,
+          `INSERT INTO travel_departures(product_id, starts_at, ends_at, capacity, min_participants, price_minor, cutoff_at) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+          [req.params.id, b.startsAt, b.endsAt ?? null, b.capacity, b.minParticipants, b.priceMinor ?? null, b.cutoffAt ?? null],
+        );
+        await recordTransition(tx, ctx, { aggregateType: 'travel_departure', aggregateId: d.id, from: null, to: 'OPEN', reason: 'CREATED_BY_STAFF' });
+        await audit(tx, ctx, { action: 'travel_departure.staff_created', resourceType: 'travel_departure', resourceId: d.id, category: 'CONTENT', after: { productId: req.params.id, startsAt: b.startsAt, capacity: b.capacity, priceMinor: b.priceMinor ?? null } });
+        await emit(tx, ctx, { aggregateType: 'travel_departure', aggregateId: d.id, eventType: 'travel.inventory.changed', payload: { departureId: d.id, capacity: d.capacity } });
+        return d;
+      });
+      return reply.status(201).send({ item: departureDto(row) });
+    },
+  );
+
+  r.patch(
+    '/v1/admin/departures/:id',
+    {
+      schema: { summary: 'Update a departure as staff', tags: [T2], params: idParams, body: z.object({ capacity: z.number().int().min(0).max(100000).optional(), status: z.enum(['OPEN', 'CLOSED']).optional(), reason: z.string().min(3).max(500) }) },
+      preHandler: requireRole('ADMIN', 'EDITOR'),
+    },
+    async (req) => {
+      const ctx = ctxFromRequest(req);
+      const row = await withTx(pool, async (tx) => {
+        const d = await maybeOne(tx, `SELECT * FROM travel_departures WHERE id = $1 FOR UPDATE`, [req.params.id]);
+        if (!d) throw notFound('Departure');
+        if (req.body.capacity !== undefined) {
+          const u = await tx.query(`UPDATE travel_departures SET capacity = $2 WHERE id = $1 AND booked <= $2`, [d.id, req.body.capacity]);
+          if (u.rowCount === 0) throw conflict('CAPACITY_BELOW_BOOKED', 'Capacity cannot be lower than seats already booked');
+        }
+        if (req.body.status && req.body.status !== d.status) await DepartureFSM.transition(tx, ctx, { table: 'travel_departures', id: d.id, to: req.body.status, reason: `STAFF: ${req.body.reason}` });
+        await audit(tx, ctx, { action: 'travel_departure.staff_updated', resourceType: 'travel_departure', resourceId: d.id, category: 'CONTENT', reason: req.body.reason, before: { capacity: d.capacity, status: d.status }, after: { capacity: req.body.capacity, status: req.body.status } });
+        await emit(tx, ctx, { aggregateType: 'travel_departure', aggregateId: d.id, eventType: 'travel.inventory.changed', payload: { departureId: d.id, capacity: req.body.capacity, status: req.body.status } });
+        return maybeOne(tx, `SELECT * FROM travel_departures WHERE id = $1`, [d.id]);
+      });
+      return { item: departureDto(row) };
+    },
+  );
+
+  r.post(
+    '/v1/admin/departures/:id/cancel',
+    { schema: { summary: 'Cancel a departure as staff (cancels and refunds its orders)', tags: [T2], params: idParams, body: z.object({ reason: z.string().min(3).max(500) }) }, preHandler: requireRole('ADMIN', 'EDITOR') },
+    async (req) => {
+      const ctx = ctxFromRequest(req);
+      const n = await withTx(pool, async (tx) => {
+        const d = await maybeOne(tx, `SELECT id FROM travel_departures WHERE id = $1 FOR UPDATE`, [req.params.id]);
+        if (!d) throw notFound('Departure');
+        const cancelled = await cancelDeparture(tx, ctx, d.id, `STAFF_CANCELLED: ${req.body.reason}`);
+        await audit(tx, ctx, { action: 'travel_departure.staff_cancelled', resourceType: 'travel_departure', resourceId: d.id, category: 'MONEY', reason: req.body.reason, after: { cancelledOrders: cancelled } });
+        return cancelled;
       });
       const d = await maybeOne(pool, `SELECT * FROM travel_departures WHERE id = $1`, [req.params.id]);
       return { item: departureDto(d), cancelledOrders: n };
@@ -851,6 +1057,88 @@ export default async function travelModule(app: FastifyInstance) {
       nextCursor: pg.nextCursor,
     };
   });
+
+  // ------------------------------------------------------------------ TRAVEL-04 backoffice order desk
+  /**
+   * Operator order intake. Buyer identity is limited to id + display name (contact data stays behind
+   * `/v1/admin/users`, which masks it per role) and bearer voucher codes are NOT in the list — an operator who
+   * needs one opens `/v1/orders/:id`, where the read is attributable to a single order.
+   * `CART` rows are drafts that no buyer has submitted, so the desk never lists them.
+   */
+  r.get(
+    '/v1/admin/orders',
+    {
+      schema: { summary: 'Console list of travel orders', tags: [T4, 'OPS-02'],
+        querystring: pagination.extend({
+          limit: z.coerce.number().int().min(1).max(200).default(50),
+          status: z.enum(['PENDING', 'PAYMENT_PENDING', 'PAID', 'FULFILLED', 'CANCELLED', 'PARTIALLY_REFUNDED', 'REFUNDED', 'PAYMENT_FAILED', 'EXPIRED']).optional(),
+          code: z.string().trim().max(40).optional(),
+          buyerId: z.uuid().optional(),
+          supplierId: z.uuid().optional(),
+          from: isoDate.optional(),
+          to: isoDate.optional(),
+        }),
+      },
+      preHandler: requireRole('ADMIN', 'SUPPORT', 'ACCOUNTING'),
+    },
+    async (req) => {
+      const f = req.query;
+      if (f.from && f.to && f.from > f.to) throw badRequest('INVALID_RANGE', 'from must be on or before to');
+      const c = decodeCursor(f.cursor);
+      const rows = await q(
+        pool,
+        `SELECT o.*, u.display_name AS buyer_name, ${cursorColumns('o')} FROM orders o JOIN users u ON u.id = o.buyer_id
+          WHERE o.status <> 'CART'
+            AND ($1::text IS NULL OR o.status = $1)
+            AND ($2::text IS NULL OR o.code = $2)
+            AND ($3::uuid IS NULL OR o.buyer_id = $3)
+            AND ($4::uuid IS NULL OR EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.supplier_id = $4))
+            AND ($5::date IS NULL OR o.created_at >= ($5::date::timestamp AT TIME ZONE 'Asia/Seoul'))
+            AND ($6::date IS NULL OR o.created_at < (($6::date + 1)::timestamp AT TIME ZONE 'Asia/Seoul'))
+            AND ($7::timestamptz IS NULL OR (o.created_at, o.id) < ($7::timestamptz, $8::uuid))
+          ORDER BY o.created_at DESC, o.id DESC LIMIT $9`,
+        [f.status ?? null, f.code ? f.code.toUpperCase() : null, f.buyerId ?? null, f.supplierId ?? null, f.from ?? null, f.to ?? null, c?.createdAt ?? null, c?.id ?? null, f.limit + 1],
+      );
+      const pg = page(rows, f.limit);
+      const ids = pg.items.map((o: any) => o.id);
+      const items = ids.length ? await q(pool, `SELECT * FROM order_items WHERE order_id = ANY($1::uuid[]) ORDER BY sellable_type, id`, [ids]) : [];
+      return {
+        items: pg.items.map((o: any) => ({ ...orderDto(o, items.filter((i: any) => i.order_id === o.id)), buyerName: o.buyer_name })),
+        nextCursor: pg.nextCursor,
+      };
+    },
+  );
+
+  /**
+   * Mark a paid order as delivered ("주문접수 완료") when the operator — not the departure clock — confirms it:
+   * open-dated tickets, a supplier confirming by phone, a departure whose lifecycle job has not caught up yet.
+   * Money never moves here; only the order's own status does, and the FSM refuses anything but PAID /
+   * PARTIALLY_REFUNDED so an unpaid or cancelled order cannot be marked delivered.
+   */
+  r.post(
+    '/v1/admin/orders/:id/fulfill',
+    { schema: { summary: 'Mark an order as fulfilled', tags: [T4, 'OPS-02'], params: idParams, body: z.object({ reason: z.string().min(3).max(500) }) }, preHandler: requireRole('ADMIN', 'SUPPORT') },
+    async (req) => {
+      const ctx = ctxFromRequest(req);
+      const row = await withTx(pool, async (tx) => {
+        const o = await maybeOne(tx, `SELECT id, status FROM orders WHERE id = $1 FOR UPDATE`, [req.params.id]);
+        if (!o) throw notFound('Order');
+        const { row } = await OrderFSM.transition(tx, ctx, {
+          table: 'orders',
+          id: o.id,
+          from: ['PAID', 'PARTIALLY_REFUNDED'],
+          to: 'FULFILLED',
+          reason: `STAFF: ${req.body.reason}`,
+          versioned: true,
+          set: { fulfilled_at: new Date() },
+        });
+        await audit(tx, ctx, { action: 'order.fulfill.staff', resourceType: 'order', resourceId: o.id, category: 'MONEY', reason: req.body.reason, before: { status: o.status }, after: { status: 'FULFILLED' } });
+        await emit(tx, ctx, { aggregateType: 'order', aggregateId: o.id, eventType: 'order.fulfilled', payload: { orderId: o.id, by: 'STAFF' } });
+        return row;
+      });
+      return { item: orderDto(row) };
+    },
+  );
 
   registerJob('travel.orders.expire', 60_000, (appCtx) => expireOrders(appCtx, systemCtx(appCtx, `job-orders-expire-${Date.now()}`)));
   registerJob('travel.departures.lifecycle', 5 * 60_000, (appCtx) => runDepartureLifecycle(appCtx, systemCtx(appCtx, `job-departures-${Date.now()}`)));

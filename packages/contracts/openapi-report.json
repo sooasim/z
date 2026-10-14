@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-10-09T04:37:36.898Z",
-  "operations": 380,
-  "paths": 329,
+  "generatedAt": "2026-10-14T03:33:41.317Z",
+  "operations": 389,
+  "paths": 336,
   "moduleTags": {
     "AI-01": 1,
     "AI-02": 1,
@@ -29,7 +29,7 @@
     "INT-01": 8,
     "JET-01": 8,
     "OPS-01": 16,
-    "OPS-02": 12,
+    "OPS-02": 14,
     "OPS-03": 20,
     "OPS-04": 4,
     "PAY-01": 8,
@@ -49,10 +49,10 @@
     "STAY-08": 2,
     "STAY-09": 5,
     "STAY-10": 4,
-    "TRAVEL-01": 14,
-    "TRAVEL-02": 4,
+    "TRAVEL-01": 18,
+    "TRAVEL-02": 7,
     "TRAVEL-03": 7,
-    "TRAVEL-04": 5,
+    "TRAVEL-04": 7,
     "TRUST-01": 12,
     "TRUST-02": 9,
     "TRUST-03": 24
