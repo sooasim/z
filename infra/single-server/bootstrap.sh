@@ -89,7 +89,8 @@ cat <<'NEXT'
 Still to do in the cloud console (the host firewall above is not the security group):
   1. Attach a public IP to this server.
   2. Allow inbound TCP 22 (SSH), 80 (HTTP) and 443 (HTTPS) in its security group.
-     80 is not optional: Let's Encrypt validates over HTTP before issuing the certificate.
+     Caddy can get a certificate over 443 alone (TLS-ALPN-01), but with 80 closed
+     http://<domain> answers nothing, so anyone typing the bare domain sees a dead site.
 
 Then, in the repository checkout:
   ./infra/single-server/jetpool.sh init --domain <your-domain> --email <you@example.com>

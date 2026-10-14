@@ -111,7 +111,10 @@ jobs:
                 echo "  ok   tcp/$port accepted a connection"
               else
                 echo "  note tcp/$port refused or timed out — expected if nothing is deployed yet;"
-                echo "       after a deploy it means the security group still blocks inbound $port"
+                echo "       after a deploy it means the security group still blocks inbound $port."
+                echo "       80 closed: http://<domain> is dead, so a visitor typing the bare domain sees"
+                echo "       nothing, though a certificate can still be issued over 443 (TLS-ALPN-01)."
+                echo "       443 closed: the site cannot serve at all." 
               fi
             done
             echo "## HTTP"
