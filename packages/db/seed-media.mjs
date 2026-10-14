@@ -196,14 +196,27 @@ export async function seedMedia({ connectionString, assignmentsPath = DEFAULT_AS
     if (supplier) {
       for (const p of A.legacyProducts) {
         const created = p.status === 'PUBLISHED' ? '2025-04-01T10:00:00+09:00' : '2024-01-01T10:00:00+09:00';
+        // the rebuilt programme content is seed-owned and carries its own hash, so a later run refreshes it only
+        // while no one has edited it — the same rule the migrated CMS entries use
+        const detail = { ...(p.detail ?? {}), seedMedia: { hash: sha256(J(p.detail ?? {})), source: 'scripts/legacy/assign.mjs' } };
         bump(
           'travel_products (WONT legacy)',
           (await q(
-            `INSERT INTO travel_products(id, supplier_id, type, slug, title, summary, description, city, country, duration_minutes, base_price_minor, currency, status, cancellation_terms, created_at, updated_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'KRW',$12,$13,$14,$14) ON CONFLICT DO NOTHING`,
+            `INSERT INTO travel_products(id, supplier_id, type, slug, title, summary, description, city, country, duration_minutes, base_price_minor, currency, status, cancellation_terms, detail, created_at, updated_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'KRW',$12,$13,$14,$15,$15) ON CONFLICT DO NOTHING`,
             [p.productId, supplier, p.type, p.slug, p.title, p.summary, p.description, p.city, p.country, p.durationMinutes, p.basePriceMinor, p.status,
               J({ note: p.status === 'PUBLISHED' ? '출발 일정이 확정되면 상담 후 개별 안내 (현재 예약·결제 없음)' : '진행이 끝난 원여행클럽 프로그램 — 예약 불가', legacy: { system: 'LEGACY_WONT', path: p.legacyPath } }),
-              created],
+              J(detail), created],
+          )).rowCount,
+        );
+        bump(
+          'travel_products (WONT detail refreshed)',
+          (await q(
+            `UPDATE travel_products
+                SET detail = $2::jsonb, status = $4, base_price_minor = $5, summary = $6, description = $7
+              WHERE id = $1 AND (detail = '{}'::jsonb OR detail ? 'seedMedia')
+                AND detail->'seedMedia'->>'hash' IS DISTINCT FROM $3`,
+            [p.productId, J(detail), detail.seedMedia.hash, p.status, p.basePriceMinor, p.summary, p.description],
           )).rowCount,
         );
         if (await one(`SELECT 1 FROM travel_products WHERE id = $1`, [p.productId])) await productMedia(p.productId, p.slug, p.media);
@@ -281,6 +294,41 @@ export async function seedMedia({ connectionString, assignmentsPath = DEFAULT_AS
         og(seo, own, d.coverUrl);
         return d.coverUrl;
       });
+    }
+    // ---- 관광정보: the destinations the migrated WONT programmes travelled to (new entries, not curated covers)
+    for (const d of A.legacyDestinations ?? []) {
+      const heroId = d.coverUrl ? sharedId(d.coverUrl) : null;
+      const data = {
+        city: d.city,
+        country: d.country,
+        coverUrl: d.coverUrl,
+        heroUrl: d.coverUrl,
+        gallery: d.gallery,
+        highlights: d.highlights,
+        spots: d.spots,
+        facts: d.facts,
+        product: { id: d.productId, slug: d.productSlug, title: d.productTitle },
+        legacy: { system: 'LEGACY_WONT', path: d.legacyPath },
+        tags: ['원여행클럽', '관광정보'],
+        seedMedia: { hash: sha256(J([d.title, d.summary, d.bodyMd, d.gallery, d.spots, d.facts])), source: 'scripts/legacy/assign.mjs' },
+      };
+      const seo = {
+        title: `${d.title} 관광정보 | JETPOOL`,
+        description: d.summary,
+        canonical: '/discover',
+        og: { image: d.coverUrl, type: 'article' },
+      };
+      const r = await one(
+        `INSERT INTO cms_entries(id, entry_type, slug, locale, title, summary, body_md, hero_media_id, seo, data, status, published_at, author_id, created_at, updated_at)
+         VALUES ($1,'DESTINATION',$2,'ko-KR',$3,$4,$5,$6,$7,$8,'PUBLISHED',$9,$10,$9,$9)
+         ON CONFLICT (entry_type, slug, locale) DO UPDATE SET title = EXCLUDED.title, summary = EXCLUDED.summary, body_md = EXCLUDED.body_md,
+                hero_media_id = EXCLUDED.hero_media_id, seo = EXCLUDED.seo, data = EXCLUDED.data
+          WHERE cms_entries.data ? 'seedMedia'
+            AND cms_entries.data->'seedMedia'->>'hash' IS DISTINCT FROM EXCLUDED.data->'seedMedia'->>'hash'
+         RETURNING id, (xmax = 0) AS inserted`,
+        [uid(`cms:DESTINATION:${d.slug}`), d.slug, d.title, d.summary, d.bodyMd, heroId, J(seo), J(data), d.publishedAt, admin],
+      );
+      if (r) bump(r.inserted ? 'DESTINATION (WONT 관광정보)' : 'DESTINATION (WONT 관광정보, refreshed)');
     }
     for (const [slug, s] of Object.entries(A.stories)) {
       await curate('STORY', slug, ({ data, seo, own }) => {

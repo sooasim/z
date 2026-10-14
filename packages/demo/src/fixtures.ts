@@ -107,7 +107,7 @@ export interface Hit {
 }
 
 /** Query keys whose value changes the result set (mismatch = strong penalty). */
-const STRONG = new Set(['q', 'city', 'targetId', 'targetType', 'propertyId', 'filter', 'role', 'status', 'type', 'unread', 'mode', 'checkIn', 'checkOut', 'guests', 'contextType', 'subjectId', 'subjectType', 'orderId', 'paymentId', 'kind', 'tab']);
+const STRONG = new Set(['q', 'city', 'collection', 'targetId', 'targetType', 'propertyId', 'filter', 'role', 'status', 'type', 'unread', 'mode', 'checkIn', 'checkOut', 'guests', 'contextType', 'subjectId', 'subjectType', 'orderId', 'paymentId', 'kind', 'tab']);
 
 function score(want: URLSearchParams, have: URLSearchParams): number {
   let s = 0;

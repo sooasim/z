@@ -7403,7 +7403,7 @@
     },
     "/v1/auth/login": {
       "post": {
-        "summary": "Email + password login (per-account lockout with exponential backoff)",
+        "summary": "Email (or login handle) + password login (per-account lockout with exponential backoff)",
         "tags": [
           "CORE-01"
         ],
@@ -7420,6 +7420,12 @@
                     "format": "email",
                     "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
                   },
+                  "username": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 40,
+                    "pattern": "^[a-z0-9][a-z0-9._-]{2,39}$"
+                  },
                   "password": {
                     "type": "string",
                     "minLength": 1,
@@ -7427,7 +7433,6 @@
                   }
                 },
                 "required": [
-                  "email",
                   "password"
                 ]
               }
@@ -18168,6 +18173,17 @@
             },
             "in": "query",
             "name": "to",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "LEGACY_WONT"
+              ]
+            },
+            "in": "query",
+            "name": "collection",
             "required": false
           }
         ],
