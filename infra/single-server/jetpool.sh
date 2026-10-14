@@ -278,8 +278,19 @@ cmd_smoke() {
   log "smoke test against the containers (127.0.0.1)"
   SMOKE_RETRIES=12 SMOKE_INTERVAL=5 bash "$ROOT/infra/scripts/smoke.sh" "http://127.0.0.1:4000" || true
   local code
+  # Port 80 in domain mode is Caddy's redirect to https, so 3xx is the right answer, not a warning.
   code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 -H "Host: $root" http://127.0.0.1/ || true)"
-  [[ "$code" == "200" ]] && echo "  ok   web through caddy ($code)" || warn "web through caddy returned ${code:-none}"
+  case "$code" in
+    200) echo "  ok   web through caddy ($code)" ;;
+    301|302|307|308) echo "  ok   caddy redirects port 80 to https ($code)" ;;
+    *) warn "web through caddy returned ${code:-none}" ;;
+  esac
+  # And the site itself over TLS, through Caddy to the web container, without leaving the box.
+  if [[ "$(get_env DEPLOY_MODE)" == "domain" ]]; then
+    code="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 --resolve "$root:443:127.0.0.1" "https://$root/" || true)"
+    [[ "$code" == "200" ]] && echo "  ok   the site serves over https inside the box ($code)" \
+      || warn "https through caddy returned ${code:-none} — caddy is up but the web app behind it is not serving"
+  fi
   if [[ "$(get_env DEPLOY_MODE)" == "domain" ]]; then
     log "smoke test from the public internet (https://$root)"
     for url in "https://$root/" "https://api.$root/health"; do
