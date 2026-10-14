@@ -16,6 +16,8 @@ export default function LoginView() {
   const router = useRouter();
   const sp = useSearchParams();
   const next = safeNext(sp.get('next'));
+  /** Reached from the home-screen icon (`/app` → here): say plainly that one sign-in is enough. */
+  const appMode = sp.get('app') === '1';
   const [mode, setMode] = useState<'email' | 'otp'>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -66,8 +68,18 @@ export default function LoginView() {
   return (
     <div style={{ maxWidth: 440, margin: '0 auto' }} className="stack-lg">
       <div>
+        {appMode && (
+          <p className="eyebrow" style={{ marginBottom: 4 }}>
+            <img src="/icons/icon.svg" alt="" width={18} height={18} style={{ borderRadius: 5, verticalAlign: '-4px', marginRight: 6 }} />
+            JETPOOL {L('앱', 'app')}
+          </p>
+        )}
         <h1 style={{ marginBottom: 4 }}>{L('로그인', 'Log in')}</h1>
-        <p className="muted" style={{ margin: 0 }}>{L('다시 오셨군요! 예약과 메시지를 이어서 확인하세요.', 'Welcome back — pick up your trips and messages.')}</p>
+        <p className="muted" style={{ margin: 0 }}>
+          {appMode
+            ? L('한 번 로그인하면 로그아웃할 때까지 자동으로 접속돼요.', 'Sign in once — you stay signed in until you log out.')
+            : L('다시 오셨군요! 예약과 메시지를 이어서 확인하세요.', 'Welcome back — pick up your trips and messages.')}
+        </p>
       </div>
       {sp.get('linkRequired') && <Alert tone="info">{L('이 이메일로 가입된 계정이 있습니다. 기존 방법으로 로그인한 후 계정 보안에서 소셜 계정을 연결하세요.', 'An account with this email already exists. Sign in with your existing method, then link the social account in Account security.')}</Alert>}
       {sp.get('error') && <Alert tone="error">{L('소셜 로그인을 시작할 수 없습니다. 다른 방법을 이용해 주세요.', 'Social login is unavailable. Try another method.')}</Alert>}

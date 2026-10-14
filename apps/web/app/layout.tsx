@@ -4,6 +4,7 @@ import './globals.css';
 import { Providers } from '@/components/providers';
 import { Header, Footer, BottomNav, ScrollReset, ServiceWorkerRegister, SkipLink } from '@/components/shell';
 import { THEME_SCRIPT } from '@/components/theme';
+import { INSTALL_PROMPT_SCRIPT } from '@/components/public/AppInstall';
 import { SITE_URL } from '@/lib/env';
 
 export const metadata: Metadata = {
@@ -46,6 +47,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="ko-KR" suppressHydrationWarning data-scroll-behavior="smooth">
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        {/* Chromium fires beforeinstallprompt once, before React mounts: stash it for <AppInstall>. */}
+        <script dangerouslySetInnerHTML={{ __html: INSTALL_PROMPT_SCRIPT }} />
         <link rel="preload" href={FONT_PRELOAD} as="font" type="font/woff2" crossOrigin="anonymous" />
         {/* eslint-disable-next-line @next/next/no-css-tags -- static, cacheable @font-face sheet (unicode-range slices) */}
         <link rel="stylesheet" href={FONT_CSS} />

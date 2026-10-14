@@ -12,6 +12,16 @@ describe('BFF refresh-token handling', () => {
     expect(n.refreshToken).toBe('r2');
     expect(JSON.stringify(n.publicBody)).not.toContain('r2');
   });
+  it('gives the cookie exactly the session’s remaining life (what this API reports)', () => {
+    const now = Date.parse('2026-01-01T00:00:00Z');
+    const r = splitAuthPayload({ accessToken: 'a', refreshToken: 'r', refreshExpiresAt: '2026-01-31T00:00:00Z' }, now);
+    expect(r.refreshMaxAge).toBe(30 * 24 * 60 * 60);
+    // An absolute timestamp wins over a duration in the same body.
+    expect(splitAuthPayload({ refreshExpiresIn: 60, refreshExpiresAt: '2026-01-02T00:00:00Z' }, now).refreshMaxAge).toBe(24 * 60 * 60);
+    // Already past, or unparseable: fall back to the default rather than writing a cookie that expires at once.
+    expect(splitAuthPayload({ refreshExpiresAt: '2025-12-31T00:00:00Z' }, now).refreshMaxAge).toBe(30 * 24 * 60 * 60);
+    expect(splitAuthPayload({ refreshExpiresAt: 'soon' }, now).refreshMaxAge).toBe(30 * 24 * 60 * 60);
+  });
   it('passes through bodies without tokens', () => {
     expect(splitAuthPayload({ mfaRequired: true }).refreshToken).toBeNull();
     expect(splitAuthPayload(null).publicBody).toBeNull();

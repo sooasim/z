@@ -211,6 +211,23 @@ describe('CORE-01 refresh rotation & logout', () => {
     expect(rows[0].n).toBe(1);
   });
 
+  it('each refresh slides the session out, so an app in use never signs itself out', async () => {
+    const s = await signup('slide@example.com');
+    // Age the session to a day from its end, where a month-old install that is opened daily would sit.
+    await t.pool.query(`UPDATE sessions SET expires_at = now() + interval '1 day' WHERE id = $1`, [s.body.sessionId]);
+    const r = await call(t, null, 'POST', '/v1/auth/refresh', { refreshToken: s.body.refreshToken });
+    expect(r.status).toBe(200);
+    const month = 29 * 24 * 60 * 60 * 1000; // the configured TTL is 30 days; allow for the clock moving
+    expect(Date.parse(r.body.refreshExpiresAt) - Date.now()).toBeGreaterThan(month);
+    const { rows } = await t.pool.query(`SELECT expires_at FROM sessions WHERE id = $1`, [s.body.sessionId]);
+    expect(new Date(rows[0].expires_at).getTime() - Date.now()).toBeGreaterThan(month);
+    // It is an idle timeout, not an endless session: once it does lapse, the token is dead.
+    await t.pool.query(`UPDATE sessions SET expires_at = now() - interval '1 second' WHERE id = $1`, [s.body.sessionId]);
+    const dead = await call(t, null, 'POST', '/v1/auth/refresh', { refreshToken: r.body.refreshToken });
+    expect(dead.status).toBe(401);
+    expect(dead.body.code).toBe('REFRESH_TOKEN_INVALID');
+  });
+
   it('rejects garbage refresh tokens', async () => {
     const r = await call(t, null, 'POST', '/v1/auth/refresh', { refreshToken: 'x'.repeat(43) });
     expect(r.status).toBe(401);

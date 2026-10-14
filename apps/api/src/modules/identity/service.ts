@@ -548,9 +548,16 @@ export async function refreshSession(pool: pg.Pool, ctx: Ctx, refreshToken: stri
     if (s.user_status === 'SUSPENDED' || s.user_status === 'DELETED') return { err: forbidden('ACCOUNT_SUSPENDED', 'Account is not active') };
     const next = randomToken(32);
     await tx.query(`INSERT INTO session_refresh_history(token_hash, session_id) VALUES ($1,$2)`, [h, s.id]);
-    await tx.query(
-      `UPDATE sessions SET refresh_token_hash = $2, last_used_at = now(), rotation_counter = rotation_counter + 1, ip = coalesce($3::inet, ip) WHERE id = $1`,
-      [s.id, sha256(next), ctx.ip ?? null],
+    // Rotation also pushes `expires_at` out, so REFRESH_TOKEN_TTL_SEC is an idle timeout rather than an
+    // absolute lifetime: a session in regular use never ends on its own, which is what the installed app's
+    // "signed in until you log out" promises, while an abandoned one still dies a month after its last use.
+    // `greatest` so a shorter configured TTL can never cut a live session short.
+    const updated = await one<{ expires_at: string }>(
+      tx,
+      `UPDATE sessions SET refresh_token_hash = $2, last_used_at = now(), rotation_counter = rotation_counter + 1,
+              ip = coalesce($3::inet, ip), expires_at = greatest(expires_at, now() + make_interval(secs => $4))
+         WHERE id = $1 RETURNING expires_at`,
+      [s.id, sha256(next), ctx.ip ?? null, ctx.app.config.REFRESH_TOKEN_TTL_SEC],
     );
     const accessToken = await signAccessToken(ctx.app.config, { sub: s.user_id, sid: s.id, aal: s.aal });
     return {
@@ -559,7 +566,7 @@ export async function refreshSession(pool: pg.Pool, ctx: Ctx, refreshToken: stri
         refreshToken: next,
         tokenType: 'Bearer' as const,
         expiresIn: ctx.app.config.ACCESS_TOKEN_TTL_SEC,
-        refreshExpiresAt: new Date(s.expires_at).toISOString(),
+        refreshExpiresAt: new Date(updated.expires_at).toISOString(),
         sessionId: s.id as string,
         aal: s.aal as 'aal1' | 'aal2',
       },
