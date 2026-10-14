@@ -85,6 +85,11 @@ A single Ubuntu 22.04 box (2 vCPU / 8 GB / 50 GB is enough) running the whole st
 Let's Encrypt certificates it renews itself. Step-by-step, including DNS:
 **`docs/runbooks/single-server-deploy.md`**.
 ```bash
+# one command: bootstrap → init → deploy → seed (idempotent; re-run it if ssh drops)
+sudo bash infra/single-server/install.sh --domain example.com --email you@example.com --seed
+```
+or step by step:
+```bash
 sudo bash infra/single-server/bootstrap.sh                       # docker, swap, firewall, UTC clock
 ./infra/single-server/jetpool.sh init --domain example.com --email you@example.com
 ./infra/single-server/jetpool.sh deploy                          # build → migrate → start → smoke

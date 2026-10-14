@@ -138,7 +138,7 @@ cmd_check() {
   [[ -f "$ENV_FILE" ]] || die "no $ENV_FILE — run '$0 init' first"
   command -v docker >/dev/null || die "docker is not installed — run infra/single-server/bootstrap.sh"
   docker compose version >/dev/null 2>&1 || die "the docker compose plugin is missing — run bootstrap.sh"
-  docker info >/dev/null 2>&1 || die "cannot talk to the docker daemon (sudo systemctl start docker, or re-login after bootstrap)"
+  docker info >/dev/null 2>&1 || die "cannot talk to the docker daemon — try again with sudo, run 'sudo systemctl start docker', or log out and back in once after bootstrap (docker group)"
   local missing=()
   local k
   for k in POSTGRES_PASSWORD JWT_SECRET DATA_ENCRYPTION_KEY GEO_FUZZ_SECRET MEILI_MASTER_KEY MINIO_ROOT_PASSWORD; do
@@ -280,7 +280,7 @@ cmd_doctor() {
   if docker compose version >/dev/null 2>&1; then ok "compose plugin present"
   else bad "the docker compose plugin is missing — run bootstrap.sh"; fi
   if docker info >/dev/null 2>&1; then ok "docker daemon reachable"
-  else bad "cannot talk to the docker daemon — 'sudo systemctl start docker', and log out/in once after bootstrap (docker group)"; fi
+  else bad "cannot talk to the docker daemon — re-run this with sudo, or log out and back in once after bootstrap (docker group)"; fi
 
   bold "3. configuration"
   local mode root_domain
@@ -468,26 +468,40 @@ cmd_backup() {
   echo "  Media lives in the 'miniodata' docker volume — back that up too (see the runbook)."
 }
 
+# bootstrap.sh puts the login user in the docker group, but group membership only applies to NEW logins,
+# so the very first deploy after bootstrap would fail on a permission error. Re-exec through sudo when that
+# is what is happening and sudo needs no password; otherwise fall through to the explicit message in check().
+ensure_docker_access() {
+  [[ "${JETPOOL_SUDO_REEXEC:-}" == "1" ]] && return 0
+  [[ "$(id -u)" -eq 0 ]] && return 0
+  docker info >/dev/null 2>&1 && return 0
+  command -v sudo >/dev/null 2>&1 || return 0
+  sudo -n true 2>/dev/null || return 0
+  sudo -n docker info >/dev/null 2>&1 || return 0
+  log "docker needs root until your next login (docker group) — re-running through sudo"
+  exec sudo -E JETPOOL_SUDO_REEXEC=1 "$0" "$@"
+}
+
 case "${1:-help}" in
   init)    shift; cmd_init "$@" ;;
-  check)   cmd_check ;;
-  build)   cmd_build ;;
-  up)      cmd_up ;;
-  deploy)  cmd_deploy ;;
-  update)  cmd_update ;;
-  migrate) cmd_migrate ;;
-  seed)    cmd_seed ;;
+  check)   ensure_docker_access "$@"; cmd_check ;;
+  build)   ensure_docker_access "$@"; cmd_build ;;
+  up)      ensure_docker_access "$@"; cmd_up ;;
+  deploy)  ensure_docker_access "$@"; cmd_deploy ;;
+  update)  ensure_docker_access "$@"; cmd_update ;;
+  migrate) ensure_docker_access "$@"; cmd_migrate ;;
+  seed)    ensure_docker_access "$@"; cmd_seed ;;
   logins)  cmd_logins ;;
-  smoke)   cmd_smoke ;;
-  doctor)  cmd_doctor ;;
-  backup)  cmd_backup ;;
-  ps)      dc ps ;;
-  logs)    shift; dc logs -f --tail 200 "$@" ;;
-  restart) shift; dc restart "$@" ;;
-  stop)    dc stop ;;
-  down)    dc down ;;
-  psql)    dc exec postgres psql -U jetpool jetpool ;;
-  prune)   docker image prune -f && docker builder prune -f ;;
+  smoke)   ensure_docker_access "$@"; cmd_smoke ;;
+  doctor)  ensure_docker_access "$@"; cmd_doctor ;;
+  backup)  ensure_docker_access "$@"; cmd_backup ;;
+  ps)      ensure_docker_access "$@"; dc ps ;;
+  logs)    ensure_docker_access "$@"; shift; dc logs -f --tail 200 "$@" ;;
+  restart) ensure_docker_access "$@"; shift; dc restart "$@" ;;
+  stop)    ensure_docker_access "$@"; dc stop ;;
+  down)    ensure_docker_access "$@"; dc down ;;
+  psql)    ensure_docker_access "$@"; dc exec postgres psql -U jetpool jetpool ;;
+  prune)   ensure_docker_access "$@"; docker image prune -f && docker builder prune -f ;;
   help|-h|--help)
     awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}" ;;
   *) die "unknown command '$1' — try '$0 help'" ;;

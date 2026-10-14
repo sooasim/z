@@ -58,6 +58,23 @@ Let's Encrypt 인증서 발급도 불가능합니다.
 
 ---
 
+## 한 줄로 끝내기 (권장)
+
+DNS 레코드(아래 2단계)까지 끝났다면, 서버에서 이 두 줄이 전부입니다.
+
+```bash
+git clone -b claude/youthful-darwin-fueqrx https://github.com/sooasim/z.git ~/jetpool
+sudo bash ~/jetpool/infra/single-server/install.sh --domain <도메인> --email <메일> --seed
+```
+
+`install.sh` 가 bootstrap → init → deploy → seed 를 순서대로 돌립니다. 전부 멱등이라 SSH가 끊기거나
+실패하면 **같은 명령을 다시 실행**하면 되고, 빌드 캐시가 남아 있어 두 번째는 훨씬 빠릅니다. 빌드가
+10~25분이므로 `tmux` 안에서 돌리는 것을 권합니다.
+
+도메인이 아직 없으면 `--domain/--email` 대신 `--ip <공인-IP>` 를 쓰세요(TLS 없음, 점검 전용).
+
+아래는 같은 일을 단계별로 하는 설명입니다.
+
 ## 1단계 — 접속하고 서버 준비
 
 ```bash
