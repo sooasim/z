@@ -253,7 +253,7 @@ cmd_smoke() {
 # independent and none of them die, so this runs before init, before deploy, and on a half-set-up box.
 # The verdict at the end names the first thing that is actually wrong and what to do about it.
 cmd_doctor() {
-  local fail=() warnings=()
+  local fail=() warnings=() cert_ok=0
   local okmark='  \033[32mok\033[0m  '
   ok()   { printf "$okmark%s\n" "$*"; }
   bad()  { printf '  \033[31mBAD\033[0m %s\n' "$*"; fail+=("$*"); }
@@ -431,7 +431,11 @@ cmd_doctor() {
     if [[ -z "$caddy_log" ]]; then
       note "no caddy logs yet"
     elif grep -qiE 'certificate obtained|obtained certificate|successfully' <<< "$caddy_log"; then
-      ok "caddy reports a certificate was obtained"
+      ok "caddy obtained a certificate"
+      # HTTP-01 means Let's Encrypt connected to port 80 on this box from the public internet, so
+      # inbound 80 and the DNS record were both correct at least at that moment.
+      info "that also proves inbound port 80 reached this server from the internet, and DNS pointed here"
+      cert_ok=1
     elif grep -qiE 'could not get certificate|obtain certificate|acme|challenge failed|timeout|connection refused' <<< "$caddy_log"; then
       bad "caddy is failing to get a certificate — the ACME errors below almost always mean port 80 is not reachable from the internet"
       grep -iE 'error|challenge|acme|obtain' <<< "$caddy_log" | tail -8 | sed 's/^/      /'
@@ -452,8 +456,15 @@ cmd_doctor() {
     bold "Verdict"
     if [[ "${mode:-}" == "domain" ]]; then
       echo "  Everything checkable from inside the server is healthy, and DNS points here."
-      echo "  If the site still does not open from outside, what is left is OUTSIDE this server:"
-      echo "    the cloud security group must allow inbound TCP 80 and 443 from 0.0.0.0/0."
+      if [[ "$cert_ok" == "1" ]]; then
+        echo "  A certificate was issued, so inbound 80 and DNS were both working. If the site still does"
+        echo "  not open for you, suspect what sits between you and here rather than this server:"
+        echo "    a CDN/proxy in front of the domain, a stale DNS cache on your machine, or 443 (not 80)"
+        echo "    still closed in the security group."
+      else
+        echo "  If the site still does not open from outside, what is left is OUTSIDE this server:"
+        echo "    the cloud security group must allow inbound TCP 80 and 443 from 0.0.0.0/0."
+      fi
       echo "  Test from your own PC (not from the server):"
       echo "    curl -I http://${root_domain:-<도메인>}"
       echo "    curl -I https://${root_domain:-<도메인>}"
