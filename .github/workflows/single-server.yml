@@ -1,0 +1,248 @@
+# Verify and deploy the single-server install from GitHub's runners.
+#
+# Why this exists: the operator's box sits behind a cloud security group and the only machine that can
+# both reach it and be driven from a pull request is a GitHub runner. Runners have unrestricted outbound,
+# so `verify` can see the server the way the public internet does — which is exactly what you cannot tell
+# from inside the server, and what `jetpool.sh doctor` can only infer.
+#
+#   verify  — no credentials at all. Resolves the four names, says whether each is a routable public
+#             address and whether they agree, then probes 80/443 and HTTPS. Run this first.
+#   deploy  — opt in with the `deploy` input. Needs the secrets below, and runs
+#             infra/single-server/install.sh over SSH.
+#
+# Secrets for `deploy` (Settings → Secrets and variables → Actions):
+#   JETPOOL_SSH_HOST       the server's public IP or hostname
+#   JETPOOL_SSH_USER       login user; `root`, or a user with passwordless sudo
+#   JETPOOL_SSH_KEY        a PRIVATE SSH key whose public half is in that user's authorized_keys
+#   JETPOOL_SSH_HOST_KEY   optional, recommended: the server's host key line, from
+#                          `ssh-keyscan <host>` run somewhere you trust. Pins the host so this job
+#                          cannot be pointed at an impostor. Without it the job trusts whatever
+#                          answers on the first connection and says so.
+#   JETPOOL_SSH_PORT       optional, defaults to 22
+#
+# Use a key, not the login password: a password in a secret is replayable everywhere that password works,
+# while a key generated for this job alone can be revoked by deleting one line from authorized_keys.
+name: single-server
+
+on:
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: "Domain to serve (blank = verify the IP only)"
+        required: false
+        default: ""
+      email:
+        description: "Let's Encrypt contact e-mail (required to deploy with a domain)"
+        required: false
+        default: ""
+      deploy:
+        description: "Actually deploy over SSH (needs the JETPOOL_SSH_* secrets)"
+        type: boolean
+        default: false
+      seed:
+        description: "Load the demo catalogue after deploying"
+        type: boolean
+        default: true
+      skip_dns_check:
+        description: "Deploy even if the installer's DNS preflight objects"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: single-server
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: verify from the public internet
+    runs-on: ubuntu-latest
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq dnsutils
+      - name: Resolve and probe
+        env:
+          DOMAIN: ${{ inputs.domain }}
+          HOST_IP: ${{ secrets.JETPOOL_SSH_HOST }}
+        run: |
+          set -uo pipefail
+          is_private() {
+            case "$1" in
+              10.*|127.*|169.254.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*) return 0 ;;
+              100.6[4-9].*|100.[7-9][0-9].*|100.1[0-1][0-9].*|100.12[0-7].*) return 0 ;;
+            esac
+            return 1
+          }
+          fail=0
+          addrs=""
+
+          if [ -n "${DOMAIN:-}" ]; then
+            echo "## DNS"
+            for n in "$DOMAIN" "www.$DOMAIN" "api.$DOMAIN" "s3.$DOMAIN"; do
+              a="$(dig +short +time=5 +tries=2 "$n" A | grep -E '^[0-9.]+$' | paste -sd, -)"
+              if [ -z "$a" ]; then
+                echo "  FAIL $n does not resolve"
+                fail=1
+              elif is_private "${a%%,*}"; then
+                echo "  FAIL $n -> $a is a private address; the internet cannot route it"
+                fail=1
+              else
+                echo "  ok   $n -> $a"
+                addrs="$addrs ${a%%,*}"
+              fi
+            done
+            uniq_count="$(printf '%s\n' $addrs | sort -u | wc -l)"
+            [ "$uniq_count" -le 1 ] || echo "  note the four names do not all point at one address: $(printf '%s\n' $addrs | sort -u | paste -sd' ' -)"
+          else
+            echo "## DNS — skipped (no domain given)"
+          fi
+
+          target="${DOMAIN:-}"
+          [ -n "$target" ] || target="${HOST_IP:-}"
+          if [ -z "$target" ]; then
+            echo "## Reachability — nothing to probe (give a domain, or set JETPOOL_SSH_HOST)"
+          else
+            echo "## Reachability of $target"
+            # Informational only: before the first deploy nothing listens yet, and failing here would
+            # stop the deploy job that is supposed to fix it. Only DNS gates the deploy.
+            for port in 80 443; do
+              if timeout 12 bash -c "cat < /dev/null > /dev/tcp/$target/$port" 2>/dev/null; then
+                echo "  ok   tcp/$port accepted a connection"
+              else
+                echo "  note tcp/$port refused or timed out — expected if nothing is deployed yet;"
+                echo "       after a deploy it means the security group still blocks inbound $port"
+              fi
+            done
+            echo "## HTTP"
+            code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "http://$target/" 2>&1 || true)"
+            echo "  http://$target/  -> $code"
+            if [ -n "${DOMAIN:-}" ]; then
+              out="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 25 "https://$DOMAIN/" 2>&1 || true)"
+              echo "  https://$DOMAIN/ -> $out"
+              case "$out" in
+                200|30[0-9]) echo "  ok   HTTPS is serving, so the certificate is valid and 443 is open" ;;
+                *) echo "  note HTTPS did not return a success/redirect; if the deploy just ran, Caddy may still be issuing" ;;
+              esac
+            fi
+          fi
+
+          echo
+          if [ "$fail" -eq 0 ] && [ -z "${DOMAIN:-}" ]; then
+            echo "Verdict: no domain was given, so nothing about DNS was checked."
+          elif [ "$fail" -eq 0 ]; then
+            echo "Verdict: DNS is sound. Any 'note' above about ports is only a problem after a deploy."
+          else
+            echo "Verdict: the DNS above cannot work — see the FAIL lines. The records must hold this"
+            echo "server's PUBLIC address, or Let's Encrypt can never validate and the deploy is pointless."
+            echo "Not deploying on top of that; fix DNS and run this again."
+          fi
+          exit "$fail"
+
+  deploy:
+    name: deploy over SSH
+    needs: verify
+    if: ${{ inputs.deploy }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the secrets are present
+        env:
+          HOST: ${{ secrets.JETPOOL_SSH_HOST }}
+          USER_NAME: ${{ secrets.JETPOOL_SSH_USER }}
+          KEY: ${{ secrets.JETPOOL_SSH_KEY }}
+          HOST_KEY: ${{ secrets.JETPOOL_SSH_HOST_KEY }}
+          DOMAIN: ${{ inputs.domain }}
+          EMAIL: ${{ inputs.email }}
+        run: |
+          missing=""
+          [ -n "$HOST" ] || missing="$missing JETPOOL_SSH_HOST"
+          [ -n "$USER_NAME" ] || missing="$missing JETPOOL_SSH_USER"
+          [ -n "$KEY" ] || missing="$missing JETPOOL_SSH_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::missing repository secrets:$missing — see the comments at the top of this workflow"
+            exit 1
+          fi
+          [ -n "$HOST_KEY" ] || echo "::warning::JETPOOL_SSH_HOST_KEY is not set, so this job trusts whatever host answers first"
+          if [ -n "$DOMAIN" ] && [ -z "$EMAIL" ]; then
+            echo "::error::deploying with a domain needs an e-mail for Let's Encrypt expiry notices"
+            exit 1
+          fi
+
+      - name: Prepare SSH
+        env:
+          HOST: ${{ secrets.JETPOOL_SSH_HOST }}
+          PORT: ${{ secrets.JETPOOL_SSH_PORT }}
+          KEY: ${{ secrets.JETPOOL_SSH_KEY }}
+          HOST_KEY: ${{ secrets.JETPOOL_SSH_HOST_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          if [ -n "$HOST_KEY" ]; then
+            printf '%s\n' "$HOST_KEY" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "${PORT:-22}" -H "$HOST" > ~/.ssh/known_hosts 2>/dev/null
+          fi
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Run the installer on the server
+        env:
+          HOST: ${{ secrets.JETPOOL_SSH_HOST }}
+          USER_NAME: ${{ secrets.JETPOOL_SSH_USER }}
+          PORT: ${{ secrets.JETPOOL_SSH_PORT }}
+          DOMAIN: ${{ inputs.domain }}
+          EMAIL: ${{ inputs.email }}
+          SEED: ${{ inputs.seed }}
+          SKIP_DNS: ${{ inputs.skip_dns_check }}
+          BRANCH: ${{ github.ref_name }}
+          REPO: ${{ github.server_url }}/${{ github.repository }}.git
+        run: |
+          set -euo pipefail
+          # The remote script is fed on stdin so nothing needs quoting through the shell twice.
+          ssh -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 \
+              -i ~/.ssh/id_deploy -p "${PORT:-22}" "$USER_NAME@$HOST" \
+              env DOMAIN="$DOMAIN" EMAIL="$EMAIL" SEED="$SEED" SKIP_DNS="$SKIP_DNS" \
+                  BRANCH="$BRANCH" REPO="$REPO" bash -s <<'REMOTE'
+          set -euo pipefail
+          SUDO=""
+          [ "$(id -u)" -eq 0 ] || SUDO="sudo -n"
+          $SUDO true || { echo "this user needs passwordless sudo, or log in as root" >&2; exit 1; }
+
+          command -v git >/dev/null 2>&1 || { $SUDO apt-get update -qq && $SUDO apt-get install -y -qq git; }
+          DIR="$HOME/jetpool"
+          if [ -d "$DIR/.git" ]; then
+            git -C "$DIR" fetch --depth 1 origin "$BRANCH"
+            git -C "$DIR" checkout -B "$BRANCH" "origin/$BRANCH"
+          else
+            git clone --branch "$BRANCH" --single-branch "$REPO" "$DIR"
+          fi
+
+          args=""
+          if [ -n "$DOMAIN" ]; then args="--domain $DOMAIN --email $EMAIL"; else
+            echo "no domain given; deploying in IP mode against this host's public address"
+            ip="$(curl -fsS --max-time 8 https://api.ipify.org || true)"
+            [ -n "$ip" ] || { echo "could not determine this server's public IP" >&2; exit 1; }
+            args="--ip $ip"
+          fi
+          [ "$SEED" = "true" ] && args="$args --seed"
+          [ "$SKIP_DNS" = "true" ] && args="$args --skip-dns-check"
+
+          echo "running: install.sh $args"
+          $SUDO bash "$DIR/infra/single-server/install.sh" $args
+          REMOTE
+
+      - name: Report what the server thinks
+        if: always()
+        env:
+          HOST: ${{ secrets.JETPOOL_SSH_HOST }}
+          USER_NAME: ${{ secrets.JETPOOL_SSH_USER }}
+          PORT: ${{ secrets.JETPOOL_SSH_PORT }}
+        run: |
+          ssh -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 \
+              -i ~/.ssh/id_deploy -p "${PORT:-22}" "$USER_NAME@$HOST" \
+              'cd ~/jetpool && ./infra/single-server/jetpool.sh doctor' || true
+
+      - name: Remove the key from the runner
+        if: always()
+        run: rm -f ~/.ssh/id_deploy
