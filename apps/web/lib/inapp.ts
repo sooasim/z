@@ -73,13 +73,29 @@ export function detectEnv(nav: NavLike): AppEnv {
 }
 
 /**
+ * The subpath this deployment is served under, taken from its public site URL — '' for a site at the root of
+ * its domain, '/z' for the static demo on GitHub Pages. Routing handles this on its own (next/link and the
+ * router add it); the escape URL is built by hand and handed to another browser, so it has to carry it too.
+ */
+export function basePathOf(siteUrl: string): string {
+  try {
+    return new URL(siteUrl).pathname.replace(/\/+$/, '');
+  } catch {
+    return '';
+  }
+}
+
+/**
  * The target handed to the external browser. Always built from this page's own origin: a relay that forwards
  * an arbitrary URL is an open redirect, and a phishing link shared in KakaoTalk is exactly the abuse the kit
  * warns about. Throws rather than returning a URL it cannot vouch for.
  */
-export function escapeTarget(origin: string, path: string = APP_INSTALL_PATH): string {
+export function escapeTarget(origin: string, path: string = APP_INSTALL_PATH, basePath = ''): string {
   const base = new URL(origin);
-  const url = new URL(path, base);
+  const prefix = basePath.replace(/\/+$/, '');
+  // A path that already carries the prefix is left alone, so /z/app never becomes /z/z/app.
+  const full = prefix && path.startsWith('/') && !(path === prefix || path.startsWith(`${prefix}/`) || path.startsWith(`${prefix}?`)) ? prefix + path : path;
+  const url = new URL(full, base);
   if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error(`unsupported scheme: ${url.protocol}`);
   if (url.origin !== base.origin) throw new Error(`refusing to hand off another origin: ${url.origin}`);
   return url.toString();

@@ -261,6 +261,17 @@ const pub = path.join(COPY, 'public');
 await mkdir(pub, { recursive: true });
 await cp(path.join(DEMO, 'dist/demo-backend.js'), path.join(pub, 'demo-backend.js'));
 await writeFile(path.join(pub, 'demo-fixtures.json'), fixturesJson);
+// The manifest is JSON in public/, so the source patch above never touched it: without this the installed
+// icon would open https://<owner>.github.io/app (the Pages root, not this demo) and its icons would 404.
+const manifestPath = path.join(pub, 'manifest.webmanifest');
+if (BASE && existsSync(manifestPath)) {
+  const m = JSON.parse(await readFile(manifestPath, 'utf8'));
+  const under = (u) => (typeof u === 'string' && u.startsWith('/') && !u.startsWith(BASE + '/') && u !== BASE ? BASE + u : u);
+  for (const k of ['id', 'start_url', 'scope']) if (m[k]) m[k] = under(m[k]);
+  if (Array.isArray(m.icons)) m.icons = m.icons.map((i) => ({ ...i, src: under(i.src) }));
+  await writeFile(manifestPath, JSON.stringify(m, null, 2) + '\n');
+  log(`manifest start_url ${m.start_url}, scope ${m.scope}`);
+}
 await writeFile(
   path.join(pub, 'sw.js'),
   `/* Static demo: no offline cache. Removes any previously installed JETPOOL service worker. */\nself.addEventListener('install', () => self.skipWaiting());\nself.addEventListener('activate', (e) => e.waitUntil(self.registration.unregister().then(() => self.clients.matchAll()).then((cs) => cs.forEach((c) => c.navigate && c.navigate(c.url)))));\n`,

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   APP_INSTALL_PATH,
   androidChromeIntent,
+  basePathOf,
   detectEnv,
   escapeTarget,
   installPlan,
@@ -74,10 +75,21 @@ describe('escape target is never an open redirect', () => {
     expect(escapeTarget(origin)).toBe('https://jetpool.co.kr/app?install=1');
     expect(APP_INSTALL_PATH).toBe('/app?install=1');
   });
+  it('carries the deployment subpath, which routing adds for itself but a hand-built URL does not', () => {
+    // The static demo is served from https://<owner>.github.io/z — an escape URL without /z is a 404.
+    expect(basePathOf('https://sooasim.github.io/z')).toBe('/z');
+    expect(basePathOf('https://jetpool.co.kr/')).toBe('');
+    expect(basePathOf('not a url')).toBe('');
+    expect(escapeTarget('https://sooasim.github.io', APP_INSTALL_PATH, '/z')).toBe('https://sooasim.github.io/z/app?install=1');
+    // Already prefixed, or no prefix at all: unchanged either way.
+    expect(escapeTarget('https://sooasim.github.io', '/z/app?install=1', '/z')).toBe('https://sooasim.github.io/z/app?install=1');
+    expect(escapeTarget(origin, APP_INSTALL_PATH, '')).toBe('https://jetpool.co.kr/app?install=1');
+  });
   it('refuses to hand another origin, or a non-web scheme, to the external browser', () => {
     expect(() => escapeTarget(origin, 'https://phishing.example/login')).toThrow(/another origin/);
     expect(() => escapeTarget(origin, '//phishing.example/login')).toThrow(/another origin/);
     expect(() => escapeTarget(origin, 'javascript:alert(1)')).toThrow(/unsupported scheme/);
+    expect(() => escapeTarget(origin, 'https://phishing.example/login', '/z')).toThrow(/another origin/);
   });
 });
 

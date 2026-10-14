@@ -7,6 +7,7 @@ import { Alert, Button, Icon } from '@/components/ui';
 import {
   APP_INSTALL_PATH,
   androidChromeIntent,
+  basePathOf,
   detectEnv,
   escapeTarget,
   installPlan,
@@ -15,6 +16,7 @@ import {
   type AppEnv,
   type InstallPlan,
 } from '@/lib/inapp';
+import { SITE_URL } from '@/lib/env';
 
 /**
  * Pre-React capture of `beforeinstallprompt`.
@@ -109,7 +111,9 @@ export function AppInstall({ variant = 'home' }: { variant?: 'home' | 'page' }) 
   const target = useMemo(() => {
     if (!origin) return '';
     try {
-      return escapeTarget(origin, APP_INSTALL_PATH);
+      // The reader's own origin, with the deployment's subpath from SITE_URL: the static demo lives under /z,
+      // and an escape URL without it would hand the external browser a 404.
+      return escapeTarget(origin, APP_INSTALL_PATH, basePathOf(SITE_URL));
     } catch {
       return '';
     }

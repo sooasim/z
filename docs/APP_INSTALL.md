@@ -38,6 +38,15 @@
 - **중계 대상은 항상 우리 origin 입니다.** 임의 URL 을 받아 넘겨 주는 중계 페이지는 피싱용 open redirect 가
   됩니다. `escapeTarget()` 이 origin 과 스킴을 검사하고, 어긋나면 URL 을 만들지 않고 던집니다.
 
+### 배포 경로(basePath)
+
+정적 데모는 `https://sooasim.github.io/z/` 처럼 **하위 경로**에서 돌아갑니다. 라우팅은 next/link 와 라우터가
+알아서 `/z` 를 붙여 주지만, 전환 URL 은 우리가 손으로 만들어 **다른 브라우저에 넘기는** 절대 주소라 직접 붙여야
+합니다. `basePathOf(SITE_URL)` 이 그 경로를 꺼내고 `escapeTarget()` 이 앞에 붙입니다(이미 붙어 있으면 그대로).
+manifest 는 `public/` 의 JSON 이라 소스 패치 대상이 아니므로 `scripts/pages/build.mjs` 가 `id`·`start_url`·
+`scope`·아이콘 경로를 basePath 기준으로 다시 씁니다 — 그렇게 하지 않으면 설치된 아이콘이 Pages 루트를 열고
+아이콘은 404 가 됩니다.
+
 ### `beforeinstallprompt` 는 React 보다 먼저 온다
 
 Chromium 은 이 이벤트를 **한 번만** 발생시키고 재생할 수 없습니다. 컴포넌트가 마운트된 뒤에 리스너를 붙이면
@@ -85,7 +94,8 @@ cd apps/web && npx vitest run test/inapp.test.ts test/bff.test.ts   # 판정·in
 cd apps/api && npx vitest run test/identity.test.ts                 # 세션 만료가 미끄러지는지
 ```
 
-브라우저 검증은 로컬 스택(`scripts/dev-up.sh`)에 Playwright 로 붙여서 했습니다: 카카오톡 Android/iOS UA 에서
+브라우저 검증은 로컬 스택(`scripts/dev-up.sh`)과, 실제로 배포되는 산출물(`node scripts/pages/build.mjs` →
+`node scripts/pages/serve.mjs`, GitHub Pages 와 같은 하위 경로·트레일링 슬래시 동작)에 Playwright 로 붙여서 했습니다: 카카오톡 Android/iOS UA 에서
 나오는 전환 링크 문자열, iOS 실패 안내, Chrome/Safari 수동 안내, standalone 판정, manifest 와 아이콘, 그리고
 로그인 → 앱 재실행 → 오래된 세션 → 로그아웃 전 과정. **다만 Chrome 자신의 설치 판정 파이프라인(engagement
 heuristic)은 자동화 프로필에서 돌지 않습니다** — 그래서 원탭 설치 경로는 Chrome 과 같은 모양의
