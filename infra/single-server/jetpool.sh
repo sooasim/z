@@ -6,6 +6,7 @@
 #   ./infra/single-server/jetpool.sh deploy                        # build images, migrate, start, smoke
 #   ./infra/single-server/jetpool.sh seed                           # demo content + demo logins
 #   ./infra/single-server/jetpool.sh logins                         # print the generated logins
+#   ./infra/single-server/jetpool.sh doctor                          # why isn't it opening? run this
 #   ./infra/single-server/jetpool.sh ps | logs [svc] | smoke | backup | update | down
 #
 # `init` is safe to re-run: it rewrites the public addresses and never regenerates a secret that already
@@ -28,7 +29,7 @@ dc() {
 }
 
 # ------------------------------------------------------------------ env file helpers
-get_env() { awk -F= -v k="$1" '$1==k{sub(/^[^=]*=/,""); print; exit}' "$ENV_FILE"; }
+get_env() { [[ -f "$ENV_FILE" ]] || return 0; awk -F= -v k="$1" '$1==k{sub(/^[^=]*=/,""); print; exit}' "$ENV_FILE"; }
 
 set_env() { # <key> <value> — replaces the first assignment, appends when absent
   local tmp; tmp="$(mktemp)"
@@ -242,6 +243,221 @@ cmd_smoke() {
   fi
 }
 
+# ------------------------------------------------------------------ doctor
+# Answers "it's deployed but nothing opens from the internet" without guessing. Every check is
+# independent and none of them die, so this runs before init, before deploy, and on a half-set-up box.
+# The verdict at the end names the first thing that is actually wrong and what to do about it.
+cmd_doctor() {
+  local fail=() warnings=()
+  local okmark='  \033[32mok\033[0m  '
+  ok()   { printf "$okmark%s\n" "$*"; }
+  bad()  { printf '  \033[31mBAD\033[0m %s\n' "$*"; fail+=("$*"); }
+  note() { printf '  \033[33m??\033[0m  %s\n' "$*"; warnings+=("$*"); }
+  info() { printf '      %s\n' "$*"; }
+
+  # dig is not on a minimal Ubuntu; getent uses the same resolver and is always there.
+  resolve() { # <name> -> one address per line
+    if command -v dig >/dev/null 2>&1; then dig +short +time=3 +tries=1 "$1" A 2>/dev/null | grep -E '^[0-9.]+$'
+    else getent ahostsv4 "$1" 2>/dev/null | awk '{print $1}' | sort -u; fi
+  }
+
+  bold "1. repository checkout"
+  local branch sha
+  branch="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+  sha="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo '?')"
+  info "branch $branch @ $sha  ($ROOT)"
+  if [[ -f "$COMPOSE_FILE" ]]; then
+    ok "infra/single-server/ is present"
+  else
+    bad "infra/single-server/docker-compose.prod.yml is missing — this checkout does not have the deployment files"
+    info "the single-server setup lives on branch claude/youthful-darwin-fueqrx (PR #18, not merged yet):"
+    info "  git fetch origin claude/youthful-darwin-fueqrx && git checkout claude/youthful-darwin-fueqrx"
+  fi
+
+  bold "2. docker"
+  if command -v docker >/dev/null 2>&1; then ok "docker $(docker --version 2>/dev/null | awk '{print $3}' | tr -d ,)"
+  else bad "docker is not installed — run: sudo bash infra/single-server/bootstrap.sh"; fi
+  if docker compose version >/dev/null 2>&1; then ok "compose plugin present"
+  else bad "the docker compose plugin is missing — run bootstrap.sh"; fi
+  if docker info >/dev/null 2>&1; then ok "docker daemon reachable"
+  else bad "cannot talk to the docker daemon — 'sudo systemctl start docker', and log out/in once after bootstrap (docker group)"; fi
+
+  bold "3. configuration"
+  local mode root_domain
+  if [[ -f "$ENV_FILE" ]]; then
+    mode="$(get_env DEPLOY_MODE)"; root_domain="$(get_env ROOT_DOMAIN)"
+    ok ".env present — DEPLOY_MODE=${mode:-?} ROOT_DOMAIN=${root_domain:-?}"
+    info "web $(get_env PUBLIC_WEB_URL)  ·  api $(get_env PUBLIC_API_URL)"
+    if [[ "$mode" == "ip" ]]; then
+      note "this box is configured for IP mode: there is NO TLS and no vhost for a domain, so https://<domain> cannot work"
+      info "after the DNS records exist, switch over with:"
+      info "  ./infra/single-server/jetpool.sh init --domain <도메인> --email <메일> && ./infra/single-server/jetpool.sh deploy"
+    fi
+  else
+    bad "no $ENV_FILE — nothing has been configured yet; run 'jetpool.sh init --domain <도메인> --email <메일>'"
+    mode=""; root_domain=""
+  fi
+
+  bold "4. containers"
+  if docker info >/dev/null 2>&1 && [[ -f "$ENV_FILE" && -f "$COMPOSE_FILE" ]]; then
+    local ps_out
+    ps_out="$(dc ps --format '{{.Service}}\t{{.State}}\t{{.Status}}' 2>/dev/null || true)"
+    if [[ -z "$ps_out" ]]; then
+      bad "no containers for this project are running — 'jetpool.sh deploy' has not completed"
+    else
+      printf '%s\n' "$ps_out" | sed 's/^/      /'
+      local svc state
+      while IFS=$'\t' read -r svc state _; do
+        [[ -z "${svc:-}" ]] && continue
+        case "$state" in
+          running) ;;
+          restarting) bad "service '$svc' is restarting in a loop — see 'jetpool.sh logs $svc'" ;;
+          exited|dead) [[ "$svc" == "migrate" || "$svc" == "minio-init" || "$svc" == "seed" ]] \
+            && ok "'$svc' is a one-shot job, exited is normal" \
+            || bad "service '$svc' is not running ($state) — see 'jetpool.sh logs $svc'" ;;
+          *) note "service '$svc' state: $state" ;;
+        esac
+      done <<< "$ps_out"
+      grep -q $'\trunning' <<< "$ps_out" && ok "containers are up"
+    fi
+  else
+    note "container check skipped (needs a reachable docker daemon, .env and the compose file)"
+  fi
+
+  bold "5. the app, from inside the server"
+  local code
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://127.0.0.1:4000/health 2>/dev/null || true)"
+  [[ "$code" == "200" ]] && ok "api /health 200 on 127.0.0.1:4000" \
+    || bad "api /health returned ${code:-no response} on 127.0.0.1:4000 — the API itself is not serving ('jetpool.sh logs api')"
+  if [[ -n "${root_domain:-}" ]]; then
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 -H "Host: $root_domain" http://127.0.0.1/ 2>/dev/null || true)"
+    [[ "$code" == "200" ]] && ok "web through caddy on port 80 (Host: $root_domain) → 200" \
+      || bad "caddy on port 80 returned ${code:-no response} for Host $root_domain ('jetpool.sh logs caddy')"
+  fi
+
+  bold "6. who is listening on 80/443"
+  if command -v ss >/dev/null 2>&1; then
+    local listeners; listeners="$(ss -tlnH 2>/dev/null | awk '{print $4}' | grep -E ':(80|443)$' || true)"
+    if [[ -n "$listeners" ]]; then
+      printf '%s\n' "$listeners" | sed 's/^/      /'
+      ok "something is bound to 80/443"
+    else
+      bad "nothing is listening on 80 or 443 — caddy is not up"
+    fi
+    for other in nginx apache2 httpd; do
+      pgrep -x "$other" >/dev/null 2>&1 && bad "$other is running on this host and will hold 80/443 — stop it: sudo systemctl disable --now $other"
+    done
+  else
+    note "port-listener check skipped (ss not available)"
+  fi
+
+  bold "7. host firewall (ufw)"
+  if command -v ufw >/dev/null 2>&1; then
+    local ufw_status; ufw_status="$(ufw status 2>/dev/null || echo 'need root')"
+    if grep -qi 'inactive' <<< "$ufw_status"; then
+      ok "ufw inactive (the cloud security group is then the only filter)"
+    elif grep -qi 'need root\|ERROR' <<< "$ufw_status"; then
+      note "could not read ufw status without root — re-run with sudo to include this check"
+    else
+      grep -qE '(^|[^0-9])80($|[^0-9])' <<< "$ufw_status" && ok "ufw allows 80" || bad "ufw does NOT allow 80 — sudo ufw allow 80/tcp"
+      grep -qE '(^|[^0-9])443($|[^0-9])' <<< "$ufw_status" && ok "ufw allows 443" || bad "ufw does NOT allow 443 — sudo ufw allow 443/tcp"
+    fi
+  else
+    ok "ufw not installed (nothing filtering on the host)"
+  fi
+
+  bold "8. addresses and DNS"
+  local nic_ip public_ip
+  nic_ip="$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | paste -sd, - || true)"
+  info "this server's own NIC: ${nic_ip:-unknown}"
+  case "${nic_ip:-}" in
+    10.*|192.168.*|172.1[6-9].*|172.2*.*|172.3[01].*)
+      info "that is a private address — normal behind a cloud NAT; the public IP is mapped to it, not configured here" ;;
+  esac
+  for svc in https://api.ipify.org https://checkip.amazonaws.com https://ifconfig.me/ip; do
+    public_ip="$(curl -fsS --max-time 6 "$svc" 2>/dev/null | tr -d '[:space:]' || true)"
+    [[ "$public_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && break || public_ip=""
+  done
+  if [[ -n "$public_ip" ]]; then
+    ok "this server's public IP, as the internet sees it: $public_ip"
+  else
+    note "could not determine the public IP from this server (no outbound HTTP?) — compare the DNS answers below against the IP in your cloud console by hand"
+  fi
+
+  if [[ -n "${root_domain:-}" && "${mode:-}" == "domain" ]]; then
+    local name answers
+    for name in "$root_domain" "www.$root_domain" "api.$root_domain" "s3.$root_domain"; do
+      answers="$(resolve "$name" | paste -sd, - || true)"
+      if [[ -z "$answers" ]]; then
+        bad "$name does not resolve — the A record is missing (or DNS has not propagated yet)"
+      elif [[ -n "$public_ip" && "$answers" == "$public_ip" ]]; then
+        ok "$name → $answers"
+      elif [[ -n "$public_ip" ]]; then
+        bad "$name → $answers but this server is $public_ip — the A record points elsewhere (or a CDN/proxy such as Cloudflare sits in front; turn its proxy off until HTTPS works)"
+      else
+        info "$name → $answers (check this equals the public IP in your console)"
+      fi
+    done
+    # Cloudflare's proxy terminates TLS itself and breaks Caddy's HTTP-01 issuance.
+    local ns; ns="$(command -v dig >/dev/null 2>&1 && dig +short +time=3 NS "$root_domain" 2>/dev/null | tr 'A-Z' 'a-z' | paste -sd, - || true)"
+    [[ "$ns" == *cloudflare* ]] && note "nameservers are Cloudflare ($ns): set every record to 'DNS only' (grey cloud) until HTTPS works, or issuance fails"
+  elif [[ -n "${root_domain:-}" ]]; then
+    note "DNS checks skipped — DEPLOY_MODE is '${mode:-unset}', so no domain is configured to check"
+  fi
+
+  bold "9. certificates"
+  if ! docker info >/dev/null 2>&1 || [[ ! -f "$ENV_FILE" || ! -f "$COMPOSE_FILE" ]]; then
+    note "certificate check skipped (needs a reachable docker daemon, .env and the compose file)"
+  else
+    local caddy_log
+    caddy_log="$(dc logs --tail 400 caddy 2>/dev/null || true)"
+    if [[ -z "$caddy_log" ]]; then
+      note "no caddy logs yet"
+    elif grep -qiE 'certificate obtained|obtained certificate|successfully' <<< "$caddy_log"; then
+      ok "caddy reports a certificate was obtained"
+    elif grep -qiE 'could not get certificate|obtain certificate|acme|challenge failed|timeout|connection refused' <<< "$caddy_log"; then
+      bad "caddy is failing to get a certificate — the ACME errors below almost always mean port 80 is not reachable from the internet"
+      grep -iE 'error|challenge|acme|obtain' <<< "$caddy_log" | tail -8 | sed 's/^/      /'
+    else
+      note "caddy has not logged a certificate result yet"
+    fi
+  fi
+
+  bold "10. resources"
+  info "disk:   $(df -h "$ROOT" 2>/dev/null | tail -1 | awk '{print $4" free of "$2}')"
+  info "memory: $(free -h 2>/dev/null | awk '/^Mem:/{print $7" available of "$2}')"
+  info "swap:   $(free -h 2>/dev/null | awk '/^Swap:/{print $2" total"}')"
+  local avail; avail="$(df -BG --output=avail "$ROOT" 2>/dev/null | tail -1 | tr -dc '0-9' || true)"
+  [[ -n "$avail" && "$avail" -lt 3 ]] && bad "only ${avail}GB disk free — builds and containers fail at this point ('jetpool.sh prune')"
+
+  echo
+  if [[ ${#fail[@]} -eq 0 ]]; then
+    bold "Verdict"
+    if [[ "${mode:-}" == "domain" ]]; then
+      echo "  Everything checkable from inside the server is healthy, and DNS points here."
+      echo "  If the site still does not open from outside, what is left is OUTSIDE this server:"
+      echo "    the cloud security group must allow inbound TCP 80 and 443 from 0.0.0.0/0."
+      echo "  Test from your own PC (not from the server):"
+      echo "    curl -I http://${root_domain:-<도메인>}"
+      echo "    curl -I https://${root_domain:-<도메인>}"
+      echo "  A hang or 'connection timed out' = the security group. 'connection refused' = nothing listening."
+    else
+      echo "  The stack is healthy but this box is not configured for a domain (DEPLOY_MODE=${mode:-unset})."
+      echo "  Run: ./infra/single-server/jetpool.sh init --domain <도메인> --email <메일> && ./infra/single-server/jetpool.sh deploy"
+    fi
+  else
+    bold "Verdict — fix these, first one first"
+    local i=1 f
+    for f in "${fail[@]}"; do printf '  %d. %s\n' "$i" "$f"; i=$((i + 1)); done
+  fi
+  if [[ ${#warnings[@]} -gt 0 ]]; then
+    echo
+    bold "Worth knowing"
+    for f in "${warnings[@]}"; do printf '  - %s\n' "$f"; done
+  fi
+  echo
+}
+
 cmd_backup() {
   cmd_check
   mkdir -p "$HERE/backups"
@@ -263,6 +479,7 @@ case "${1:-help}" in
   seed)    cmd_seed ;;
   logins)  cmd_logins ;;
   smoke)   cmd_smoke ;;
+  doctor)  cmd_doctor ;;
   backup)  cmd_backup ;;
   ps)      dc ps ;;
   logs)    shift; dc logs -f --tail 200 "$@" ;;

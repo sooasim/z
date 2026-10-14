@@ -188,6 +188,7 @@ CSP에 박히므로 `up` 이 아니라 `deploy` 여야 합니다). IP 모드는 
 ## 평소 운영
 
 ```bash
+./infra/single-server/jetpool.sh doctor          # 안 열릴 때 원인 진단 (제일 먼저)
 ./infra/single-server/jetpool.sh ps              # 상태
 ./infra/single-server/jetpool.sh logs api        # 로그 따라가기 (web / worker / caddy / postgres …)
 ./infra/single-server/jetpool.sh smoke           # 헬스 재확인
@@ -242,6 +243,26 @@ CSP에 박히므로 `up` 이 아니라 `deploy` 여야 합니다). IP 모드는 
 ---
 
 ## 문제가 생기면
+
+### 먼저 이것부터
+
+```bash
+./infra/single-server/jetpool.sh doctor
+```
+
+체크아웃·Docker·`.env`·컨테이너 상태·서버 내부에서의 `/health`·80/443 리스너·ufw·**DNS 레코드 4개가 이
+서버의 공인 IP를 가리키는지**·인증서 발급 로그·디스크/메모리를 순서대로 점검하고, 마지막에 **무엇을
+먼저 고쳐야 하는지** 찍어 줍니다. 서버 안에서 모두 정상인데 밖에서 안 열리면 남은 건 거의 항상 클라우드
+**보안 그룹의 80/443**이며, doctor가 그렇게 말해 줍니다.
+
+내부는 정상이라고 나왔을 때, **본인 PC에서**(서버가 아니라) 확인:
+
+```bash
+curl -I http://도메인
+curl -I https://도메인
+```
+
+멈춘 채 `timed out` → 보안 그룹. `connection refused` → 서버에서 아무것도 안 듣고 있음.
 
 **인증서가 발급되지 않음 / `https` 가 안 열림**
 ```bash

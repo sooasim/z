@@ -89,6 +89,7 @@ sudo bash infra/single-server/bootstrap.sh                       # docker, swap,
 ./infra/single-server/jetpool.sh init --domain example.com --email you@example.com
 ./infra/single-server/jetpool.sh deploy                          # build → migrate → start → smoke
 ./infra/single-server/jetpool.sh seed                            # optional demo content + logins
+./infra/single-server/jetpool.sh doctor                          # nothing opens? this says why
 ```
 For the managed targets (ECS / k8s / Fly) use `infra/scripts/deploy.sh` from the release workflows instead.
 
