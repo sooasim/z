@@ -10,6 +10,7 @@ import { GuideCard, PropertyCard } from '@/components/cards';
 import { TourCard } from '@/components/public/TourCard';
 import { Icon, type IconName } from '@/components/ui';
 import { HomeRail, RailNav } from '@/components/public/HomeRail';
+import { AppInstall } from '@/components/public/AppInstall';
 import s from '@/components/public/public.module.css';
 import { charterPhotos, cityPhoto, heroPhotos, useMediaMap } from '@/lib/media';
 import { postcardFor } from '@/lib/art';
@@ -265,6 +266,7 @@ export default function HomeView() {
       )}
       <BrandBlocks cfg={cfg} />
       <TrustRow cfg={cfg} />
+      <AppInstall />
     </>
   );
 }
