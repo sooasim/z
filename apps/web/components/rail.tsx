@@ -7,8 +7,8 @@ import { useI18n } from '@/lib/i18n';
 import { ApiError } from '@/lib/errors';
 import { useAuth } from '@/lib/auth';
 import { CardSkeleton } from './ui/skeleton';
-import { Icon } from './ui/icons';
 import { HeadingLevel } from './ui/heading';
+import { RailPager } from './rail-pager';
 
 /** Horizontal scroll-snap discovery rail. Errors degrade to a quiet inline note so the home page never breaks. */
 export function Rail({ title, subtitle, path, query, render, href, emptyText, fallback, requireAuth }: { title: string; subtitle?: string; path: string; query?: Record<string, any>; render: (row: any) => ReactNode; href?: string; emptyText?: string; fallback?: ReactNode; requireAuth?: boolean }) {
@@ -18,7 +18,6 @@ export function Rail({ title, subtitle, path, query, render, href, emptyText, fa
   const st = useApi<any>(skip ? null : path, { query });
   const rows = items(st.data);
   const ref = useRef<HTMLDivElement>(null);
-  const scroll = (d: number) => ref.current?.scrollBy({ left: d * ref.current.clientWidth * 0.9, behavior: 'smooth' });
   return (
     <section className="section" aria-label={title}>
       <div className="rail-head">
@@ -32,16 +31,8 @@ export function Rail({ title, subtitle, path, query, render, href, emptyText, fa
               {L('전체 보기', 'See all')}
             </Link>
           )}
-          {rows.length > 4 && (
-            <div className="rail-nav">
-              <button className="btn icon sm" onClick={() => scroll(-1)} aria-label={L('이전', 'Previous')}>
-                <Icon name="left" size={16} />
-              </button>
-              <button className="btn icon sm" onClick={() => scroll(1)} aria-label={L('다음', 'Next')}>
-                <Icon name="right" size={16} />
-              </button>
-            </div>
-          )}
+          {/* The pager measures the rail itself and hides when nothing overflows, so no row-count guess here. */}
+          <RailPager target={ref} label={`${title} — ${L('목록 넘기기', 'Scroll list')}`} />
         </div>
       </div>
       {requireAuth && ready && !user ? (
@@ -63,7 +54,7 @@ export function Rail({ title, subtitle, path, query, render, href, emptyText, fa
         )
       ) : (
         <HeadingLevel level={3}>
-          <div className="rail" ref={ref} tabIndex={0} aria-label={`${title} — ${L('좌우로 스크롤', 'scroll horizontally')}`}>
+          <div className="rail has-pager" ref={ref} tabIndex={0} aria-label={`${title} — ${L('좌우로 스크롤', 'scroll horizontally')}`}>
             {rows.slice(0, 16).map((r, i) => (
               <div key={r.id ?? i}>{render(r)}</div>
             ))}

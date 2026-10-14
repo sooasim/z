@@ -6,6 +6,7 @@ import { items } from '@/lib/shape';
 import { useI18n } from '@/lib/i18n';
 import { ApiError } from '@/lib/errors';
 import { CardSkeleton, HeadingLevel, Icon, type IconName } from '@/components/ui';
+import { RailPager } from '@/components/rail-pager';
 import s from './public.module.css';
 
 export interface Promo {
@@ -15,21 +16,11 @@ export interface Promo {
   cta: { href: string; label: string };
 }
 
-/** Prev/next buttons for a horizontal `.rail` (desktop only, like the shared Rail). */
-export function RailNav({ target, label }: { target: React.RefObject<HTMLDivElement | null>; label?: string }) {
-  const { L } = useI18n();
-  const scroll = (d: number) => target.current?.scrollBy({ left: d * target.current.clientWidth * 0.9, behavior: 'smooth' });
-  return (
-    <div className="rail-nav" role="group" aria-label={label ?? L('목록 넘기기', 'Scroll list')}>
-      <button type="button" className="btn icon sm" onClick={() => scroll(-1)} aria-label={L('이전', 'Previous')}>
-        <Icon name="left" size={16} />
-      </button>
-      <button type="button" className="btn icon sm" onClick={() => scroll(1)} aria-label={L('다음', 'Next')}>
-        <Icon name="right" size={16} />
-      </button>
-    </div>
-  );
-}
+/**
+ * Slide controls for a horizontal `.rail`. Kept under the old name so the home page's own rails keep
+ * importing one thing; the behaviour is RailPager's — arrows plus page position, desktop only.
+ */
+export { RailPager as RailNav } from '@/components/rail-pager';
 
 /**
  * Discovery rail like components/rail.tsx, but a short result (fewer than 3 items) becomes a grid with a promotional
@@ -66,7 +57,7 @@ export function HomeRail({ title, subtitle, path, query, render, href, promo }: 
               {L('전체 보기', 'See all')}
             </Link>
           )}
-          {rows.length > 4 && <RailNav target={ref} />}
+          <RailPager target={ref} label={`${title} — ${L('목록 넘기기', 'Scroll list')}`} />
         </div>
       </div>
       {st.loading ? (
@@ -87,7 +78,7 @@ export function HomeRail({ title, subtitle, path, query, render, href, promo }: 
               {promoCard}
             </div>
           ) : (
-            <div className="rail" ref={ref} tabIndex={0} aria-label={`${title} — ${L('좌우로 스크롤', 'scroll horizontally')}`}>
+            <div className="rail has-pager" ref={ref} tabIndex={0} aria-label={`${title} — ${L('좌우로 스크롤', 'scroll horizontally')}`}>
               {rows.slice(0, 16).map((r, i) => (
                 <div key={r.id ?? i}>{render(r)}</div>
               ))}

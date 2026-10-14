@@ -1,0 +1,62 @@
+# JETPOOL edge — domain mode WITH object storage (STORAGE_MODE=minio). Same as Caddyfile plus the
+# s3.<domain> host. Only use this when MinIO is actually running (the `minio` compose profile) and you
+# have confirmed you can pull its image; otherwise s3.<domain> gets a certificate and answers nothing.
+#
+# Four hostnames, all driven by ROOT_DOMAIN from the env file:
+#   example.com       → web      (www.example.com redirects here)
+#   api.example.com   → api
+#   s3.example.com    → MinIO    (presigned uploads AND public media; SigV4 signs this exact host)
+# Using a sub-domain instead of an apex? Replace {$ROOT_DOMAIN} with it and delete the www block.
+
+{
+	email {$ACME_EMAIL}
+	# Caddy's admin API stays on the container's loopback; it is never published.
+}
+
+(common) {
+	encode zstd gzip
+	header {
+		-Server
+		# The apps set their own CSP/HSTS; don't duplicate them here.
+	}
+	log {
+		output stdout
+		format json
+	}
+}
+
+{$ROOT_DOMAIN} {
+	import common
+	reverse_proxy web:3000
+}
+
+www.{$ROOT_DOMAIN} {
+	import common
+	redir https://{$ROOT_DOMAIN}{uri} permanent
+}
+
+api.{$ROOT_DOMAIN} {
+	import common
+
+	# docs/OPERATIONS.md: /metrics and /docs are scraped from inside only, never from the edge.
+	@internal_only path /metrics /metrics/* /docs /docs/*
+	respond @internal_only 404
+
+	reverse_proxy api:4000
+}
+
+s3.{$ROOT_DOMAIN} {
+	import common
+
+	# Media uploads go straight from the browser to MinIO through here (STAY-02 presigned PUT).
+	# 200 MB covers the largest allowed video; raise it only together with the API's own limits.
+	request_body {
+		max_size 200MB
+	}
+
+	# The MinIO console is an admin surface — it must not be reachable from the internet.
+	@console path /minio/* /api/v1/*
+	respond @console 404
+
+	reverse_proxy minio:9000
+}

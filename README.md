@@ -80,6 +80,24 @@ pnpm dev:web                         # http://localhost:3000
 docker compose up -d redis meilisearch minio minio-init mailpit   # optional backing services
 ```
 
+### Option C — one server, public on the internet
+A single Ubuntu 22.04 box (2 vCPU / 8 GB / 50 GB is enough) running the whole stack behind Caddy, with
+Let's Encrypt certificates it renews itself. Step-by-step, including DNS:
+**`docs/runbooks/single-server-deploy.md`**.
+```bash
+# one command: bootstrap → init → deploy → seed (idempotent; re-run it if ssh drops)
+sudo bash infra/single-server/install.sh --domain example.com --email you@example.com --seed
+```
+or step by step:
+```bash
+sudo bash infra/single-server/bootstrap.sh                       # docker, swap, firewall, UTC clock
+./infra/single-server/jetpool.sh init --domain example.com --email you@example.com
+./infra/single-server/jetpool.sh deploy                          # build → migrate → start → smoke
+./infra/single-server/jetpool.sh seed                            # optional demo content + logins
+./infra/single-server/jetpool.sh doctor                          # nothing opens? this says why
+```
+For the managed targets (ECS / k8s / Fly) use `infra/scripts/deploy.sh` from the release workflows instead.
+
 The dev seed prints the member logins it created. The **admin console is at `/admin/login`** — login handle `admin`,
 password `admin1234` (override with `SEED_ADMIN_USERNAME` / `SEED_ADMIN_PASSWORD`; `seed-dev` refuses to run with
 `NODE_ENV=production`). Staff routes need an AAL2 session, so enroll an authenticator on first sign-in. The main
@@ -115,7 +133,10 @@ default `JWT_SECRET`/`DATA_ENCRYPTION_KEY`, `PAYMENT_PROVIDER=MOCK` or `OAUTH_MO
 | `OUTBOX_POLL_MS` | `1000` | worker outbox polling |
 | `LOG_LEVEL` | `info` | pino log level |
 
-Web: `NEXT_PUBLIC_API_URL` (inlined at build time — build one image per environment).
+Web: `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_MEDIA_ORIGIN` (inlined at build time — build one image per
+environment). `NEXT_PUBLIC_MEDIA_ORIGIN` is the object-storage origin the browser uploads to directly; it
+has to be in the page's CSP or presigned uploads are blocked. Leave it unset only when media is served
+from the web origin itself.
 
 ## Tests
 

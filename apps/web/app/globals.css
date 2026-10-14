@@ -795,6 +795,24 @@ body:has(.popover) .map-fab, body:has(.overlay) .map-fab { display: none; }
 .rail-nav { display: none; gap: 8px; }
 @media (min-width: 1024px) { .rail-nav { display: flex; } }
 
+/* Slide-style pager for a `.rail` — arrows with the page positions between them. Desktop only: a touch
+   device swipes, and controls would just cover cards. See components/rail-pager.tsx. */
+.rail-pager { display: none; align-items: center; gap: 8px; }
+@media (min-width: 1024px) { .rail-pager { display: flex; } }
+.rail-pager .btn.icon:disabled { opacity: 0.35; cursor: default; }
+.rail-pages, .rail-dots { display: flex; align-items: center; gap: 4px; }
+.rail-page { min-width: 28px; height: 28px; padding: 0 6px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text-muted); font: inherit; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; cursor: pointer; transition: background var(--dur-fast), color var(--dur-fast); }
+.rail-page:hover { background: var(--surface-2); color: var(--text); }
+.rail-page.on { background: var(--navy-900); color: #fff; font-weight: 600; }
+.rail-dots .rail-page { min-width: 0; width: 8px; height: 8px; padding: 0; border-radius: 50%; background: var(--surface-3); }
+.rail-dots .rail-page:hover { background: var(--text-muted); }
+.rail-dots .rail-page.on { background: var(--navy-900); }
+/* The scrollbar is redundant noise once the pager shows position, but only where the pager exists. */
+@media (min-width: 1024px) {
+  .rail.has-pager { scrollbar-width: none; }
+  .rail.has-pager::-webkit-scrollbar { display: none; }
+}
+
 .lcard { position: relative; display: grid; gap: 10px; color: inherit; text-decoration: none; min-width: 0; }
 .lcard .media { position: relative; aspect-ratio: 20 / 19; border-radius: var(--r-lg); overflow: hidden; background: var(--surface-3); isolation: isolate; }
 .lcard .track { display: flex; height: 100%; transition: transform var(--dur-slow) var(--ease-out); }

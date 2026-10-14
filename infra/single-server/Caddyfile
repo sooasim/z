@@ -1,0 +1,55 @@
+# JETPOOL edge — domain mode. Caddy terminates TLS with its own Let's Encrypt certificates (HTTP-01),
+# so port 80 must stay reachable from the internet or renewal fails.
+#
+# Three hostnames, all driven by ROOT_DOMAIN from the env file:
+#   example.com       → web      (www.example.com redirects here)
+#   api.example.com   → api      (uploads and public media too, in local storage mode)
+# Using a sub-domain instead of an apex? Replace {$ROOT_DOMAIN} with it and delete the www block.
+#
+# STORAGE_MODE=minio needs a fourth host for object storage — use Caddyfile.minio instead of this file
+# (jetpool.sh init picks it). With local storage there is nothing to serve on s3.<domain>, and defining
+# it here anyway would make Caddy request a certificate for a host that answers nothing.
+
+{
+	email {$ACME_EMAIL}
+	# Caddy's admin API stays on the container's loopback; it is never published.
+}
+
+(common) {
+	encode zstd gzip
+	header {
+		-Server
+		# The apps set their own CSP/HSTS; don't duplicate them here.
+	}
+	log {
+		output stdout
+		format json
+	}
+}
+
+{$ROOT_DOMAIN} {
+	import common
+	reverse_proxy web:3000
+}
+
+www.{$ROOT_DOMAIN} {
+	import common
+	redir https://{$ROOT_DOMAIN}{uri} permanent
+}
+
+api.{$ROOT_DOMAIN} {
+	import common
+
+	# docs/OPERATIONS.md: /metrics and /docs are scraped from inside only, never from the edge.
+	@internal_only path /metrics /metrics/* /docs /docs/*
+	respond @internal_only 404
+
+	# In local storage mode the browser PUTs uploads to this host (/v1/media/dev-upload/:id) and public
+	# media is served from it (/media-dev/public/*). 200 MB covers the largest allowed video; raise it
+	# only together with the API's own limits.
+	request_body {
+		max_size 200MB
+	}
+
+	reverse_proxy api:4000
+}

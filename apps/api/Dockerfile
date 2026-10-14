@@ -51,6 +51,10 @@ COPY --from=build --chown=node:node /app/apps/api/dist ./apps/api/dist
 COPY --chown=node:node infra/docker/api-entrypoint.sh /usr/local/bin/jetpool
 COPY --chown=node:node infra/docker/healthcheck.mjs /usr/local/lib/jetpool-healthcheck.mjs
 RUN chmod 0555 /usr/local/bin/jetpool
+# Scratch/media directory. Deployments that run without object storage point TMPDIR here and mount a
+# volume on it, so the disk-backed media adapter persists; it must be owned by `node` in the IMAGE,
+# because an empty named volume inherits the ownership of the directory it is mounted over.
+RUN mkdir -p /data && chown node:node /data
 ARG GIT_SHA=unknown
 LABEL org.opencontainers.image.title="jetpool-api" \
       org.opencontainers.image.source="https://github.com/jetpool/jetpool" \

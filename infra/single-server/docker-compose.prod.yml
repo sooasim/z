@@ -1,0 +1,305 @@
+# JETPOOL — whole platform on ONE server (Ubuntu 22.04, 2 vCPU / 8 GB / 50 GB is enough).
+#
+# Never run this file by hand; `./infra/single-server/jetpool.sh` passes the env file and the right flags:
+#   ./infra/single-server/jetpool.sh init --domain example.com --email you@example.com
+#   ./infra/single-server/jetpool.sh deploy
+#
+# Everything the internet can reach goes through Caddy (80/443), which gets its own Let's Encrypt
+# certificates. Postgres, Redis, Meilisearch and the MinIO console are NOT published to the host at all;
+# the API and MinIO's S3 port bind to 127.0.0.1 so you can curl them over an SSH tunnel while debugging
+# (DEPLOY_MODE=ip opens them to the world instead — see .env.example).
+name: jetpool
+
+# Both the API and the worker are the same image with a different command, so they share one env block.
+x-api-env: &api-env
+  # staging, not production: production refuses to boot with PAYMENT_PROVIDER=MOCK or OAUTH_MOCK
+  # (apps/api/src/platform/config.ts). Flip to production once Toss + OAuth credentials are in .env.
+  NODE_ENV: ${NODE_ENV:-staging}
+  PORT: "4000"
+  HOST: 0.0.0.0
+  TZ: UTC
+  DATABASE_URL: postgres://jetpool:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/jetpool
+  DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+  JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+  DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?set DATA_ENCRYPTION_KEY}
+  GEO_FUZZ_SECRET: ${GEO_FUZZ_SECRET:?set GEO_FUZZ_SECRET}
+  PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:?set PUBLIC_WEB_URL}
+  PUBLIC_API_URL: ${PUBLIC_API_URL:?set PUBLIC_API_URL}
+  CORS_ORIGINS: ${CORS_ORIGINS:?set CORS_ORIGINS}
+  RATE_LIMIT_PER_MIN: ${RATE_LIMIT_PER_MIN:-600}
+  # Caddy and the compose network are private addresses, which the default TRUST_PROXY already covers.
+  REDIS_URL: redis://redis:6379
+  MEILI_HOST: http://meilisearch:7700
+  MEILI_API_KEY: ${MEILI_MASTER_KEY:?set MEILI_MASTER_KEY}
+  # Media storage. STORAGE_MODE=local (the default) leaves every S3_* blank, which makes the API pick its
+  # disk-backed adapter: the browser PUTs to the API itself and the API serves public media, so there is no
+  # object-storage service and no third-party image in the critical path. The bytes live on the `mediadata`
+  # volume via TMPDIR, so they survive restarts.
+  # STORAGE_MODE=minio fills these in and starts MinIO (the `minio` compose profile). Then S3_ENDPOINT must
+  # be the PUBLIC address: presigned URLs go to the browser and SigV4 covers the host, so an internal
+  # endpoint makes every upload 403.
+  TMPDIR: /data
+  S3_ENDPOINT: ${S3_ENDPOINT:-}
+  S3_REGION: ${S3_REGION:-ap-northeast-2}
+  S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+  S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+  S3_BUCKET_PRIVATE: jetpool-private
+  S3_BUCKET_PUBLIC: jetpool-public
+  CDN_BASE_URL: ${CDN_BASE_URL:?set CDN_BASE_URL}
+  PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-MOCK}
+  TOSS_SECRET_KEY: ${TOSS_SECRET_KEY:-}
+  TOSS_CLIENT_KEY: ${TOSS_CLIENT_KEY:-}
+  TOSS_WEBHOOK_SECRET: ${TOSS_WEBHOOK_SECRET:-}
+  OAUTH_MOCK: ${OAUTH_MOCK:-true}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:-}
+  KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
+  NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-}
+  NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET:-}
+  SMTP_URL: ${SMTP_URL:-}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  GEOCODER: ${GEOCODER:-STATIC}
+  KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY:-}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "5" }
+
+services:
+  postgres:
+    # Source of truth. Runs in UTC — the app builds period boundaries from toISOString().
+    image: postgres:17
+    command:
+      - postgres
+      - -c
+      - timezone=UTC
+      - -c
+      - log_timezone=UTC
+      - -c
+      - max_connections=200
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - effective_cache_size=1536MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=128MB
+    environment:
+      POSTGRES_USER: jetpool
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: jetpool
+      TZ: UTC
+      PGTZ: UTC
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jetpool -d jetpool"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    logging: *logging
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    logging: *logging
+
+  meilisearch:
+    # Search projection (ADR-0006). If this is down the API falls back to PostgreSQL search.
+    image: getmeili/meilisearch:v1.11
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?set MEILI_MASTER_KEY}
+      MEILI_ENV: production
+      MEILI_NO_ANALYTICS: "true"
+    volumes: [meilidata:/meili_data]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:7700/health || wget -qO- http://127.0.0.1:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    logging: *logging
+
+  # ---------------------------------------------------------------------------------------------------
+  # Object storage is OPTIONAL and OFF by default (profile "minio", selected by STORAGE_MODE=minio).
+  # MinIO withdrew its images from Docker Hub (minio/minio and minio/mc both 404 there) and quay.io
+  # answered 401 for `latest`, which cost two failed deploys. STORAGE_MODE=local needs neither image.
+  # If you enable this, set MINIO_IMAGE / MINIO_MC_IMAGE to a tag you have confirmed you can pull.
+  # ---------------------------------------------------------------------------------------------------
+  minio:
+    profiles: ["minio"]
+    image: ${MINIO_IMAGE:-quay.io/minio/minio:latest}
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+    # 127.0.0.1 by default; DEPLOY_MODE=ip sets MINIO_BIND=0.0.0.0 because presigned URLs need a public host.
+    ports: ["${MINIO_BIND:-127.0.0.1}:9000:9000"]
+    volumes: [miniodata:/data]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    logging: *logging
+
+  minio-init:
+    # private = originals and ID documents (never public) · public = processed media behind the CDN host
+    profiles: ["minio"]
+    image: ${MINIO_MC_IMAGE:-quay.io/minio/mc:latest}
+    depends_on:
+      minio: { condition: service_healthy }
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing local/jetpool-private
+        mc mb --ignore-existing local/jetpool-public
+        mc anonymous set none local/jetpool-private
+        mc anonymous set download local/jetpool-public
+        echo "buckets ready"
+    restart: "no"
+    logging: *logging
+
+  migrate:
+    # Forward-only migrations (packages/db/migrate.mjs), one shot before api/worker start.
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+    image: jetpool-api:${IMAGE_TAG:-local}
+    command: ["migrate"]
+    environment: *api-env
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+    logging: *logging
+
+  api:
+    image: jetpool-api:${IMAGE_TAG:-local}
+    command: ["api"]
+    environment: *api-env
+    # Published on loopback only — Caddy reaches it over the compose network. DEPLOY_MODE=ip opens it.
+    ports: ["${API_BIND:-127.0.0.1}:4000:4000"]
+    # In local storage mode this volume IS the media store (TMPDIR=/data), so it must outlive the
+    # container; the worker mounts the same one because both sides touch the media pipeline.
+    volumes: [mediadata:/data]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      meilisearch: { condition: service_healthy }
+    restart: unless-stopped
+    logging: *logging
+
+  worker:
+    # Outbox dispatcher + scheduled sweeps (hold expiry, settlement). No HTTP listener.
+    image: jetpool-api:${IMAGE_TAG:-local}
+    command: ["worker"]
+    environment: *api-env
+    volumes: [mediadata:/data]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      meilisearch: { condition: service_healthy }
+    restart: unless-stopped
+    logging: *logging
+
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Inlined into the browser bundle at BUILD time, and it also feeds the CSP connect-src allowlist.
+        # Change the domain => rebuild this image.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?set NEXT_PUBLIC_API_URL}
+        # The origin the browser uploads to and loads public media from has to be in the page's own CSP
+        # (connect-src / img-src) or every upload is blocked. In local storage mode that is the API
+        # itself, which is already allowed, so this stays empty.
+        NEXT_PUBLIC_MEDIA_ORIGIN: ${S3_ENDPOINT:-}
+        GIT_SHA: ${GIT_SHA:-unknown}
+    image: jetpool-web:${IMAGE_TAG:-local}
+    environment:
+      PORT: "3000"
+      TZ: UTC
+      API_INTERNAL_URL: http://api:4000
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?set NEXT_PUBLIC_API_URL}
+      NEXT_PUBLIC_MEDIA_ORIGIN: ${S3_ENDPOINT:-}
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+    logging: *logging
+
+  seed:
+    # Demo / staging content: 9 login personas, 24 stays, guides, travel products, legacy WONT CMS pages,
+    # then the translation cache. Idempotent; the scripts refuse to run with NODE_ENV=production.
+    # Only the seed scripts and their data files are mounted onto the api image, so `pg` still resolves
+    # from /app/packages/db/node_modules and nothing in the image is writable from the host.
+    image: jetpool-api:${IMAGE_TAG:-local}
+    profiles: ["seed"]
+    environment:
+      <<: *api-env
+      SEED_PASSWORD: ${SEED_PASSWORD:?set SEED_PASSWORD}
+      SEED_ADMIN_USERNAME: ${SEED_ADMIN_USERNAME:-admin}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?set SEED_ADMIN_PASSWORD}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        node /app/packages/db/seed-dev.mjs
+        node /app/packages/db/seed-translations.mjs
+    volumes:
+      - ../../packages/db/seed-dev.mjs:/app/packages/db/seed-dev.mjs:ro
+      - ../../packages/db/seed-media.mjs:/app/packages/db/seed-media.mjs:ro
+      - ../../packages/db/seed-translations.mjs:/app/packages/db/seed-translations.mjs:ro
+      - ../../data:/app/data:ro
+      - ../../apps/web/public:/app/apps/web/public:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+    logging: *logging
+
+  caddy:
+    # The only service the internet talks to. Issues and renews TLS itself (HTTP-01), so 80 must stay open.
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      ROOT_DOMAIN: ${ROOT_DOMAIN:-localhost}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./${CADDYFILE:-Caddyfile}:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on:
+      web: { condition: service_started }
+      api: { condition: service_started }
+    restart: unless-stopped
+    logging: *logging
+
+volumes:
+  pgdata: {}
+  redisdata: {}
+  meilidata: {}
+  # Media in local storage mode. Back this up alongside the database — it holds the uploaded originals.
+  mediadata: {}
+  miniodata: {}
+  caddydata: {}
+  caddyconfig: {}
