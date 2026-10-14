@@ -1,0 +1,15 @@
+# JETPOOL edge — IP mode (DEPLOY_MODE=ip): plain HTTP on the public IP, no certificates.
+#
+# For the first smoke test before a domain exists, or while DNS propagates. In this mode the API is on
+# :4000 and MinIO on :9000 directly (presigned S3 URLs are signed for a host:port, so they cannot be
+# served under a path prefix). Browsers get no TLS here: sign-ins and uploads travel in the clear, so
+# switch to domain mode before any real user or real payment credential touches it.
+:80 {
+	encode zstd gzip
+	header -Server
+	log {
+		output stdout
+		format json
+	}
+	reverse_proxy web:3000
+}

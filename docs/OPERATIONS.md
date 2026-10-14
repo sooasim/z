@@ -69,6 +69,7 @@ webhooks are mounted secrets) and CloudWatch alarms publish to SNS `jetpool-<env
 | Any incident (incl. security) | `docs/runbooks/incident-response.md` |
 | Releases, canary, rollback | `docs/runbooks/release-and-rollback.md` |
 | Legacy WONT/Sixshop cutover | `docs/runbooks/legacy-cutover.md` |
+| Whole stack on one VM (self-hosted), DNS + TLS | `docs/runbooks/single-server-deploy.md` |
 
 ## Capacity
 - RDS connections: `(api tasks max + worker tasks) × DATABASE_POOL_MAX` must stay < 80 % of `max_connections`

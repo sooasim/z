@@ -23,6 +23,7 @@ docs
 infra/terraform
 infra/k8s
 infra/observability
+infra/single-server
 scripts/load
 **/.terraform
 **/*.tfstate*

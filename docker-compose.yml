@@ -143,12 +143,15 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: http://localhost:4000
+        # browser-side uploads go straight to MinIO, so its origin must be in the page CSP
+        NEXT_PUBLIC_MEDIA_ORIGIN: http://localhost:9000
     image: jetpool-web:local
     environment:
       PORT: "3000"
       # for server-side rendering inside the compose network
       API_INTERNAL_URL: http://api:4000
       NEXT_PUBLIC_API_URL: http://localhost:4000
+      NEXT_PUBLIC_MEDIA_ORIGIN: http://localhost:9000
     ports: ["3000:3000"]
     depends_on:
       api: { condition: service_healthy }

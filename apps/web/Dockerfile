@@ -23,7 +23,10 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm fetch
 FROM fetch AS build
 # NEXT_PUBLIC_* values are inlined at build time -> build one image per environment.
 ARG NEXT_PUBLIC_API_URL=http://localhost:4000
-ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} NODE_ENV=production
+# Origin of the object storage the browser talks to directly (presigned uploads, public media). Unset is
+# fine when media is served from the web origin itself; otherwise the page's CSP would block the upload.
+ARG NEXT_PUBLIC_MEDIA_ORIGIN=
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} NEXT_PUBLIC_MEDIA_ORIGIN=${NEXT_PUBLIC_MEDIA_ORIGIN} NODE_ENV=production
 COPY . .
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     NODE_ENV=development pnpm install --offline --frozen-lockfile --filter "@jetpool/web..."
