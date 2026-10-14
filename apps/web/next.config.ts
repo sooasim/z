@@ -57,6 +57,14 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  /**
+   * Standalone output, so the server does not read this file at runtime.
+   * `next start` loads next.config.ts with TypeScript, which a production image has pruned — it then
+   * tries to install TypeScript, picks the wrong package manager because there is no lockfile beside
+   * it, and exits 1 in a crash loop. Standalone serialises the config into .next/standalone/server.js,
+   * which needs neither TypeScript nor this file. apps/web/Dockerfile already prefers that output.
+   */
+  output: 'standalone',
   reactStrictMode: true,
   poweredByHeader: false,
   typedRoutes: false,

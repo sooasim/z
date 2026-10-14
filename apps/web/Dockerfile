@@ -44,7 +44,10 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store set -eu; \
       if [ -d apps/web/public ]; then cp -a apps/web/public "/out/$appdir/public"; fi; \
       printf 'standalone %s\n' "$server" > /out/.jetpool-web-mode; \
     else \
-      pnpm install --offline --frozen-lockfile --prod --filter "@jetpool/web..."; \
+      # NOT --prod: `next start` loads next.config.ts at runtime, which needs TypeScript — a dev
+      # dependency. Pruning it makes the container fail to load its config and exit 1 forever.
+      # This branch only runs if next.config stops setting output: 'standalone'.
+      pnpm install --offline --frozen-lockfile --filter "@jetpool/web..."; \
       cp -a node_modules package.json /out/; \
       mkdir -p /out/apps; cp -a apps/web /out/apps/web; \
       rm -rf /out/apps/web/.next/cache /out/apps/web/Dockerfile; \
