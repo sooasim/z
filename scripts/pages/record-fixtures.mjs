@@ -32,6 +32,8 @@ const API = (opt('api', process.env.API_URL || 'http://localhost:4000')).replace
 const OUT = path.resolve(opt('out', path.join(ROOT, 'packages/demo/fixtures/api.json')));
 const SCENARIO = flag('scenario');
 const PASSWORD = process.env.DEMO_PASSWORD || 'Jetpool!2026dev';
+// the dev seed gives the admin its own console password (packages/db/seed-dev.mjs ADMIN_PASSWORD)
+const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || 'admin1234';
 const CONCURRENCY = Number(opt('concurrency', '6'));
 
 const PERSONAS = {
@@ -116,7 +118,7 @@ const idem = (k) => ({ 'idempotency-key': k });
 
 async function loginAll() {
   for (const [key, email] of Object.entries(PERSONAS)) {
-    const r = await raw('POST', '/v1/auth/login', { body: { email, password: PASSWORD } });
+    const r = await raw('POST', '/v1/auth/login', { body: { email, password: key === 'admin' ? ADMIN_PASSWORD : PASSWORD } });
     if (r.status !== 200) {
       warn(`login failed for ${email}: ${r.status}`);
       continue;
@@ -505,7 +507,9 @@ function variants(t) {
     case '/v1/search/guides':
       return [{}, { limit: 12 }, { limit: 24 }, { city: 'Seoul', limit: 24 }, { city: '서울', limit: 24 }];
     case '/v1/travel-products':
-      return [{}, { limit: 12 }, { limit: 50 }, { q: 'Jeju', limit: 50 }];
+      // `collection` is the migrated WON TRAVEL CLUB archive (/travel): it also yields the ids of the programmes
+      // that already ran, which the default catalogue does not list, so their detail pages get recorded too.
+      return [{}, { limit: 12 }, { limit: 50 }, { q: 'Jeju', limit: 50 }, { collection: 'LEGACY_WONT', limit: 12 }, { collection: 'LEGACY_WONT', limit: 50 }];
     case '/v1/content/{type}':
       return null; // expanded with params
     case '/v1/notifications':

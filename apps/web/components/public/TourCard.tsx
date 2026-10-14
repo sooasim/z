@@ -22,6 +22,10 @@ export function TourCard({ p }: { p: any }) {
   const refund = refundLines(f(p, 'cancellationTerms'), 'ko');
   const freeCancel = refund.some((l) => l.includes('전액 환불')) || /free|무료/i.test(v.cancellation);
   const badges: CardBadge[] = [{ label: productKindLabel(v.kind, lang), tone: 'info' }];
+  // a migrated WON TRAVEL CLUB programme says so on the card, and says when it has already run
+  const legacy = f<any>(p, 'detail.legacy')?.system === 'LEGACY_WONT';
+  if (legacy) badges.push({ label: L('원여행클럽', 'WONT archive'), tone: 'accent' });
+  if (legacy && String(v.status).toUpperCase() === 'ARCHIVED') badges.push({ label: L('진행 완료', 'Already ran'), tone: 'warn' });
   if (freeCancel) badges.push({ label: L('무료 취소', 'Free cancellation'), tone: 'ok' });
   return (
     <ListingCard

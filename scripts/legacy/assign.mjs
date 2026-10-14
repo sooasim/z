@@ -10,7 +10,10 @@
 //    data/media/people.json that fits the persona's age and description. It is a STAND-IN, never a photo of that
 //    person, and it is credited on /credits like every other licensed photo. Unassigned portraits stay in a pool the
 //    web uses for people the seed does not know (review authors, demo staff)
-//  - travel products get theme photos; the past WONT tour products become products with their legacy images
+//  - travel products get theme photos; the past WONT tour products become products with their legacy images and the
+//    programme content rebuilt from data/media/wont-programs.json (fact sheet, day-by-day schedule, 관광정보 spots,
+//    hotel, companions, route) in travel_products.detail — the legacy pages carried all of that as images. The
+//    destinations those programmes travel to become DESTINATION entries (assignments.legacyDestinations)
 //  - CMS destinations get city photos, stories legacy images or city photos, the charter page charter photos + legacy
 //    aircraft images, the home hero the best hero candidates + legacy brand heroes
 //  - every migrated wontc.co.kr page becomes a CMS entry (PAGE / STORY / LEGACY_CONTENT) whose body is the migrated
@@ -34,6 +37,7 @@ const OUT_MAP = path.join(ROOT, 'apps/web/public/media-map.json');
 const PUBLIC = path.join(ROOT, 'apps/web/public');
 const PAGES_DIR = path.join(ROOT, 'data/media/legacy-pages');
 const SEED_DEV = path.join(ROOT, 'packages/db/seed-dev.mjs');
+const PROGRAMS = path.join(ROOT, 'data/media/wont-programs.json');
 
 const fail = (msg) => {
   console.error(`assign: ${msg}`);
@@ -52,6 +56,12 @@ const clip = (s, n) => {
 // ───────────────────────────────────────────────────────────── inputs
 const catalog = JSON.parse(readFileSync(CATALOG, 'utf8'));
 const peopleDoc = existsSync(PEOPLE) ? JSON.parse(readFileSync(PEOPLE, 'utf8')) : { photos: {} };
+// hand-transcribed programme content of the legacy tour products (fact sheet, schedule, destination guide, hotel):
+// the legacy pages carried all of it as images, and the visual classification asked for it to be rebuilt as data.
+const programDoc = JSON.parse(readFileSync(PROGRAMS, 'utf8'));
+const PROGRAM_BY_PAGE = new Map(programDoc.programs.map((p) => [p.legacyPage, p]));
+// legacy images that stay in the archive but are never shown again on a product page, with the reason
+const restrictedMedia = new Map(Object.entries(programDoc.restricted ?? {}));
 const LEG = catalog.legacy.assets; // sha256 → legacy asset
 // sha256 → photo: the scene photos of the catalog plus the portraits of data/media/people.json (collection 'person'),
 // which carry the same fields (src, srcset, placeholder, credit, roles…) and are credited the same way.
@@ -463,6 +473,66 @@ const pubAt = (p) => (p.date && /^\d{4}\.\d{2}\.\d{2}$/.test(p.date) ? `${p.date
 const UI = new Set(['ui-element']);
 const isVisual = (sha) => !UI.has(LEG[sha].category) && !LEG[sha].siteChrome;
 
+/**
+ * travel_products.detail for a migrated WONT programme: the transcribed content (data/media/wont-programs.json)
+ * plus the derived gallery and provenance. Every image the content names must be a published legacy medium, and
+ * every one of them is registered as a usage of this product. `gallery` is what is left over once the structured
+ * sections have claimed their images — the scenery the page showed, without the tables that are now text.
+ */
+function programDetail(prog, { page, product, entry, media }) {
+  const claimed = new Set();
+  const claim = (url, what) => {
+    if (!url) return null;
+    if (!legacyByUrl.has(url)) fail(`programme ${prog.slug}: ${what} references ${url}, which is not a published legacy medium`);
+    claimed.add(url);
+    useAt(url, `product:${product.slug}`);
+    return url;
+  };
+  const sections = [
+    ['highlights', (x) => [x.photo]],
+    ['spots', (x) => [x.photo, x.panel]],
+    ['stays', (x) => x.photos ?? []],
+    ['companions', (x) => [x.photo]],
+    ['documents', (x) => [x.url]],
+  ];
+  for (const [key, pick] of sections) for (const entryItem of prog[key] ?? []) for (const u of pick(entryItem)) claim(u, key);
+  claim(prog.schedule?.photo, 'schedule');
+  claim(prog.route?.photo, 'route');
+  claim(prog.destination?.cover, 'destination');
+  // What the page showed and the rebuilt sections did not claim, split three ways: photographs go to the gallery,
+  // the remaining printed panels keep their place as "원본 안내물", and the ones data/media/wont-programs.json
+  // restricts (personal contact details printed into the image, third-party broadcast stills) are shown nowhere on
+  // the product page — their content is in the rebuilt text. All three stay in media_ids and in the archive.
+  const rest = media.filter((u) => !claimed.has(u));
+  const restricted = rest.filter((u) => restrictedMedia.has(u));
+  const printed = rest.filter((u) => !restrictedMedia.has(u) && legacyByUrl.get(u)?.isMostlyText);
+  const gallery = rest.filter((u) => !restrictedMedia.has(u) && !legacyByUrl.get(u)?.isMostlyText);
+  [...gallery, ...printed].forEach((u) => useAt(u, `product:${product.slug}`));
+  restricted.forEach((u) => useAt(u, `product:${product.slug}:withheld`));
+  // slug/status/price are product columns and legacyLabel is carried in `legacy` — they are not content
+  const { slug, legacyPage, status, priceMinor, legacyLabel, ...content } = prog;
+  return {
+    ...content,
+    gallery: gallery.map((u) => ({ url: u, alt: altOf(u) })),
+    highlights: (prog.highlights ?? []).map((h) => ({ ...h, alt: h.photo ? altOf(h.photo) : undefined })),
+    documents: [
+      ...(prog.documents ?? []).map((d) => ({ ...d, alt: altOf(d.url) })),
+      ...printed.map((u) => ({ url: u, title: clip(altOf(u), 90), alt: altOf(u) })),
+    ],
+    // the url is deliberately absent: the point is not to publish these again, only to say what was left out
+    withheld: restricted.map((u) => ({ reason: restrictedMedia.get(u), archiveRoute: entry.route })),
+    legacy: {
+      system: 'LEGACY_WONT',
+      path: page.path,
+      url: page.legacyUrl,
+      page: page.slug,
+      label: prog.legacyLabel ?? null,
+      archiveRoute: entry.route,
+      brand: '원여행클럽(WON TRAVEL CLUB)',
+    },
+  };
+}
+
 const cms = [];
 const legacyProducts = [];
 for (const p of legacyPages) {
@@ -537,6 +607,13 @@ for (const p of legacyPages) {
   for (const u of uniq([...mdImages(body), ...gallery, ...media.map((m) => m.url), heroUrl])) useAt(u, `cms:${e.type}:${e.slug}`);
   const wp = WONT_PRODUCTS[p.slug];
   if (wp) {
+    // the transcribed programme (data/media/wont-programs.json) is authoritative for what the legacy page said:
+    // the sale state it carried ([모집중] vs 진행 완료) and the price printed next to the product.
+    const prog = PROGRAM_BY_PAGE.get(p.slug);
+    if (!prog) fail(`no programme content for ${p.slug} — add it to data/media/wont-programs.json`);
+    if (prog.slug !== wp.slug) fail(`programme ${prog.slug} does not match product ${wp.slug}`);
+    const status = prog.status;
+    const price = prog.priceMinor ?? null;
     const prodMedia = uniq([heroSha, ...(p.contentAssets ?? []), ...(p.extraAssets ?? [])].filter((s) => s && isVisual(s)).map(legacyUrl));
     prodMedia.forEach((u) => useAt(u, `product:${wp.slug}`));
     const description = [
@@ -545,8 +622,9 @@ for (const p of legacyPages) {
       clip((p.text ?? '').replace(/\[(모집중|모집|종료)\]\s*/g, ''), 1500),
       '',
       `원여행클럽(WON TRAVEL CLUB)이 진행한 여행 프로그램입니다. 원본: ${p.legacyUrl}`,
-      wp.status === 'PUBLISHED' ? '다음 출발 일정과 요금은 여행 상담으로 안내해 드립니다.' : '진행이 끝난 프로그램으로 예약할 수 없습니다.',
+      status === 'PUBLISHED' ? '다음 출발 일정과 요금은 여행 상담으로 안내해 드립니다.' : '진행이 끝난 프로그램으로 예약할 수 없습니다.',
     ].join('\n');
+    const detail = programDetail(prog, { page: p, product: wp, entry: e, media: prodMedia });
     legacyProducts.push({
       slug: wp.slug,
       productId: uid(`product:${wp.slug}`),
@@ -559,10 +637,11 @@ for (const p of legacyPages) {
       city: wp.city,
       country: wp.country,
       durationMinutes: wp.days * 1440,
-      basePriceMinor: wp.price ?? null,
-      status: wp.status,
+      basePriceMinor: price,
+      status,
       cmsSlug: e.slug,
       media: prodMedia,
+      detail,
     });
   }
 }
@@ -570,9 +649,18 @@ for (const p of legacyPages) {
 for (const [copy, orig] of Object.entries(COPY_OF)) {
   const lp = legacyProducts.find((x) => x.legacyPage === orig);
   const cp = pageBySlug.get(copy);
-  if (lp && cp) for (const s of cp.contentAssets ?? []) if (isVisual(s) && !lp.media.includes(legacyUrl(s))) lp.media.push(legacyUrl(s));
+  if (lp && cp) {
+    for (const s of cp.contentAssets ?? []) {
+      const u = legacyUrl(s);
+      if (!isVisual(s) || lp.media.includes(u)) continue;
+      lp.media.push(u);
+      if (!lp.detail.gallery.some((g) => g.url === u)) lp.detail.gallery.push({ url: u, alt: altOf(u) });
+    }
+  }
 }
-const productRoute = (lp) => (lp.status === 'PUBLISHED' ? `/travel/${lp.productId}` : `/stories/${lp.cmsSlug}`);
+// every migrated programme has a product page now, including the ones that already ran, and that page links on to
+// the archived copy of the original page — so a legacy product URL lands on the programme, not on the archive
+const productRoute = (lp) => `/travel/${lp.productId}`;
 
 // premium lounge (/untitled-7): the legacy page was empty — a short honest page with the lounge-themed legacy images
 {
@@ -665,6 +753,37 @@ for (const [slug, s12] of Object.entries(DESTINATIONS)) {
   const gallery = [cover, ...more].map((x) => x.src);
   gallery.forEach((u) => useAt(u, `cms:DESTINATION:${slug}`));
   destinations[slug] = { coverUrl: cover.src, gallery };
+}
+// 관광정보: the destinations the WONT programmes actually travelled to. The city guide and the places are the text
+// the legacy product pages carried as images; each one links back to the programme it belongs to.
+const destSlug = (city) => city.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const legacyDestinations = [];
+for (const lp of legacyProducts) {
+  const d = lp.detail.destination;
+  if (!d) continue;
+  const slug = destSlug(d.city);
+  if (legacyDestinations.some((x) => x.slug === slug) || destinations[slug]) continue;
+  const spots = (lp.detail.spots ?? []).map((s) => ({ name: s.name, nameEn: s.nameEn ?? null, summary: clip(s.lead ?? s.body, 140), photo: s.photo ?? null }));
+  const gallery = uniq([d.cover, ...spots.map((s) => s.photo)]);
+  gallery.forEach((u) => useAt(u, `cms:DESTINATION:${slug}`));
+  legacyDestinations.push({
+    slug,
+    title: d.ko,
+    summary: clip(d.lead ?? d.body, 200),
+    bodyMd: [d.lead ? `**${d.lead}**` : null, '', d.body, ...(d.facts ?? []).map((f) => `- ${f.label}: ${f.value}`)].filter((x) => x !== null).join('\n').trim(),
+    city: d.city,
+    country: d.country,
+    coverUrl: d.cover,
+    gallery,
+    highlights: spots.map((s) => s.name).slice(0, 6),
+    spots,
+    facts: d.facts ?? [],
+    productId: lp.productId,
+    productSlug: lp.slug,
+    productTitle: lp.title,
+    legacyPath: lp.legacyPath,
+    publishedAt: '2026-10-14T10:00:00+09:00',
+  });
 }
 const STORY_COVERS = {
   'local-life-exchange': 'L:b2ca3f9720b6', // Paris apartment balcony (WONT home-exchange imagery)
@@ -790,6 +909,9 @@ const coverage = {
   portraits: portraits.length,
   products: Object.keys(products).length,
   legacyProducts: legacyProducts.length,
+  legacyDestinations: legacyDestinations.length,
+  programSpots: legacyProducts.reduce((n, lp) => n + (lp.detail.spots?.length ?? 0), 0),
+  programDays: legacyProducts.reduce((n, lp) => n + (lp.detail.schedule?.days?.length ?? 0), 0),
   cmsEntries: cms.length,
   redirects: redirects.length,
 };
@@ -805,7 +927,9 @@ const assignments = {
   readme:
     'Generated by scripts/legacy/assign.mjs — do not edit by hand. Applied to the database by packages/db/seed-media.mjs (seed-dev.mjs calls it). ' +
     'Public URLs are without the web basePath. stays[slug].photos[0] is the cover; people[key] is a seeded person’s profile photo ' +
-    '(an openly-licensed portrait standing in for the persona); assets[url] holds the served file facts for media_assets rows.',
+    '(an openly-licensed portrait standing in for the persona); assets[url] holds the served file facts for media_assets rows. ' +
+    'legacyProducts[].detail is the rebuilt WONT programme content (data/media/wont-programs.json) and legacyDestinations ' +
+    'the 관광정보 those programmes travelled to.',
   coverage,
   stays,
   guides,
@@ -813,6 +937,7 @@ const assignments = {
   products,
   legacyProducts,
   destinations,
+  legacyDestinations,
   stories,
   pages,
   cms,

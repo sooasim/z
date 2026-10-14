@@ -255,10 +255,8 @@ describe('read paths', () => {
 describe('demo translations (data/translations/demo.json)', () => {
   const root = path.resolve(__dirname, '../../..');
   const seedSrc = () => readFileSync(path.join(root, 'packages/db/seed-dev.mjs'), 'utf8');
-  // seed-translations.mjs is plain JS with no types, so its rows arrive as `any` and every callback below
-  // trips noImplicitAny. Name the shape once, at the boundary.
-  type DemoRow = { locale: string; source: string; translated: string };
-  const rows = (): DemoRow[] => readDemoTranslations(path.join(root, 'data/translations/demo.json'));
+  // seed-translations.mjs is plain JS, so the rows come back untyped — name the shape the assertions rely on
+  const rows = (): Array<{ locale: string; source: string; translated: string }> => readDemoTranslations(path.join(root, 'data/translations/demo.json'));
 
   it('covers every shipped language but the source one, with the same sources in each', () => {
     const byLocale = new Map<string, Set<string>>();
