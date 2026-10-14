@@ -427,18 +427,30 @@ cmd_doctor() {
       bad "no containers for this project are running — 'jetpool.sh deploy' has not completed"
     else
       printf '%s\n' "$ps_out" | sed 's/^/      /'
-      local svc state
+      # A crash loop is useless as a finding without the reason, and asking the operator for logs costs
+      # another round trip — so print the tail here, for whichever service is actually broken.
+      local svc state broken=()
       while IFS=$'\t' read -r svc state _; do
         [[ -z "${svc:-}" ]] && continue
         case "$state" in
           running) ;;
-          restarting) bad "service '$svc' is restarting in a loop — see 'jetpool.sh logs $svc'" ;;
-          exited|dead) [[ "$svc" == "migrate" || "$svc" == "minio-init" || "$svc" == "seed" ]] \
-            && ok "'$svc' is a one-shot job, exited is normal" \
-            || bad "service '$svc' is not running ($state) — see 'jetpool.sh logs $svc'" ;;
+          restarting) bad "service '$svc' is restarting in a loop"; broken+=("$svc") ;;
+          exited|dead)
+            if [[ "$svc" == "migrate" || "$svc" == "minio-init" || "$svc" == "seed" ]]; then
+              ok "'$svc' is a one-shot job, exited is normal"
+            else
+              bad "service '$svc' is not running ($state)"; broken+=("$svc")
+            fi ;;
           *) note "service '$svc' state: $state" ;;
         esac
       done <<< "$ps_out"
+      for svc in ${broken[@]+"${broken[@]}"}; do
+        echo
+        bold "      ---- last 40 log lines from '$svc' (this is why it is not running) ----"
+        dc logs --no-color --tail 40 "$svc" 2>&1 | sed 's/^/      /' || true
+        bold "      ---- end of '$svc' log ----"
+        echo
+      done
       grep -q $'\trunning' <<< "$ps_out" && ok "containers are up"
     fi
   else
@@ -451,9 +463,19 @@ cmd_doctor() {
   [[ "$code" == "200" ]] && ok "api /health 200 on 127.0.0.1:4000" \
     || bad "api /health returned ${code:-no response} on 127.0.0.1:4000 — the API itself is not serving ('jetpool.sh logs api')"
   if [[ -n "${root_domain:-}" ]]; then
+    # In domain mode Caddy answers port 80 with a redirect to https — 308 is CORRECT here, not a fault.
     code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 -H "Host: $root_domain" http://127.0.0.1/ 2>/dev/null || true)"
-    [[ "$code" == "200" ]] && ok "web through caddy on port 80 (Host: $root_domain) → 200" \
-      || bad "caddy on port 80 returned ${code:-no response} for Host $root_domain ('jetpool.sh logs caddy')"
+    case "$code" in
+      200) ok "web through caddy on port 80 (Host: $root_domain) → 200" ;;
+      301|302|307|308) ok "caddy on port 80 redirects to https ($code) — that is the intended behaviour" ;;
+      *) bad "caddy on port 80 returned ${code:-no response} for Host $root_domain ('jetpool.sh logs caddy')" ;;
+    esac
+    # The real content check: full TLS path through Caddy to the web container, without leaving the box.
+    if [[ "$(get_env DEPLOY_MODE)" == "domain" ]]; then
+      code="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 --resolve "$root_domain:443:127.0.0.1" "https://$root_domain/" 2>/dev/null || true)"
+      [[ "$code" == "200" ]] && ok "the site itself serves over https inside the box ($code)" \
+        || bad "https through caddy returned ${code:-no response} — Caddy is up but the web app behind it is not serving"
+    fi
   fi
 
   bold "6. who is listening on 80/443"
