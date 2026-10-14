@@ -13,6 +13,7 @@ import { placeLabel } from '@/lib/places';
 import { StateView, EmptyState } from '@/components/states';
 import { Alert, Button, ButtonLink, ErrorText, PageHeader, Timeline } from '@/components/ui';
 import { Breadcrumbs } from '@/components/public/Breadcrumbs';
+import { ProgramSchedule, type ProgramDay } from '@/components/public/ProgramDetail';
 
 export default function ProductItineraryView() {
   const { id } = useParams<{ id: string }>();
@@ -28,7 +29,10 @@ export default function ProductItineraryView() {
       {(d) => {
         const p = item(d);
         const v = productView(p);
-        const days = arr<any>(p, 'itinerary', 'days', 'schedule');
+        // a migrated WONT programme carries its real day-by-day schedule in travel_products.detail
+        const progDays = arr<ProgramDay>(p, 'detail.schedule.days');
+        const scheduleNote = str(p, 'detail.schedule.note');
+        const days = progDays.length ? progDays : arr<any>(p, 'itinerary', 'days', 'schedule');
         const next = items(deps.data).slice(0, 3);
         const add = async () => {
           setErr(null);
@@ -83,6 +87,8 @@ export default function ProductItineraryView() {
                   )}
                 </div>
               </EmptyState>
+            ) : progDays.length ? (
+              <ProgramSchedule days={progDays} note={scheduleNote} />
             ) : (
               <div className="card">
                 <Timeline events={days.map((x: any, i: number) => ({ title: `${L(`${num(x, 'day', 'dayNumber') ?? i + 1}일차`, `Day ${num(x, 'day', 'dayNumber') ?? i + 1}`)} · ${str(x, 'title', 'name')}`, note: str(x, 'description', 'summary') }))} />

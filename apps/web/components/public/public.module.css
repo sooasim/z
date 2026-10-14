@@ -162,3 +162,26 @@
 /* Range picker inside a .slotField: keep the start/end labels inline ("시작 11월 2일") */
 .showK :global(.search-slot .k) { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: nowrap; color: var(--text-muted); font-weight: var(--fw-bold); font-size: var(--fs-xs); }
 .showK :global(.search-slot .v) { padding-right: 0; font-size: var(--fs-sm); }
+
+/* Travel: the rebuilt WONT programme (components/public/ProgramDetail.tsx) */
+.progLead { font-size: var(--fs-lg); line-height: 1.7; margin: 0 0 var(--sp-4); }
+.progValues { display: grid; gap: 2px; }
+.progBullets { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: var(--fs-sm); }
+.progDays { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-4); }
+.progDay { padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
+.progDayHead { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; }
+.progDayHead strong { font-size: var(--fs-md); }
+.progTheme { margin: 8px 0 0; font-weight: var(--fw-bold); color: var(--brand); font-size: var(--fs-sm); }
+.progItems { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 10px; font-size: var(--fs-sm); }
+.progItems > li { display: flex; gap: 12px; align-items: flex-start; line-height: 1.6; }
+.progTime { flex: 0 0 72px; color: var(--text-muted); font-variant-numeric: tabular-nums; font-size: var(--fs-xs); padding-top: 2px; }
+.progSub { display: grid; gap: 4px; margin-top: 4px; color: var(--text-muted); font-size: var(--fs-xs); }
+.progSub > span::before { content: '— '; }
+.progSpot { display: grid; gap: var(--sp-4); align-items: start; }
+@media (min-width: 760px) { .progSpot { grid-template-columns: 300px minmax(0, 1fr); } }
+.progSpotPhoto { aspect-ratio: 4 / 3; overflow: hidden; border-radius: var(--r-lg); background: var(--surface-2); }
+.progStrip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x mandatory; }
+.progStripItem { flex: 0 0 200px; aspect-ratio: 4 / 3; overflow: hidden; border-radius: var(--r-md); scroll-snap-align: start; background: var(--surface-2); }
+.progDoc { flex: 0 0 260px; margin: 0; display: grid; gap: 6px; scroll-snap-align: start; }
+.progDoc > :first-child { border-radius: var(--r-md); overflow: hidden; border: 1px solid var(--border); }
+.progPhoto { display: block; padding: 0; border: 0; background: var(--surface-2); border-radius: var(--r-md); overflow: hidden; cursor: zoom-in; aspect-ratio: 4 / 3; }

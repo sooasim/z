@@ -28,6 +28,8 @@ interface Dest {
   sub: string;
   cover: string;
   tags: string[];
+  /** a 관광정보 entry migrated from wontc.co.kr: it leads to the programme that travels there */
+  program?: { id: string; title: string };
 }
 
 export default function DiscoverView() {
@@ -49,6 +51,7 @@ export default function DiscoverView() {
           sub: sameLocale ? str(r, 'summary', 'subtitle') : fb ? fb.s[1] : '',
           cover: str(r, 'data.coverUrl', 'coverUrl', 'imageUrl', 'seo.og.image'),
           tags: sameLocale ? arr<string>(r, 'data.highlights').slice(0, 3) : [],
+          program: str(r, 'data.product.id') ? { id: str(r, 'data.product.id'), title: str(r, 'data.product.title') } : undefined,
         };
       })
     : FALLBACK.map((f) => ({ slug: f.slug, city: f.en, title: pickText(f, lang), sub: pickPair(f.s, lang) ?? '', cover: '', tags: [] }));
@@ -62,9 +65,11 @@ export default function DiscoverView() {
           <div className="grid">
             {list.map((d) => {
               const q = encodeURIComponent(d.city);
+              // a migrated 관광정보 destination has no JETPOOL stays yet — it leads to the programme that goes there
+              const href = d.program ? `/travel/${d.program.id}#spots` : `/stay?q=${q}`;
               return (
                 <article key={d.slug || d.city} className="lcard">
-                  <Link href={`/stay?q=${q}`} className={s.destCard} style={{ aspectRatio: '4 / 3' }} tabIndex={-1} aria-hidden="true">
+                  <Link href={href} className={s.destCard} style={{ aspectRatio: '4 / 3' }} tabIndex={-1} aria-hidden="true">
                     <Photo src={d.cover || postcardFor(d.city || d.title, d.slug)} seed={d.slug || d.city} alt="" sizes="(max-width: 640px) 92vw, 360px" />
                     <span className={s.cap}>
                       <strong>{d.title}</strong>
@@ -72,8 +77,8 @@ export default function DiscoverView() {
                   </Link>
                   <div className="body" style={{ gap: 6 }}>
                     <h2 className="lcard-title">
-                      <Link href={`/stay?q=${q}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                        {L(`${d.title} 숙소 보기`, `Stays in ${d.title}`)}
+                      <Link href={href} style={{ color: 'inherit', textDecoration: 'none' }}>
+                        {d.program ? L(`${d.title} 관광 정보`, `What to see in ${d.title}`) : L(`${d.title} 숙소 보기`, `Stays in ${d.title}`)}
                       </Link>
                     </h2>
                     {d.sub && <p className="small muted" style={{ margin: 0 }}>{d.sub}</p>}
@@ -85,6 +90,17 @@ export default function DiscoverView() {
                       </div>
                     )}
                     <div className="row small" style={{ gap: 14, marginTop: 4 }}>
+                      {d.program ? (
+                        <>
+                          <Link href={`/travel/${d.program.id}`} className="row" style={{ gap: 4 }}>
+                            <Icon name="compass" size={14} /> {L('원여행클럽 프로그램', 'WONT programme')}
+                          </Link>
+                          <Link href={`/travel?q=${q}`} className="row" style={{ gap: 4 }}>
+                            <Icon name="ticket" size={14} /> {L('투어·티켓', 'Tours')}
+                          </Link>
+                        </>
+                      ) : (
+                      <>
                       <Link href={`/guide-friends?q=${q}`} className="row" style={{ gap: 4 }}>
                         <Icon name="compass" size={14} /> {L('가이드', 'Guides')}
                       </Link>
@@ -94,6 +110,8 @@ export default function DiscoverView() {
                       <Link href={`/exchange?q=${q}`} className="row" style={{ gap: 4 }}>
                         <Icon name="swap" size={14} /> {L('맞교환', 'Exchange')}
                       </Link>
+                      </>
+                      )}
                     </div>
                   </div>
                 </article>

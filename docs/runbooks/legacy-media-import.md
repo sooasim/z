@@ -220,6 +220,43 @@ What it writes:
   `data.legacyGallery`); city photos → destination covers. Only generated placeholder covers (`/art/…`,
   `/placeholder/…`) are replaced; the previous value is kept in `data.legacyCover.previous`.
 
+### 5c. 여행 상품 콘텐츠 재구성 / Rebuilt programme content (`data/media/wont-programs.json`)
+
+**KO.** 원여행클럽의 여행 상품 페이지는 상품 개요표·일정표·여행지 소개·숙소 안내를 **이미지 안에 글자로** 담고
+있었습니다. 이미지로 다시 싣기만 하면 읽기·검색·번역이 되지 않고, 일부 안내물에는 개인 휴대전화 번호·이메일처럼 다시
+공개하면 안 되는 정보가 찍혀 있습니다. 그래서 그 내용을 손으로 옮겨 적은 파일이
+`data/media/wont-programs.json` 입니다(사람이 쓰고 사람이 고치는 입력 파일 — `data/media/classify-*.json`과 같은 성격).
+
+| 키 | 내용 |
+|---|---|
+| `status` · `priceMinor` | 레거시 사이트가 그 상품에 붙여 둔 상태(`[모집중]` → `PUBLISHED`, `진행 완료` → `ARCHIVED`)와 목록에 적혀 있던 가격 |
+| `factSheet` · `features` · `highlights` | 상품 개요표(일정·항공·포함/불포함·특전)와 구성·하이라이트 |
+| `schedule.days[]` | 일정표를 날짜·시간·항목으로 옮긴 것 (`/travel/<id>/itinerary`가 그대로 읽습니다) |
+| `spots[]` · `destination` | “여행지 소개 VISIT” 관광정보와 도시 소개 — `/discover`의 DESTINATION 엔트리도 여기서 생성됩니다 |
+| `stays[]` · `companions[]` · `route` | 숙소·식사 안내, 동행 게스트 소개(개인 연락처 제외), 동선 지도 |
+| `documents[]` | 내용을 글로 옮긴 뒤에도 보여 주는 원본 안내 이미지 |
+| `restricted` | 개인 연락처·제3자 방송 화면이 찍혀 있어 **상품 페이지에 다시 싣지 않는** 이미지와 그 사유. 아카이브(`/about/brand-archive`, `/stories/...`)에는 남습니다 |
+
+`scripts/legacy/assign.mjs`가 이 파일을 읽어 `assignments.legacyProducts[].detail`과 `assignments.legacyDestinations`를
+만들고, `packages/db/seed-media.mjs`가 `travel_products.detail`(마이그레이션 `0602`)과 DESTINATION 엔트리에 씁니다.
+참조한 이미지가 공개된 레거시 미디어가 아니면 `assign.mjs`가 실패합니다. 내용을 고친 뒤에는:
+
+```bash
+node scripts/legacy/assign.mjs            # data/media/assignments.json + apps/web/public/media-map.json
+node packages/db/seed-dev.mjs             # travel_products.detail / DESTINATION 갱신 (편집되지 않은 행만)
+bash scripts/pages/record.sh              # 정적 데모 픽스처 재녹화 (packages/demo/fixtures/api.json)
+```
+
+**EN.** The legacy product pages carried their fact sheet, schedule, destination guide and hotel information as text
+baked into images — unreadable, unsearchable, untranslatable, and some of the sheets print a personal mobile number
+or e-mail. `data/media/wont-programs.json` is the hand-transcribed content (a human-authored input file, like
+`data/media/classify-*.json`): the sale state and price the legacy site showed, the fact sheet, the day-by-day
+schedule, the places visited, the hotel, the guests who travelled along, and `restricted` — the images that stay in
+the archive but are never republished on a product page, each with its reason. `scripts/legacy/assign.mjs` turns it
+into `assignments.legacyProducts[].detail` and `assignments.legacyDestinations`; `packages/db/seed-media.mjs` writes
+`travel_products.detail` (migration `0602`) and the 관광정보 DESTINATION entries. assign fails if the content names an
+image that is not a published legacy medium. Re-run the three commands above after editing it.
+
 ### 5b. Staging / Production — API migration CLI (감사 기록 / audited path)
 
 **KO.** 운영 경로는 MIG-01 공식 CLI입니다. 기본은 DRY_RUN이며 `--apply`로 실제 반영합니다. 모든 배치는

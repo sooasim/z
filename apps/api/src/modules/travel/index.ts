@@ -79,7 +79,31 @@ const supplierDto = (s: any) => ({
 
 /** Supplier-written text in the public product DTOs. */
 const PRODUCT_LIST_TEXT = ['items[].title', 'items[].summary'] as const;
-const PRODUCT_TEXT = ['item.title', 'item.summary', 'item.description', 'item.cancellationTerms'] as const;
+const PRODUCT_TEXT = [
+  'item.title', 'item.summary', 'item.description', 'item.cancellationTerms',
+  // the rebuilt programme content (travel_products.detail) is supplier copy like the rest of the product
+  'item.detail.lead', 'item.detail.concept.title', 'item.detail.concept.body',
+  'item.detail.factSheet.priceNote', 'item.detail.factSheet.rows[].label', 'item.detail.factSheet.rows[].values[]',
+  'item.detail.factSheet.includes[]', 'item.detail.factSheet.excludes[]', 'item.detail.factSheet.perks[]',
+  'item.detail.features[].title', 'item.detail.features[].items[]',
+  'item.detail.highlights[].title', 'item.detail.highlights[].note',
+  'item.detail.schedule.note', 'item.detail.schedule.days[].theme', 'item.detail.schedule.days[].place',
+  'item.detail.schedule.days[].note', 'item.detail.schedule.days[].hotel', 'item.detail.schedule.days[].meals[]',
+  'item.detail.schedule.days[].items[].time', 'item.detail.schedule.days[].items[].text', 'item.detail.schedule.days[].items[].sub[]',
+  'item.detail.spots[].name', 'item.detail.spots[].lead', 'item.detail.spots[].body', 'item.detail.spots[].city',
+  'item.detail.stays[].lead', 'item.detail.stays[].body', 'item.detail.stays[].dining.title', 'item.detail.stays[].dining.body',
+  'item.detail.stays[].dining.allergyNote',
+  'item.detail.companions[].role', 'item.detail.companions[].title', 'item.detail.companions[].bio',
+  'item.detail.route.note', 'item.detail.destination.lead', 'item.detail.destination.body',
+  'item.detail.destination.facts[].label', 'item.detail.destination.facts[].value',
+] as const;
+
+/** Editorial programme detail as the catalogue serves it — without the seeder's own bookkeeping. */
+const publicDetail = (detail: any) => {
+  if (!detail || typeof detail !== 'object') return undefined;
+  const { seedMedia, ...rest } = detail;
+  return Object.keys(rest).length ? rest : undefined;
+};
 
 const productDto = (p: any, extra: Record<string, unknown> = {}) => ({
   id: p.id,
@@ -95,6 +119,7 @@ const productDto = (p: any, extra: Record<string, unknown> = {}) => ({
   basePriceMinor: p.base_price_minor,
   currency: p.currency,
   cancellationTerms: p.cancellation_terms,
+  detail: publicDetail(p.detail),
   mediaIds: p.media_ids,
   status: p.status,
   // TRAVEL-01 acceptance: published product identifies seller and merchant-of-record role
@@ -444,6 +469,8 @@ export default async function travelModule(app: FastifyInstance) {
           maxPrice: z.coerce.number().int().nonnegative().optional(),
           from: isoDate.optional(),
           to: isoDate.optional(),
+          // migrated heritage programmes (MIG-01): browsable read-only, including the ones that already ran
+          collection: z.enum(['LEGACY_WONT']).optional(),
         }),
       },
     },
@@ -456,7 +483,9 @@ export default async function travelModule(app: FastifyInstance) {
                 (SELECT min(coalesce(d.price_minor, p.base_price_minor)) FROM travel_departures d
                   WHERE d.product_id = p.id AND d.status IN ('OPEN','GUARANTEED') AND d.starts_at > now()) AS from_price_minor
            FROM travel_products p JOIN suppliers s ON s.id = p.supplier_id
-          WHERE p.status = 'PUBLISHED' AND s.status = 'APPROVED'
+          WHERE s.status = 'APPROVED'
+            AND (($12::text IS NULL AND p.status = 'PUBLISHED')
+                 OR ($12::text IS NOT NULL AND p.detail->'legacy'->>'system' = $12 AND p.status IN ('PUBLISHED','ARCHIVED')))
             AND ($1::text IS NULL OR p.type = $1)
             AND ($2::text IS NULL OR p.city ILIKE $2)
             AND ($3::text IS NULL OR p.country = $3)
@@ -480,6 +509,7 @@ export default async function travelModule(app: FastifyInstance) {
           c?.createdAt ?? null,
           c?.id ?? null,
           f.limit + 1,
+          f.collection ?? null,
         ],
       );
       const pg = page(rows, f.limit);
@@ -494,8 +524,11 @@ export default async function travelModule(app: FastifyInstance) {
     const out = await productWithOptions(pool, req.params.id);
     if (!out) throw notFound('Product');
     const actor = req.actor;
+    // A migrated heritage programme (MIG-01) stays readable once it has run: the catalogue keeps the WON TRAVEL
+    // CLUB archive browsable. It is never orderable — ordering checks PUBLISHED and needs an open departure.
+    const archived = out.row.detail?.legacy?.system === 'LEGACY_WONT' && out.row.status === 'ARCHIVED';
     const visible =
-      (out.row.status === 'PUBLISHED' && out.row.supplier_status === 'APPROVED') ||
+      ((out.row.status === 'PUBLISHED' || archived) && out.row.supplier_status === 'APPROVED') ||
       (actor && (out.row.owner_user_id === actor.userId || (hasRole(actor, 'ADMIN', 'EDITOR', 'COMPLIANCE') && actor.aal === 'aal2')));
     if (!visible) throw notFound('Product');
     const deps = await q(pool, `SELECT * FROM travel_departures WHERE product_id = $1 AND starts_at > now() AND status IN ('OPEN','GUARANTEED') ORDER BY starts_at LIMIT 50`, [out.row.id]);
@@ -509,10 +542,12 @@ export default async function travelModule(app: FastifyInstance) {
     '/v1/travel-products/:id/departures',
     { schema: { summary: 'List the departures of a travel product', tags: [T2], params: idParams, querystring: z.object({ from: isoDate.optional(), to: isoDate.optional(), includePast: z.enum(['true', 'false']).default('false') }) } },
     async (req) => {
-      const p = await maybeOne(pool, `SELECT p.status, s.status AS supplier_status, s.owner_user_id FROM travel_products p JOIN suppliers s ON s.id = p.supplier_id WHERE p.id = $1`, [req.params.id]);
+      const p = await maybeOne(pool, `SELECT p.status, p.detail, s.status AS supplier_status, s.owner_user_id FROM travel_products p JOIN suppliers s ON s.id = p.supplier_id WHERE p.id = $1`, [req.params.id]);
       if (!p) throw notFound('Product');
       const owner = !!req.actor && p.owner_user_id === req.actor.userId;
-      if (!owner && !(p.status === 'PUBLISHED' && p.supplier_status === 'APPROVED')) throw notFound('Product');
+      // a migrated heritage programme is readable like its product page; it simply has nothing on sale
+      const heritage = p.detail?.legacy?.system === 'LEGACY_WONT' && p.status === 'ARCHIVED' && p.supplier_status === 'APPROVED';
+      if (!owner && !heritage && !(p.status === 'PUBLISHED' && p.supplier_status === 'APPROVED')) throw notFound('Product');
       const rows = await q(
         pool,
         `SELECT * FROM travel_departures WHERE product_id = $1

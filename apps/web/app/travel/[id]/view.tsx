@@ -19,6 +19,7 @@ import { HeartButton } from '@/components/favorites';
 import { productImages } from '@/components/cards';
 import { Alert, Badge, Button, ButtonLink, ErrorText, Icon, Kv, MobileActionBar, PriceBreakdown, Qty, Section, Skeleton } from '@/components/ui';
 import { Breadcrumbs } from '@/components/public/Breadcrumbs';
+import ProgramDetail from '@/components/public/ProgramDetail';
 import { productKindLabel, refundLines } from '@/components/public/labels';
 import s from '@/components/public/public.module.css';
 
@@ -44,8 +45,22 @@ export default function TravelDetailView() {
       {(d) => {
         const p = item(d);
         const v = productView(p);
-        const gallery = productImages(p, 3).map((src, i) => realize(src, `${v.id}:${i}`));
+        // A migrated WON TRAVEL CLUB programme carries its rebuilt content; its photographs lead the gallery so the
+        // page opens on the place, not on a scan of the original brochure.
+        const prog = f<any>(p, 'detail');
+        const legacy = prog?.legacy?.system === 'LEGACY_WONT' ? prog.legacy : null;
+        const progPhotos = [
+          ...arr<any>(prog, 'spots').map((x) => str(x, 'photo')),
+          ...arr<any>(prog, 'highlights').map((x) => str(x, 'photo')),
+          ...arr<any>(prog, 'gallery').map((x) => str(x, 'url')),
+          str(prog, 'destination.cover'),
+        ].filter(Boolean);
+        const gallery = [...new Set(progPhotos.length ? progPhotos : productImages(p, 3))].map((src: string, i: number) => realize(src, `${v.id}:${i}`));
         const departures = items(deps.data);
+        const archived = String(v.status ?? str(p, 'status')).toUpperCase() === 'ARCHIVED';
+        const hasProgramDays = arr<any>(prog, 'schedule.days').length > 0;
+        // a heritage programme is read-only: it has no departures to sell, so the booking card becomes an enquiry card
+        const enquiryOnly = !!legacy && (archived || departures.length === 0);
         const sel = departures.find((x: any) => str(x, 'id') === dep);
         const unit = num(sel, 'priceMinor', 'unitPriceMinor') ?? v.priceMinor ?? 0;
         const remaining = num(sel, 'remaining', 'seatsRemaining', 'availableSeats', 'capacityRemaining');
@@ -91,7 +106,11 @@ export default function TravelDetailView() {
             <Breadcrumbs items={[{ href: '/travel', label: L('투어·티켓', 'Tours & tickets') }, ...(city ? [{ href: `/travel?q=${encodeURIComponent(v.city)}`, label: city }] : []), { label: v.title }]} />
             <div className={s.titleRow}>
               <div style={{ minWidth: 0 }}>
-                <Badge tone="info">{kind}</Badge>
+                <span className="row" style={{ gap: 6 }}>
+                  <Badge tone="info">{kind}</Badge>
+                  {legacy && <Badge tone="accent">{L('원여행클럽 아카이브', 'WON TRAVEL CLUB archive')}</Badge>}
+                  {legacy && archived && <Badge tone="warn">{L('진행 완료', 'Already ran')}</Badge>}
+                </span>
                 <h1 style={{ margin: '8px 0 4px' }}>{v.title}</h1>
                 <p className="muted" style={{ margin: 0 }}>
                   {[city, duration, v.supplier && L(`${v.supplier} 제공`, `by ${v.supplier}`)].filter(Boolean).join(' · ')}
@@ -135,12 +154,51 @@ export default function TravelDetailView() {
                   )}
                   {refund.length > 0 && note && lang === 'ko' && <p className="small muted" style={{ marginTop: 10 }}>{note}</p>}
                 </Section>
-                <Section title={L('여행 일정', 'Itinerary')}>
-                  <ButtonLink href={`/travel/${id}/itinerary`} icon="calendar">
-                    {L('일정표 보기 · 내 여행 플래너에 담기', 'View itinerary · add to planner')}
-                  </ButtonLink>
-                </Section>
+                {!hasProgramDays && (
+                  <Section title={L('여행 일정', 'Itinerary')}>
+                    <ButtonLink href={`/travel/${id}/itinerary`} icon="calendar">
+                      {L('일정표 보기 · 내 여행 플래너에 담기', 'View itinerary · add to planner')}
+                    </ButtonLink>
+                  </Section>
+                )}
+                {prog && <ProgramDetail d={prog} productId={id} />}
+                {legacy && (
+                  <p className="small muted" style={{ marginTop: 'var(--sp-6)' }}>
+                    {L('원여행클럽(WON TRAVEL CLUB)이 진행한 프로그램이며, 소유자 승인 하에 JETPOOL로 옮겨 왔습니다.', 'A programme run by WON TRAVEL CLUB, migrated to JETPOOL with the owner’s permission.')}{' '}
+                    {legacy.url && (
+                      <a href={legacy.url} rel="nofollow noopener noreferrer" target="_blank">
+                        {L('원본 주소', 'Original URL')}
+                      </a>
+                    )}
+                  </p>
+                )}
               </div>
+              {enquiryOnly ? (
+                <aside className={`card booking-card sticky-cta stack ${s.aside}`} aria-label={L('문의', 'Enquiry')}>
+                  {v.priceMinor ? (
+                    <div className="price-head">
+                      <strong className="tnum">{formatMoney(v.priceMinor, v.currency, lang)}</strong>
+                      <span className="muted">/ {L('1인', 'person')}</span>
+                    </div>
+                  ) : null}
+                  <p className="small" style={{ margin: 0 }}>
+                    {archived
+                      ? L('진행이 끝난 원여행클럽 프로그램이라 예약할 수 없어요. 일정과 방문지는 아래에 그대로 남겨 두었습니다.', 'This WON TRAVEL CLUB programme has already run, so it cannot be booked. Its schedule and places are kept below.')
+                      : L('원여행클럽이 모집하던 프로그램이에요. 다음 출발 일정과 요금은 여행 상담으로 안내해 드립니다.', 'WON TRAVEL CLUB was taking enquiries for this programme. Ask us about the next departure and price.')}
+                  </p>
+                  {!archived && (
+                    <ButtonLink href="/support" variant="accent" size="lg" block icon="chat">
+                      {L('여행 상담 신청', 'Ask about this trip')}
+                    </ButtonLink>
+                  )}
+                  <ButtonLink href="/travel?collection=LEGACY_WONT" block icon="compass">
+                    {L('원여행클럽 아카이브 둘러보기', 'Browse the WONT archive')}
+                  </ButtonLink>
+                  <p className="xs muted row" style={{ margin: 0, gap: 6, flexWrap: 'nowrap', alignItems: 'flex-start' }}>
+                    <Icon name="shield" size={14} style={{ flex: '0 0 auto', marginTop: 2 }} /> {L('이 프로그램은 결제·예약이 열려 있지 않아요.', 'No payment or booking is open for this programme.')}
+                  </p>
+                </aside>
+              ) : (
               <aside ref={cardRef} className={`card booking-card sticky-cta stack ${s.aside}`} aria-label={L('예약', 'Booking')}>
                 <div className="price-head">
                   <strong className="tnum">{formatMoney(unit, v.currency, lang)}</strong>
@@ -196,7 +254,9 @@ export default function TravelDetailView() {
                   <Icon name="shield" size={14} style={{ flex: '0 0 auto', marginTop: 2 }} /> {L('결제 시 잔여석을 다시 확인하며, 결제 승인 후 주문이 확정돼요.', 'Seats are re-checked at payment; the order is confirmed after approval.')}
                 </p>
               </aside>
+              )}
             </div>
+            {!enquiryOnly && (
             <MobileActionBar label={L('예약', 'Booking')}>
               <div className={s.mobileBarPrice}>
                 <strong>{formatMoney(sel ? unit * qty : unit, v.currency, lang)}</strong>
@@ -206,6 +266,7 @@ export default function TravelDetailView() {
                 {!dep ? L('출발일 선택', 'Choose date') : user ? L('예약하기', 'Book') : L('로그인하고 예약', 'Log in to book')}
               </Button>
             </MobileActionBar>
+            )}
             <p className="small muted" style={{ marginTop: 'var(--sp-8)' }}>
               <Link href="/travel">{L('← 다른 투어·티켓 보기', '← See other tours')}</Link>
             </p>
