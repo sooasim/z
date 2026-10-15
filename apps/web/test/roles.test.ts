@@ -10,6 +10,7 @@ import { ROLE_GUIDES, ROLE_SLUGS, roleByDemoKey, roleBySlug } from '@/lib/roles'
  */
 const WEB_ROOT = path.resolve(__dirname, '..');
 const API_DEMO = path.resolve(WEB_ROOT, '../api/src/modules/identity/demo-accounts.ts');
+const PAGES_WORKFLOW = path.resolve(WEB_ROOT, '../../.github/workflows/pages.yml');
 
 /** Every route segment the app ships, as directory names under app/. */
 function routeExists(href: string): boolean {
@@ -57,6 +58,17 @@ describe('role guide', () => {
     }
     const bad = pairs.filter((p) => p.length !== 2 || !p[0]?.trim() || !p[1]?.trim());
     expect(bad).toEqual([]);
+  });
+
+  it('is covered by the published-site check, slug for slug', () => {
+    // The deploy only verifies the URLs named in pages.yml. That list cannot be generated (the check runs
+    // without a checkout), so a role added here would otherwise ship unverified — and a renamed one would
+    // leave the deploy checking a path that no longer exists.
+    const wf = fs.readFileSync(PAGES_WORKFLOW, 'utf8');
+    const checked = new Set([...wf.matchAll(/"help\/([a-z-]+)\/"/g)].map((m) => m[1]));
+    expect(wf).toMatch(/"help\/"/); // the hub itself
+    expect([...ROLE_SLUGS].filter((s) => !checked.has(s))).toEqual([]);
+    expect([...checked].filter((s) => !ROLE_SLUGS.includes(s))).toEqual([]);
   });
 
   it('lands each role on one of its own screens', () => {
