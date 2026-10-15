@@ -10468,7 +10468,7 @@
     },
     "/v1/conversations/{id}/messages": {
       "get": {
-        "summary": "List the messages of a conversation",
+        "summary": "List the messages of a conversation, with a translation into the reader’s language",
         "tags": [
           "COMMS-01"
         ],
@@ -10491,6 +10491,21 @@
             },
             "in": "query",
             "name": "cursor",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ko-KR",
+                "en-US",
+                "ja-JP",
+                "zh-CN",
+                "vi-VN"
+              ]
+            },
+            "in": "query",
+            "name": "locale",
             "required": false
           },
           {

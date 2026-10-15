@@ -65,6 +65,15 @@ const schema = z.object({
   // AI (AI-01)
   ANTHROPIC_API_KEY: z.string().optional(),
   AI_MODEL: z.string().default('claude-sonnet-5-5'),
+  /**
+   * Machine translation of member-written content and messages.
+   * AUTO prefers Claude when ANTHROPIC_API_KEY is set and falls back to a self-hosted LibreTranslate when
+   * LIBRETRANSLATE_URL is; NONE switches translation off even where the feature flag is on.
+   */
+  TRANSLATE_PROVIDER: z.enum(['AUTO', 'ANTHROPIC', 'LIBRETRANSLATE', 'NONE']).default('AUTO'),
+  /** Self-hosted LibreTranslate (docker compose up libretranslate → http://localhost:5000). */
+  LIBRETRANSLATE_URL: z.string().optional(),
+  LIBRETRANSLATE_API_KEY: z.string().optional(),
   // Geo (PLAT-02)
   GEOCODER: z.enum(['NOMINATIM', 'KAKAO', 'STATIC']).default('STATIC'),
   KAKAO_REST_API_KEY: z.string().optional(),

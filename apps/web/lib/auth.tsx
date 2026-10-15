@@ -14,6 +14,8 @@ export interface User {
   roles: string[];
   aal: 'aal1' | 'aal2';
   mfaEnabled: boolean;
+  /** The account's language (BCP-47). Background work — message translation, notifications — reads this one. */
+  locale: string;
   raw: any;
 }
 
@@ -53,6 +55,7 @@ function toUser(me: any, token: string | null): User | null {
     roles: roles.length ? roles : ['USER'],
     aal: (str(u, 'aal', 'session.aal') || claims.aal || 'aal1') as 'aal1' | 'aal2',
     mfaEnabled: Boolean(f(user, 'mfaEnabled', 'mfa_enabled', 'totpEnabled') ?? f(u, 'mfaEnabled')),
+    locale: str(user, 'locale') || str(u, 'locale'),
     raw: u,
   };
 }

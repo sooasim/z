@@ -28,6 +28,9 @@ x-api-env: &api-env
   S3_BUCKET_PUBLIC: jetpool-public
   CDN_BASE_URL: http://localhost:9000/jetpool-public
   SMTP_URL: smtp://mailpit:1025
+  # Auto-translation: AUTO uses Claude when ANTHROPIC_API_KEY is set, else this self-hosted LibreTranslate.
+  # Switching it on at runtime is still the `content.auto_translate` feature flag (admin → feature flags).
+  LIBRETRANSLATE_URL: http://libretranslate:5000
   LOG_LEVEL: info
 
 services:
@@ -70,6 +73,25 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  libretranslate:
+    # Open-source machine translation (github.com/LibreTranslate/LibreTranslate, AGPL-3.0, Argos models).
+    # Optional: the API only uses it when LIBRETRANSLATE_URL is set, and prefers Claude when an Anthropic key
+    # is configured. LT_LOAD_ONLY keeps the five UI languages in memory instead of every model Argos ships —
+    # the full set needs several GB, this set starts in well under one.
+    image: libretranslate/libretranslate:latest
+    environment:
+      LT_LOAD_ONLY: "ko,en,ja,zh,vi"
+      LT_DISABLE_WEB_UI: "true"
+      LT_UPDATE_MODELS: "true"
+    ports: ["5000:5000"]
+    volumes: [ltmodels:/home/libretranslate/.local/share/argos-translate]
+    healthcheck:
+      # First boot downloads the models, so give it longer than the other services before calling it unhealthy.
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5000/languages || wget -qO- http://127.0.0.1:5000/languages"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
 
   minio:
     image: minio/minio:latest
@@ -159,3 +181,4 @@ volumes:
   redisdata: {}
   meilidata: {}
   miniodata: {}
+  ltmodels: {}

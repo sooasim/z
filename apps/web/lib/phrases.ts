@@ -118,6 +118,13 @@ const ja: Table = {
   'Chiang Mai': 'チェンマイ',
   'Tokyo': '東京',
   'Lisbon': 'リスボン',
+  // ---- messaging (COMMS-01 cross-language chat)
+  'Original': '原文',
+  'Write a message': 'メッセージを入力',
+  'No messages yet': 'まだメッセージがありません',
+  'Message hidden': '非表示のメッセージです',
+  'Conversation': '会話',
+  'All conversations': '会話一覧',
 };
 
 const zh: Table = {
@@ -219,6 +226,13 @@ const zh: Table = {
   'Chiang Mai': '清迈',
   'Tokyo': '东京',
   'Lisbon': '里斯本',
+  // ---- messaging (COMMS-01 cross-language chat)
+  'Original': '原文',
+  'Write a message': '输入消息',
+  'No messages yet': '还没有消息',
+  'Message hidden': '消息已隐藏',
+  'Conversation': '对话',
+  'All conversations': '全部对话',
 };
 
 const vi: Table = {
@@ -325,6 +339,13 @@ const vi: Table = {
   'Chiang Mai': 'Chiang Mai',
   'Tokyo': 'Tokyo',
   'Lisbon': 'Lisbon',
+  // ---- messaging (COMMS-01 cross-language chat)
+  'Original': 'Nguyên văn',
+  'Write a message': 'Nhập tin nhắn',
+  'No messages yet': 'Chưa có tin nhắn nào',
+  'Message hidden': 'Tin nhắn đã bị ẩn',
+  'Conversation': 'Cuộc trò chuyện',
+  'All conversations': 'Tất cả cuộc trò chuyện',
 };
 
 export const PHRASES: Record<TranslatedLang, Table> = { ja, zh, vi };

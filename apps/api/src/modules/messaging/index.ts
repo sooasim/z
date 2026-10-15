@@ -3,10 +3,13 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import pg from 'pg';
 import { z } from 'zod';
 import { getActor, requireAuth, requireRole, resolveActor } from '../../platform/auth.js';
-import { ctxFromRequest, type AppContext } from '../../platform/context.js';
+import { ctxFromRequest, systemCtx, type AppContext } from '../../platform/context.js';
 import { decodeJwt } from 'jose';
-import { withTx } from '../../platform/db.js';
+import { maybeOne, withTx } from '../../platform/db.js';
 import { AppError, unauthorized } from '../../platform/errors.js';
+import { onEvent } from '../../platform/outbox.js';
+import { contentLocale } from '../../platform/content-locale.js';
+import { cachedTranslations, readerLocale, translateMessage } from './translate.js';
 import {
   MAX_BODY_LENGTH,
   NOTIFY_CHANNEL,
@@ -19,6 +22,8 @@ import {
   reportMessage,
   sendMessage,
   toMessageDto,
+  type MessageLocalizer,
+  type MessageRow,
 } from './service.js';
 
 const TAG = ['COMMS-01'];
@@ -79,8 +84,8 @@ export async function startMessageBridge(app: AppContext, opts: MessageBridgeOpt
     c.on('notification', (n) => {
       if (n.channel !== NOTIFY_CHANNEL || !n.payload) return;
       try {
-        const { messageId } = JSON.parse(n.payload);
-        deliverRealtime(app, messageId).catch((err) => app.log.warn({ err }, 'realtime delivery failed'));
+        const { messageId, translated } = JSON.parse(n.payload);
+        deliverRealtime(app, messageId, { translated: !!translated }).catch((err) => app.log.warn({ err }, 'realtime delivery failed'));
       } catch {
         /* ignore malformed payloads */
       }
@@ -135,6 +140,36 @@ export default async function messagingModule(app: FastifyInstance) {
   /** open SSE streams per user on this instance */
   const streams = new Map<string, number>();
 
+  /**
+   * The reader's language for a request, and the cached translations for it (never waits on a provider).
+   * Unlike the catalogue there is no cheap Korean path to skip: a Korean host still needs the Vietnamese
+   * half of the conversation translated, so every reader gets a localizer.
+   */
+  const localizerFor = (req: Parameters<typeof contentLocale>[0], ctx: ReturnType<typeof ctxFromRequest>): MessageLocalizer => {
+    const locale = contentLocale(req);
+    return { locale, translate: (bodies) => cachedTranslations(ctx, bodies, locale) };
+  };
+
+  // Realtime pushes each member the message in their own language; service.ts stays free of the translation
+  // module by reading this adapter rather than importing it.
+  app.ctx.adapters.set('messaging.translationLookup', (bodies: string[], locale: string) => {
+    // users.locale is free text ('de-DE' is a valid account setting); normalise before asking, so an
+    // unsupported language reads as "no translation" instead of erroring inside the queue.
+    const l = readerLocale(locale);
+    return l ? cachedTranslations(systemCtx(app.ctx, `realtime-${Date.now()}`), bodies, l) : Promise.resolve(new Map<string, string>());
+  });
+
+  /**
+   * COMMS-01 cross-language chat: translate a committed message into the languages its conversation reads.
+   * In the outbox (not afterCommit) so a provider failure retries the event instead of being logged and lost.
+   */
+  onEvent('message.created', 'messaging.translate', async (tx, event, ctx) => {
+    const messageId = (event.payload as { messageId?: string })?.messageId;
+    if (!messageId) return;
+    const msg = await maybeOne<MessageRow>(tx, `SELECT * FROM messages WHERE id = $1`, [messageId]);
+    if (msg) await translateMessage(app.ctx, ctx, tx, msg);
+  });
+
   if (app.ctx.config.NODE_ENV !== 'test') {
     let stop: (() => Promise<void>) | null = null;
     app.addHook('onReady', async () => {
@@ -181,8 +216,16 @@ export default async function messagingModule(app: FastifyInstance) {
 
   r.get(
     '/v1/conversations/:id/messages',
-    { schema: { summary: 'List the messages of a conversation', tags: TAG, params: z.object({ id: z.uuid() }), querystring: pageQuery }, preHandler: requireAuth },
-    async (req) => listMessagesAsMember(pool, req.params.id, getActor(req).userId, req.query),
+    {
+      schema: {
+        summary: 'List the messages of a conversation, with a translation into the reader’s language',
+        tags: TAG,
+        params: z.object({ id: z.uuid() }),
+        querystring: pageQuery.extend({ locale: z.enum(['ko-KR', 'en-US', 'ja-JP', 'zh-CN', 'vi-VN']).optional() }),
+      },
+      preHandler: requireAuth,
+    },
+    async (req) => listMessagesAsMember(pool, req.params.id, getActor(req).userId, req.query, localizerFor(req, ctxFromRequest(req))),
   );
 
   r.post(
@@ -263,12 +306,21 @@ export default async function messagingModule(app: FastifyInstance) {
 
       reply.hijack();
       const raw = reply.raw;
+      // Hijacking writes to the socket directly, which skips the hooks @fastify/cors adds its headers in — so
+      // they have to be repeated here or the browser blocks the stream and the member silently stops receiving
+      // messages (the web app runs on a different origin from the API in every deployment we ship).
+      // The allowlisted origin is echoed, never '*': the stream is credentialed.
+      const origin = req.headers.origin;
+      const allowed = app.ctx.config.CORS_ORIGINS.split(',').map((s) => s.trim());
       raw.writeHead(200, {
         'content-type': 'text/event-stream; charset=utf-8',
         'cache-control': 'no-cache, no-transform',
         connection: 'keep-alive',
         'x-accel-buffering': 'no',
         'x-correlation-id': req.correlationId,
+        ...(origin && allowed.includes(origin)
+          ? { 'access-control-allow-origin': origin, 'access-control-allow-credentials': 'true', vary: 'Origin' }
+          : {}),
       });
       raw.write(`retry: 3000\nevent: ready\ndata: ${JSON.stringify({ userId })}\n\n`);
 
