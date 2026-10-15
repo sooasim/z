@@ -10,6 +10,19 @@
 #   deploy  — opt in with the `deploy` input. Needs the secrets below, and runs
 #             infra/single-server/install.sh over SSH.
 #
+# Two ways in, because they are different jobs:
+#
+#   workflow_dispatch + deploy=true   FIRST setup of a server: runs install.sh, which writes .env, the
+#                                     Caddy mode and the public addresses from the inputs you give it.
+#   push of a tag `deploy-*`          RE-deploy of a server that is already set up: ships the current
+#                                     default branch with `jetpool.sh deploy` (build → migrate → up →
+#                                     smoke) and never touches .env or the domain mode. No inputs, so
+#                                     nothing can accidentally rewrite a live site into IP mode — and a
+#                                     tag push needs no `actions: write`, so anyone (or any agent) who
+#                                     can push can ship:
+#
+#                                       git tag deploy-$(date -u +%Y%m%d-%H%M) && git push origin --tags
+#
 # Secrets for `deploy` (Settings → Secrets and variables → Actions):
 #   JETPOOL_SSH_HOST       the server's public IP or hostname
 #   JETPOOL_SSH_USER       login user; `root`, or a user with passwordless sudo
@@ -47,6 +60,9 @@ on:
         description: "Deploy even if the installer's DNS preflight objects"
         type: boolean
         default: false
+  push:
+    # A re-deploy button that needs no API permission: push the tag, the runner ships the branch.
+    tags: ['deploy-*']
 
 permissions:
   contents: read
@@ -145,7 +161,7 @@ jobs:
   deploy:
     name: deploy over SSH
     needs: verify
-    if: ${{ inputs.deploy }}
+    if: ${{ inputs.deploy || startsWith(github.ref, 'refs/tags/deploy-') }}
     runs-on: ubuntu-latest
     steps:
       - name: Check the secrets are present
@@ -198,14 +214,18 @@ jobs:
           EMAIL: ${{ inputs.email }}
           SEED: ${{ inputs.seed }}
           SKIP_DNS: ${{ inputs.skip_dns_check }}
-          BRANCH: ${{ github.ref_name }}
+          # A tag push re-deploys what is already configured; a dispatch sets a server up from scratch.
+          MODE: ${{ startsWith(github.ref, 'refs/tags/deploy-') && 'update' || 'install' }}
+          # On a tag push `github.ref_name` is the tag, which is no branch to check out on the server, so
+          # the update path ships the default branch — the tag is a button, not the payload.
+          BRANCH: ${{ startsWith(github.ref, 'refs/tags/deploy-') && github.event.repository.default_branch || github.ref_name }}
           REPO: ${{ github.server_url }}/${{ github.repository }}.git
         run: |
           set -euo pipefail
           # The remote script is fed on stdin so nothing needs quoting through the shell twice.
           ssh -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 \
               -i ~/.ssh/id_deploy -p "${PORT:-22}" "$USER_NAME@$HOST" \
-              env DOMAIN="$DOMAIN" EMAIL="$EMAIL" SEED="$SEED" SKIP_DNS="$SKIP_DNS" \
+              env DOMAIN="$DOMAIN" EMAIL="$EMAIL" SEED="$SEED" SKIP_DNS="$SKIP_DNS" MODE="$MODE" \
                   BRANCH="$BRANCH" REPO="$REPO" bash -s <<'REMOTE'
           set -euo pipefail
           SUDO=""
@@ -218,7 +238,22 @@ jobs:
             git -C "$DIR" fetch --depth 1 origin "$BRANCH"
             git -C "$DIR" checkout -B "$BRANCH" "origin/$BRANCH"
           else
+            if [ "$MODE" = "update" ]; then
+              echo "no checkout at $DIR, so this server was never set up — run the workflow by hand once" >&2
+              echo "(Actions -> single-server -> Run workflow, with a domain and an e-mail) before tagging." >&2
+              exit 1
+            fi
             git clone --branch "$BRANCH" --single-branch "$REPO" "$DIR"
+          fi
+
+          if [ "$MODE" = "update" ]; then
+            # Already configured: ship the code and leave the configuration alone. .env, the Caddy mode and
+            # the public addresses stay exactly as they are, so a re-deploy can never demote a live HTTPS
+            # site into IP mode — which is what install.sh would do here with no domain input to go on.
+            [ -f "$DIR/infra/single-server/.env" ] || { echo "$DIR/infra/single-server/.env is missing: nothing to re-deploy" >&2; exit 1; }
+            echo "re-deploying $BRANCH with the configuration already on this server"
+            $SUDO bash "$DIR/infra/single-server/jetpool.sh" deploy
+            exit 0
           fi
 
           args=""
