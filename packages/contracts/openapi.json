@@ -7356,6 +7356,153 @@
         }
       }
     },
+    "/v1/auth/demo-accounts": {
+      "get": {
+        "summary": "Seeded demo accounts offered for one-click sign-in (empty unless DEMO_LOGINS is on)",
+        "tags": [
+          "CORE-01"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "roles": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "email",
+                          "displayName",
+                          "roles"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/demo-login": {
+      "post": {
+        "summary": "Open a session as a seeded demo account — no password, demo environments only",
+        "tags": [
+          "CORE-01"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "enum": [
+                      "guest",
+                      "host-seoul",
+                      "host-jeju",
+                      "exchange",
+                      "guide-friend",
+                      "guide-pro",
+                      "supplier",
+                      "accounting",
+                      "admin"
+                    ]
+                  }
+                },
+                "required": [
+                  "key"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accessToken": {
+                      "type": "string"
+                    },
+                    "refreshToken": {
+                      "type": "string"
+                    },
+                    "tokenType": {
+                      "type": "string",
+                      "enum": [
+                        "Bearer"
+                      ]
+                    },
+                    "expiresIn": {
+                      "type": "number"
+                    },
+                    "refreshExpiresAt": {
+                      "type": "string"
+                    },
+                    "sessionId": {
+                      "type": "string"
+                    },
+                    "aal": {
+                      "type": "string",
+                      "enum": [
+                        "aal1",
+                        "aal2"
+                      ]
+                    },
+                    "user": {}
+                  },
+                  "required": [
+                    "accessToken",
+                    "refreshToken",
+                    "tokenType",
+                    "expiresIn",
+                    "refreshExpiresAt",
+                    "sessionId",
+                    "aal",
+                    "user"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/auth/email/verify/confirm": {
       "post": {
         "summary": "Confirm an email verification code",

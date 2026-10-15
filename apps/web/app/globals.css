@@ -1210,6 +1210,24 @@ dl.kv dd { margin: 0; font-weight: 600; min-width: 0; }
   .container { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
 }
 
+/* Demo sign-in: one row per seeded role (components/auth/demo-accounts.tsx). A button, so it keeps the
+   card look but answers to the keyboard and to :disabled while a sign-in is in flight. */
+.demo-accounts { display: grid; gap: 8px; grid-template-columns: 1fr; }
+/* Only where the page is wide enough for two readable rows — in the 440px login column it stays one. */
+.demo-accounts.wide { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.demo-account { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; cursor: pointer; padding: 12px 14px; border: 1px solid var(--border); background: var(--surface); color: inherit; transition: border-color var(--dur-fast), transform var(--dur-fast); }
+.demo-account:hover:not(:disabled) { border-color: var(--brand); }
+.demo-account:active:not(:disabled) { transform: translateY(1px); }
+.demo-account:disabled { opacity: 0.6; cursor: progress; }
+.demo-account[data-loading='true'] { border-color: var(--brand); }
+.demo-account > svg:first-child { flex: 0 0 auto; color: var(--brand); }
+.demo-account > svg:last-child { flex: 0 0 auto; color: var(--text-subtle); margin-left: auto; }
+.demo-account-text { display: grid; gap: 2px; min-width: 0; }
+.demo-account-text strong { font-size: var(--fs-sm); }
+.demo-account-text .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The tagline earns two lines; the account line gets one and an ellipsis. */
+.demo-account-text .says { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.45; }
+
 /* Display sizes only (--fs-xl and below are body copy and stay put). */
 @media (max-width: 479px) {
   :root { --fs-2xl: 1.375rem; --fs-3xl: 1.5rem; --fs-4xl: 1.75rem; --fs-5xl: 2.125rem; }

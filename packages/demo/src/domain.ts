@@ -3,7 +3,7 @@
  * the recorded fixtures. Shapes mirror the real API DTOs (apps/api) as captured in the fixtures/templates.
  */
 import { F, anyBody, lookup, lookupFor, narrow, userName } from './fixtures';
-import { persona, personaByUserId, type Persona } from './auth';
+import { persona, personaByDemoKey, personaByUserId, type Persona } from './auth';
 import { QuoteError, catalog, computeQuote, hostIdOf, invalidateCatalog, propertyDetail, publicCalendar, searchItemOf, searchProperties, suggest, locallyBookedNights } from './catalog';
 import { S, entities, entity, putEntity, save, type Kind } from './store';
 import { publish } from './realtime';
@@ -101,6 +101,14 @@ on('GET', /^\/v1\/config\/public$/, (c) => {
   body.config = { ...(body.config ?? {}), paymentProvider: 'MOCK', demo: true, staticDemo: true };
   body.paymentProvider = 'MOCK';
   return ok(body);
+});
+
+// The one-click sign-in listing. Recorded from a seeded API, then narrowed to the personas this static demo
+// actually carries — a key with no persona behind it would be a button that 404s.
+on('GET', /^\/v1\/auth\/demo-accounts$/, (c) => {
+  const h = recorded(c);
+  const items = itemsOf(h?.body ?? {}).filter((a: Obj) => personaByDemoKey(String(a?.key ?? '')));
+  return ok({ items });
 });
 
 on('GET', /^\/v1\/me$/, (c) => {

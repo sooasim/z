@@ -1,0 +1,273 @@
+/**
+ * What each kind of member can do, screen by screen — the content behind `/help` and `/help/<slug>`.
+ *
+ * JETPOOL puts four marketplaces behind one account, so the same header leads somewhere different depending on
+ * which roles the account holds: a host sees 호스트 센터 where a traveller sees 호스트 되기. That is invisible
+ * until you are signed in as the right person, which is exactly what this guide (and the demo sign-in beside it)
+ * is for. Copy is `[한국어, English]`; read it with `pickPair` so ja/zh/vi go through the phrase table.
+ *
+ * `demoKeys` are the seeded accounts `/v1/auth/demo-accounts` offers (apps/api/.../demo-accounts.ts). An account
+ * key listed here that the environment does not have simply yields no button.
+ */
+export type Copy = readonly [string, string];
+
+export interface Screen {
+  /** Where it lives. A route that needs the role is only reachable once signed in as one. */
+  href: string;
+  name: Copy;
+  /** What the screen is for, in one sentence. */
+  what: Copy;
+  /** The buttons that matter on it and what they actually do. */
+  actions?: Copy[];
+}
+
+export interface RoleGuide {
+  slug: string;
+  /** Seeded demo accounts for this role, in the order the buttons appear. */
+  demoKeys: string[];
+  name: Copy;
+  tagline: Copy;
+  /** The platform role(s) on the account — what the header reads to decide what to show. */
+  roles: string[];
+  icon: string;
+  /** Where the one-click sign-in lands. */
+  home: string;
+  intro: Copy;
+  screens: Screen[];
+  /** A short path through the product: do these in order and you have seen the role work. */
+  steps: Copy[];
+  /** Things that look broken but are the product working as designed. */
+  notes?: Copy[];
+}
+
+export const ROLE_GUIDES: RoleGuide[] = [
+  {
+    slug: 'traveler',
+    demoKeys: ['guest'],
+    name: ['여행자', 'Traveller'],
+    tagline: ['숙소·맞교환·가이드·투어를 한 계정으로 예약합니다.', 'Books stays, exchanges, guides and tours from one account.'],
+    roles: [],
+    icon: 'bag',
+    home: '/trips',
+    intro: [
+      '가입하면 누구나 여행자입니다. 별도 승인 없이 네 가지 상품을 모두 예약할 수 있고, 예약·메시지·결제가 한곳에 모입니다. 호스트·가이드·공급사도 모두 여행자 기능을 그대로 씁니다.',
+      'Every account starts here — no approval needed. One traveller account books all four marketplaces, and keeps trips, messages and payments in one place. Hosts, guides and suppliers keep these screens too.',
+    ],
+    screens: [
+      { href: '/stay', name: ['숙소 검색', 'Stay search'], what: ['날짜·인원·지역으로 유료 숙소를 찾습니다. 지도와 목록을 오갈 수 있어요.', 'Find paid stays by date, guests and area, as a list or on the map.'], actions: [['지도 보기 — 목록과 지도를 전환합니다', 'Map view — switches between list and map'], ['하트 — 저장함(/saved)에 담습니다', 'Heart — saves it to /saved']] },
+      { href: '/stay/[slug]', name: ['숙소 상세', 'Stay detail'], what: ['사진·편의시설·이용규칙·후기와 함께 날짜를 고르고 예약합니다.', 'Photos, amenities, house rules and reviews, with the booking card.'], actions: [['예약하기 — 요금을 확정하고 결제로 넘어갑니다', 'Book — locks the quote and goes to checkout'], ['호스트에게 문의 — 예약 전 메시지를 보냅니다', 'Message the host — opens an inquiry thread']] },
+      { href: '/exchange', name: ['홈 맞교환', 'Home exchange'], what: ['내 집과 상대 집을 맞바꾸는 여행입니다. 돈이 아니라 집이 오갑니다.', 'Swap your home for someone else’s — no money changes hands.'], actions: [['맞교환 제안하기 — 내 집과 기간을 골라 제안을 보냅니다', 'Propose an exchange — pick your home and the dates']] },
+      { href: '/guide-friends', name: ['가이드 프렌드', 'Guide friends'], what: ['현지 친구처럼 동행하는 무료 가이드와, 요금을 받는 전문 가이드를 찾습니다.', 'Local friends who show you around for free, and paid professionals.'], actions: [['요청 보내기 — 날짜와 하고 싶은 일을 적어 보냅니다', 'Send a request — your dates and what you want to do']] },
+      { href: '/travel', name: ['투어·티켓', 'Tours & tickets'], what: ['검증된 공급사의 투어·티켓·패키지를 출발일 기준으로 예약합니다.', 'Tours, tickets and packages from verified suppliers, by departure date.'], actions: [['예약하기 — 출발일과 인원을 골라 주문합니다', 'Book — choose a departure and travellers'], ['여행 상담 신청 — 출발일이 열리지 않은 프로그램 문의', 'Ask about this trip — for programmes with no open departure']] },
+      { href: '/trips', name: ['내 여행', 'My trips'], what: ['예약한 모든 것이 다가오는 여행 / 지난 여행 / 취소로 나뉘어 보입니다.', 'Everything you booked, split into upcoming, past and cancelled.'], actions: [['여행 상세 — 바우처, 취소·환불, 호스트 연락이 모두 여기에', 'Open a trip — voucher, cancellation and the host thread']] },
+      { href: '/messages', name: ['메시지', 'Messages'], what: ['예약·맞교환·가이드 건별로 대화가 열립니다. 플랫폼 밖 연락처 교환은 막혀 있어요.', 'A thread per booking, exchange or guide request. Off-platform contact details are blocked.'] },
+      { href: '/payments', name: ['결제·환불', 'Payments'], what: ['결제 내역과 환불 진행 상황을 확인합니다.', 'Your payments and the state of any refund.'] },
+      { href: '/trip-planner', name: ['여행 플래너', 'Trip planner'], what: ['예약과 메모를 날짜별로 묶어 일정표를 만듭니다.', 'Collect bookings and notes into a day-by-day plan.'] },
+      { href: '/saved', name: ['저장함', 'Saved'], what: ['하트로 담아 둔 숙소·가이드·상품을 모아 봅니다.', 'Everything you hearted, in one place.'] },
+    ],
+    steps: [
+      ['`/stay`에서 "제주"로 검색하고 숙소 하나를 엽니다.', 'Search “Jeju” on /stay and open a listing.'],
+      ['날짜를 고르고 예약하기 → 테스트 결제로 끝까지 진행합니다.', 'Pick dates, book, and pay with the test provider.'],
+      ['`/trips`에서 방금 만든 예약을 열고 바우처와 취소 규정을 확인합니다.', 'Open the new booking in /trips and read the voucher and refund terms.'],
+      ['`/messages`에서 호스트와의 대화를 확인합니다.', 'Check the host thread in /messages.'],
+    ],
+    notes: [['결제는 테스트(MOCK) 모드입니다. 실제로 돈이 움직이지 않아요.', 'Payments run in test (MOCK) mode — no money moves.']],
+  },
+  {
+    slug: 'host',
+    demoKeys: ['host-seoul', 'host-jeju'],
+    name: ['호스트', 'Host'],
+    tagline: ['숙소를 올리고 달력·예약·정산을 관리합니다.', 'Lists homes and runs the calendar, reservations and payouts.'],
+    roles: ['HOST'],
+    icon: 'home',
+    home: '/host/dashboard',
+    intro: [
+      '숙소를 등록하면 계정에 HOST 역할이 붙고, 헤더 메뉴의 "호스트 되기"가 "호스트 센터"로 바뀝니다. 여행자 화면은 그대로 두고 운영 화면이 더해지는 구조예요.',
+      'Listing a home adds the HOST role, and “Become a host” in the menu becomes “Host center”. The traveller screens stay; the operations screens are added.',
+    ],
+    screens: [
+      { href: '/host/dashboard', name: ['호스트 센터', 'Host center'], what: ['예정된 예약, 운영 중인 숙소, 최근 정산액, 평균 평점을 한 화면에서 봅니다.', 'Upcoming reservations, live listings, recent payouts and your rating.'], actions: [['숙소 등록 — 새 숙소 등록 흐름을 시작합니다', 'Add a listing — starts the listing flow']] },
+      { href: '/host/listings', name: ['숙소 관리', 'Listings'], what: ['등록한 숙소의 사진·요금·규칙·인허가를 관리합니다.', 'Photos, pricing, rules and permits for each listing.'], actions: [['편집 — 제목·소개·요금·규칙을 고칩니다', 'Edit — title, description, pricing, rules'], ['사진 — 사진을 올리고 순서를 바꿉니다', 'Photos — upload and reorder'], ['인허가 — 영업신고번호 등 규제 서류를 등록합니다', 'Permits — the licence the jurisdiction requires'], ['맞교환 — 이 숙소를 맞교환에도 내놓습니다', 'Exchange — also offer this home for swaps']] },
+      { href: '/host/calendar', name: ['달력', 'Calendar'], what: ['날짜별 가능/차단과 요금을 조정합니다. 예약된 날짜는 자동으로 막힙니다.', 'Open, block and price dates. Booked dates block themselves.'], actions: [['날짜 선택 후 차단/해제 — 수동으로 막거나 엽니다', 'Select dates, then block or open them']] },
+      { href: '/host/reservations', name: ['예약 관리', 'Reservations'], what: ['예정·숙박 중·완료·취소로 나눠 예약을 처리합니다.', 'Reservations by state: upcoming, in stay, completed, cancelled.'], actions: [['예약 열기 — 게스트 정보, 메시지, 취소 처리로 이어집니다', 'Open — guest details, messages and cancellation']] },
+      { href: '/earnings', name: ['정산', 'Earnings'], what: ['확정된 수익, 지급 예정일, 지난 정산 내역을 봅니다.', 'Confirmed earnings, next payout date and past payouts.'], actions: [['정산 계좌 — 받을 계좌를 등록합니다(2단계 인증 필요)', 'Payout account — add where money lands (needs 2-step verification)']] },
+      { href: '/host/onboarding', name: ['호스트 시작하기', 'Host onboarding'], what: ['아직 호스트가 아닌 계정이 숙소를 올리는 첫 단계입니다.', 'The first step for an account that is not a host yet.'] },
+      { href: '/host/integrations', name: ['채널 연동', 'Channel integrations'], what: ['외부 예약 채널의 달력을 끌어와 중복 예약을 막습니다.', 'Pull calendars from other channels so dates cannot double-book.'] },
+    ],
+    steps: [
+      ['`/host/dashboard`에서 예정된 예약 수를 확인합니다.', 'Check the upcoming reservations on /host/dashboard.'],
+      ['`/host/listings`에서 숙소 하나를 열고 편집을 눌러 봅니다.', 'Open a listing in /host/listings and press Edit.'],
+      ['`/host/calendar`에서 며칠을 차단한 뒤 `/stay`에서 그 날짜가 사라졌는지 봅니다.', 'Block a few dates in /host/calendar, then confirm they disappear on /stay.'],
+      ['`/earnings`에서 최근 정산 내역을 확인합니다.', 'Read the recent payouts in /earnings.'],
+    ],
+    notes: [['서울 호스트와 제주 호스트는 가진 숙소가 다릅니다. 둘 다 눌러 보세요.', 'The Seoul and Jeju hosts own different homes — try both.']],
+  },
+  {
+    slug: 'exchange',
+    demoKeys: ['exchange'],
+    name: ['맞교환 회원', 'Exchange member'],
+    tagline: ['집과 집을 맞바꿔 여행합니다. 결제가 아니라 합의가 오갑니다.', 'Swaps homes instead of paying — the deal is an agreement, not a price.'],
+    roles: ['HOST'],
+    icon: 'swap',
+    home: '/exchange',
+    intro: [
+      '맞교환은 유료 숙박과 완전히 다른 흐름입니다. 요금·결제가 없고, 대신 양쪽이 각자 집을 걸고 합의해야 성립해요. 그래서 내 집이 먼저 등록돼 있어야 제안할 수 있습니다.',
+      'Exchange is not a cheaper booking — it is a different machine. No price, no payment: both sides stake a home and both must agree, so you need a listed home before you can propose one.',
+    ],
+    screens: [
+      { href: '/exchange', name: ['맞교환 둘러보기', 'Browse exchanges'], what: ['맞교환에 열려 있는 집을 찾고 제안을 보냅니다.', 'Homes open to a swap, and where you propose one.'], actions: [['맞교환 제안하기 — 내 집·기간·메시지를 담아 보냅니다', 'Propose an exchange — your home, the dates and a note']] },
+      { href: '/exchange/[id]', name: ['맞교환 상세', 'Exchange detail'], what: ['제안 → 수락 → 양쪽 확인 → 합의서까지의 진행 상태를 봅니다.', 'The state of one swap: proposed, accepted, both verified, agreed.'], actions: [['수락 / 거절 — 받은 제안에 답합니다', 'Accept / decline — answer a proposal'], ['확인 완료 — 양쪽이 모두 눌러야 합의가 성립합니다', 'Confirm — the swap is only agreed when both sides do']] },
+      { href: '/exchange/onboarding', name: ['맞교환 시작하기', 'Exchange onboarding'], what: ['내 집을 맞교환 대상으로 열고, 필요한 확인을 마칩니다.', 'Open your home for swaps and finish the checks.'] },
+      { href: '/host/listings', name: ['내 집 관리', 'My home'], what: ['맞교환에 내놓을 집은 숙소 관리에서 "맞교환"을 켜 둡니다.', 'The home you stake is a listing with “Exchange” turned on.'] },
+      { href: '/messages', name: ['메시지', 'Messages'], what: ['맞교환은 대화가 반입니다. 건별 대화에서 일정과 규칙을 맞춥니다.', 'Half of an exchange is the conversation — dates and rules get settled here.'] },
+    ],
+    steps: [
+      ['`/exchange`에서 마음에 드는 집을 엽니다.', 'Open a home you like on /exchange.'],
+      ['맞교환 제안하기 → 내 집과 기간을 고르고 보냅니다.', 'Propose an exchange — pick your home and the dates.'],
+      ['`/exchange`의 내 제안 목록에서 상태가 바뀌는 것을 확인합니다.', 'Watch the state change in your proposals list.'],
+      ['`/messages`에서 상대와의 대화를 확인합니다.', 'Read the thread in /messages.'],
+    ],
+    notes: [['맞교환에는 결제가 없습니다. 결제 화면이 안 보이는 게 정상이에요.', 'There is no payment step in an exchange — that is not a missing screen.']],
+  },
+  {
+    slug: 'guide-friend',
+    demoKeys: ['guide-friend'],
+    name: ['가이드 프렌드', 'Guide friend'],
+    tagline: ['요금 없이 현지 친구로 동행합니다.', 'Shows travellers around as a local friend, for free.'],
+    roles: ['GUIDE'],
+    icon: 'compass',
+    home: '/guide/requests',
+    intro: [
+      '프렌드 가이드는 돈을 받지 않습니다. 그래서 결제·정산 화면이 없고, 요청을 받아 일정만 맞추면 끝이에요. 유료 가이드와 같은 화면을 쓰되 "유료 제안" 부분이 비활성입니다.',
+      'A friend guide takes no money, so there is no payment or payout screen — just requests and dates. Same screens as a paid guide, with the paid-offer part switched off.',
+    ],
+    screens: [
+      { href: '/guide/requests', name: ['가이드 센터 · 요청함', 'Guide center · requests'], what: ['여행자가 보낸 동행 요청을 보고 답합니다.', 'Requests from travellers, and your answer to them.'], actions: [['제안 보내기 — 가능한 일정과 메시지를 보냅니다', 'Send an offer — the dates you can do and a note'], ['거절 — 요청을 닫습니다', 'Decline — closes the request']] },
+      { href: '/guide/calendar', name: ['가이드 일정 · 확정된 동행', 'Guide calendar & confirmed meetups'], what: ['가능한 날짜와 시간대를 열어 두고, 아래 "예정된 가이드 예약"에서 확정된 동행을 봅니다. 여행자는 열린 시간만 요청할 수 있어요.', 'Open the hours you can do; confirmed meetups are listed under them. Travellers can only ask for what is open.'] },
+      { href: '/guide-bookings/[id]', name: ['동행 상세', 'Meetup detail'], what: ['확정된 동행 하나를 열어 일정·장소·대화를 확인합니다. 일정 목록이나 알림에서 들어갑니다.', 'One confirmed meetup: its time, place and thread. Reached from the calendar or a notification.'] },
+      { href: '/guide/onboarding', name: ['가이드 시작하기', 'Guide onboarding'], what: ['소개·지역·언어·관심사를 채워 프로필을 공개합니다.', 'Bio, area, languages and interests — then your profile goes live.'] },
+      { href: '/guides/[id]', name: ['내 공개 프로필', 'Your public profile'], what: ['여행자에게 보이는 화면입니다. 후기와 응답률이 여기 쌓여요.', 'What travellers see — reviews and response rate build up here.'] },
+    ],
+    steps: [
+      ['`/guide/requests`에서 받은 요청을 엽니다.', 'Open a request in /guide/requests.'],
+      ['제안 보내기로 가능한 시간을 보냅니다.', 'Send an offer with the time you can do.'],
+      ['`/guide-bookings`에서 확정된 일정을 확인합니다.', 'Check the confirmed meetup in /guide-bookings.'],
+      ['`/guides/<내 id>`로 공개 프로필이 어떻게 보이는지 확인합니다.', 'Open /guides/<your id> to see your public profile.'],
+    ],
+  },
+  {
+    slug: 'guide-pro',
+    demoKeys: ['guide-pro'],
+    name: ['유료 가이드', 'Paid guide'],
+    tagline: ['요금을 받고 가이드합니다. 결제와 정산이 따라붙습니다.', 'Guides for a fee — with payment and payouts attached.'],
+    roles: ['GUIDE'],
+    icon: 'compass',
+    home: '/guide/requests',
+    intro: [
+      '유료 가이드는 프렌드와 같은 화면을 쓰지만 금액이 들어갑니다. 제안에 요금을 적으면 여행자가 결제해야 확정되고, 그 돈은 정산 화면으로 흘러갑니다. 유료 가이드 기능은 법적 검토(G9) 전까지 기능 플래그로 꺼 둘 수 있어요.',
+      'Same screens as a friend guide, with a price on them: your offer carries a fee, the traveller pays to confirm, and the money shows up in Earnings. Paid guiding sits behind a feature flag until its legal review (G9).',
+    ],
+    screens: [
+      { href: '/guide/requests', name: ['가이드 센터 · 요청함', 'Guide center · requests'], what: ['요청에 금액을 적은 제안을 보냅니다.', 'Answer a request with a priced offer.'], actions: [['유료 제안 — 금액(원)을 적어 보냅니다', 'Paid offer — put a price on it'], ['제안 보내기 — 여행자가 결제하면 확정됩니다', 'Send — it confirms when the traveller pays']] },
+      { href: '/guide/calendar', name: ['가이드 일정 · 확정된 예약', 'Guide calendar & confirmed bookings'], what: ['판매할 시간대를 열고, 결제까지 끝난 예약을 아래에서 봅니다.', 'Open the hours you sell; paid bookings are listed under them.'] },
+      { href: '/guide-bookings/[id]', name: ['예약 상세', 'Booking detail'], what: ['확정된 예약 하나의 일정·금액·대화를 봅니다.', 'One confirmed booking: time, price and thread.'] },
+      { href: '/earnings', name: ['정산', 'Earnings'], what: ['가이드 수익과 지급 예정일을 봅니다.', 'Guiding income and when it pays out.'], actions: [['정산 계좌 — 받을 계좌를 등록합니다(2단계 인증 필요)', 'Payout account — needs 2-step verification']] },
+      { href: '/verification', name: ['본인 확인', 'Verification'], what: ['유료 가이드는 본인 확인을 마쳐야 배지가 붙습니다.', 'A paid guide needs identity verification for the badge.'] },
+    ],
+    steps: [
+      ['`/guide/requests`에서 요청을 열고 유료 제안으로 금액을 적어 보냅니다.', 'Open a request and send a priced offer.'],
+      ['여행자 계정으로 바꿔 그 제안을 결제해 봅니다.', 'Switch to the traveller account and pay for it.'],
+      ['다시 가이드로 돌아와 `/guide-bookings`와 `/earnings`를 확인합니다.', 'Come back and check /guide-bookings and /earnings.'],
+    ],
+    notes: [['유료 가이드 기능이 꺼져 있으면 금액 입력이 보이지 않습니다. 운영자 계정의 `/admin/config`에서 켤 수 있어요.', 'With the paid-guide flag off, the price field is hidden. The admin account turns it on in /admin/config.']],
+  },
+  {
+    slug: 'supplier',
+    demoKeys: ['supplier'],
+    name: ['여행 공급사', 'Travel supplier'],
+    tagline: ['투어·티켓·패키지를 등록하고 출발일과 좌석을 관리합니다.', 'Lists tours, tickets and packages, and runs departures and seats.'],
+    roles: ['SUPPLIER'],
+    icon: 'ticket',
+    home: '/supplier/products',
+    intro: [
+      '공급사는 상품의 계약 당사자입니다. JETPOOL은 통신판매중개자로서 결제와 고객 지원을 맡고, 상품·출발일·좌석은 공급사가 직접 관리해요. 등록은 승인제라서 운영자 승인 후에 상품이 공개됩니다.',
+      'The supplier is the contracting party for its products; JETPOOL is the marketplace and handles payment and support. Suppliers run their own products, departures and seats — after an admin approves the company.',
+    ],
+    screens: [
+      { href: '/supplier/products', name: ['공급사 센터', 'Supplier center'], what: ['상품 목록과 상태(임시저장·검수중·판매중)를 봅니다.', 'Your products and their state: draft, in review, published.'], actions: [['상품 등록 — 새 투어·티켓·패키지를 만듭니다', 'Add a product — a new tour, ticket or package'], ['검수 요청 — 운영자 검수로 보냅니다', 'Submit for review — sends it to an admin'], ['출발일 — 날짜·정원·요금을 추가합니다', 'Departures — dates, capacity and price']] },
+      { href: '/supplier/products', name: ['출발일·재고 탭', 'Departures & inventory tab'], what: ['상품마다 출발일을 열고 정원과 요금을 정합니다. 잔여석은 결제 시점에 다시 확인됩니다.', 'Open departures per product with capacity and price; seats are re-checked at payment.'] },
+      { href: '/supplier/products', name: ['주문 탭', 'Orders tab'], what: ['같은 화면의 "주문" 탭에서 들어온 주문과 바우처 상태를 봅니다.', 'The “Orders” tab of the same screen: incoming orders and voucher state.'] },
+      { href: '/earnings', name: ['정산', 'Earnings'], what: ['판매액에서 수수료를 뺀 정산 예정액을 봅니다.', 'Sales minus commission, and when it pays out.'] },
+    ],
+    steps: [
+      ['`/supplier/products`에서 상품 하나를 엽니다.', 'Open a product on /supplier/products.'],
+      ['출발일을 하나 추가하고 정원을 정합니다.', 'Add a departure with a capacity.'],
+      ['여행자 계정으로 `/travel`에서 그 출발일이 보이는지 확인합니다.', 'Switch to the traveller and find that departure on /travel.'],
+      ['주문이 들어오면 `/orders`에서 확인합니다.', 'Check /orders once an order lands.'],
+    ],
+  },
+  {
+    slug: 'accounting',
+    demoKeys: ['accounting'],
+    name: ['정산 담당', 'Finance'],
+    tagline: ['원장·정산·환불을 확인하고 지급을 승인합니다.', 'Reads the ledger, runs settlements and approves payouts.'],
+    roles: ['ACCOUNTING'],
+    icon: 'coin',
+    home: '/admin/settlements',
+    intro: [
+      '정산 담당은 돈만 봅니다. 숙소·가이드 운영 권한은 없고, 복식부기 원장과 정산·환불 화면에 접근해요. 지급은 만든 사람과 승인한 사람이 달라야 하는 2인 규칙(maker-checker)이 걸려 있습니다.',
+      'Finance sees money and nothing else: the double-entry ledger, settlements and refunds. Payouts are maker-checker — whoever generated a settlement cannot be the one who approves it.',
+    ],
+    screens: [
+      { href: '/admin/settlements', name: ['정산', 'Settlements'], what: ['기간별 정산을 만들고 승인합니다. 공급사·호스트·가이드별로 나뉩니다.', 'Generate and approve settlements per period and per payee.'], actions: [['정산 생성 — 기간을 정해 정산서를 만듭니다', 'Generate — build a settlement for a period'], ['승인 — 만든 사람과 다른 사람이 눌러야 합니다', 'Approve — must be a different person than the maker']] },
+      { href: '/admin/ledger', name: ['원장', 'Ledger'], what: ['복식부기 원장을 계정별로 조회합니다. 차변·대변이 항상 일치해야 합니다.', 'The double-entry ledger by account — debits and credits always balance.'] },
+      { href: '/admin/payments', name: ['결제 운영', 'Payments'], what: ['결제 승인·실패·웹훅 대사 결과를 봅니다.', 'Approvals, failures and webhook reconciliation.'] },
+      { href: '/admin/refunds', name: ['환불', 'Refunds'], what: ['환불 요청과 재시도 상태를 처리합니다.', 'Refund requests and their retry state.'] },
+      { href: '/admin/finance/rules', name: ['수수료 규칙', 'Fee rules'], what: ['수수료율 같은 금액 규칙을 제안하고 승인합니다. 적용 시점이 정해진 데이터예요.', 'Commission and fee rules — proposed, approved, and effective-dated.'] },
+    ],
+    steps: [
+      ['`/admin/settlements`에서 지난 기간 정산을 하나 엽니다.', 'Open a past settlement on /admin/settlements.'],
+      ['항목별 금액을 보고 `/admin/ledger`에서 같은 건의 분개를 확인합니다.', 'Read the lines, then find the same entry in /admin/ledger.'],
+      ['`/admin/payments`에서 웹훅 대사 결과를 확인합니다.', 'Check webhook reconciliation in /admin/payments.'],
+    ],
+    notes: [['스태프 화면은 2단계 인증(AAL2) 세션이 필요합니다. 로그인 후 인증 앱 등록을 요구하면 정상이에요.', 'Staff screens need a 2-step (AAL2) session, so an authenticator prompt after login is expected.']],
+  },
+  {
+    slug: 'admin',
+    demoKeys: ['admin'],
+    name: ['운영자', 'Admin'],
+    tagline: ['검수·분쟁·규제·콘텐츠·기능 플래그까지 플랫폼 전체를 운영합니다.', 'Runs the platform: review, disputes, compliance, content and feature flags.'],
+    roles: ['ADMIN', 'COMPLIANCE', 'ACCOUNTING', 'SUPPORT', 'EDITOR'],
+    icon: 'chart',
+    home: '/admin',
+    intro: [
+      '운영자 계정은 스태프 역할을 모두 가지고 있어 관리 화면 전체를 볼 수 있습니다. 일반 로그인(`/login`)이 아니라 관리자 콘솔(`/admin/login`)로도 들어갈 수 있고, 스태프 작업은 2단계 인증 세션을 요구합니다.',
+      'The admin account holds every staff role, so it sees the whole console. It can sign in at /admin/login as well as /login, and staff actions need a 2-step session.',
+    ],
+    screens: [
+      { href: '/admin', name: ['운영 개요', 'Ops overview'], what: ['예약·맞교환·가이드·주문 현황과 웹훅 실패 같은 경고를 한눈에 봅니다.', 'Volumes across all four marketplaces, plus warnings like failed webhooks.'] },
+      { href: '/admin/compliance', name: ['규제 검수', 'Compliance'], what: ['숙소 인허가와 지역 규칙을 검수해 판매 가능 여부를 정합니다.', 'Permits and jurisdiction rules decide whether a listing may sell.'], actions: [['승인 / 반려 — 사유를 남겨야 합니다', 'Approve / reject — a reason is required']] },
+      { href: '/admin/disputes', name: ['분쟁', 'Disputes'], what: ['게스트·호스트 분쟁을 열어 증거를 보고 결정합니다.', 'Open a dispute, read the evidence, decide.'] },
+      { href: '/admin/verifications', name: ['본인 확인', 'Verifications'], what: ['신원 확인 요청을 검토합니다. 원본 서류는 접근이 기록됩니다.', 'Identity cases — every look at a document is audited.'] },
+      { href: '/admin/cms', name: ['콘텐츠', 'Content'], what: ['여행지·스토리·페이지와 SEO를 편집합니다. 메인 첫 화면은 `/admin/home`에서 고칩니다.', 'Destinations, stories, pages and SEO. The home page itself is /admin/home.'] },
+      { href: '/admin/config', name: ['설정·기능 플래그', 'Config & flags'], what: ['유료숙박·맞교환·유료가이드 같은 기능을 켜고 끕니다. 기본은 모두 꺼짐이에요.', 'Turn the paid-stay, exchange, paid-guide and commerce features on. They ship off.'], actions: [['플래그 전환 — 적용 시점과 사유가 함께 기록됩니다', 'Toggle — recorded with an effective date and a reason']] },
+      { href: '/admin/support', name: ['고객 지원', 'Support desk'], what: ['문의와 신고를 처리합니다. 비공개 대화 열람은 사유와 기한이 필요합니다.', 'Tickets and reports. Reading a private thread needs a reason and expires.'] },
+      { href: '/admin/audit', name: ['감사 로그', 'Audit log'], what: ['누가 무엇을 언제 했는지 모두 남습니다. 이 데모의 모든 조작도 여기 쌓여요.', 'Who did what, when — including everything you click in this demo.'] },
+    ],
+    steps: [
+      ['`/admin`에서 오늘의 운영 현황을 봅니다.', 'Read today’s numbers on /admin.'],
+      ['`/admin/config`에서 기능 플래그 하나를 켜고 공개 화면이 달라지는지 확인합니다.', 'Flip a flag in /admin/config and watch a public screen change.'],
+      ['`/admin/compliance`에서 검수 대기 숙소를 하나 처리합니다.', 'Clear one pending listing in /admin/compliance.'],
+      ['`/admin/audit`에서 방금 한 일이 기록됐는지 확인합니다.', 'Find what you just did in /admin/audit.'],
+    ],
+    notes: [
+      ['관리자 콘솔은 `/admin/login`에서 아이디 `admin`으로도 들어갈 수 있습니다.', 'The console also takes the handle `admin` at /admin/login.'],
+      ['스태프 작업은 2단계 인증 세션이 필요합니다. 데모에서 인증 앱을 등록할 수 없다면 서버에서 `jetpool.sh admin-mfa off`로 이 요구를 꺼 둘 수 있어요(운영 환경에서는 불가).', 'Staff actions need a 2-step session. A demo box with no authenticator can turn that requirement off with `jetpool.sh admin-mfa off` — never in production.'],
+    ],
+  },
+];
+
+export const roleBySlug = (slug: string) => ROLE_GUIDES.find((r) => r.slug === slug);
+/** The guide a demo account key belongs to (login page → “이 계정으로 뭘 할 수 있나”). */
+export const roleByDemoKey = (key: string) => ROLE_GUIDES.find((r) => r.demoKeys.includes(key));
+export const ROLE_SLUGS = ROLE_GUIDES.map((r) => r.slug);

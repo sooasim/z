@@ -15,7 +15,8 @@ export const userStatusMachine = new StateMachine<UserStatus>('user', {
   DELETED: [],
 });
 
-export type AuthMethod = 'PASSWORD' | 'EMAIL_OTP' | 'OAUTH' | 'PASSWORD_RESET';
+// 'TEST' is the demo sign-in (DEMO_LOGINS): a session opened with no credential, kept apart in the audit trail
+export type AuthMethod = 'PASSWORD' | 'EMAIL_OTP' | 'OAUTH' | 'PASSWORD_RESET' | 'TEST';
 
 export interface IssuedSession {
   accessToken: string;
