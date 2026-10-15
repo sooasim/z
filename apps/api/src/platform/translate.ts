@@ -67,6 +67,31 @@ export async function translateMany(deps: TranslateDeps, texts: readonly string[
   return out;
 }
 
+/**
+ * Translate and WAIT for the provider, then cache the result.
+ *
+ * `translateMany` above answers from the cache because a public GET must not inherit an external API's latency.
+ * A chat message is the opposite case: it is new by definition, so there is nothing to find in the cache, and
+ * "the next reader gets it" would mean the recipient never gets it. Callers must therefore be background work
+ * that can afford to wait and be retried — today that is the outbox handler in modules/messaging.
+ *
+ * Returns the same shape as `translateMany`: sources that could not be translated are simply absent, so a
+ * provider outage degrades to showing the original text rather than failing the caller.
+ */
+export async function translateNow(deps: TranslateDeps, texts: readonly string[], targetLocale: string): Promise<Map<string, string>> {
+  // Hit the cache first (identical phrasing is common in chat too) and never queue: we are about to do the work.
+  const out = await translateMany({ db: deps.db }, texts, targetLocale);
+  if (!deps.translator) return out;
+  const missing = [...new Set(texts.filter(translatable))].filter((t) => !out.has(t));
+  if (!missing.length) return out;
+  const translated = await deps.translator.translate([...missing], targetLocale);
+  if (translated.length !== missing.length) throw new Error(`translator returned ${translated.length} for ${missing.length} inputs`);
+  const entries = missing.map((source, i) => ({ source, translated: translated[i] ?? '' }));
+  await storeTranslations(deps.db, entries, targetLocale, deps.translator.provider, deps.translator.model);
+  for (const e of entries) if (e.translated?.trim() && e.translated !== e.source) out.set(e.source, e.translated);
+  return out;
+}
+
 /** Translate `fields` of `obj` in place-ish, returning a copy. Unknown/absent translations keep the source. */
 export function applyTranslations<T extends Record<string, any>>(obj: T, fields: readonly string[], map: Map<string, string>): T {
   if (!map.size) return obj;

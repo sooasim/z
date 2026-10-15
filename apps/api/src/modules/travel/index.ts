@@ -17,6 +17,7 @@ import { cursorColumns, decodeCursor, idParams, isoDate, page, pagination } from
 import { grantRole } from '../roles/service.js';
 import {
   DepartureFSM,
+  OrderFSM,
   ProductFSM,
   SupplierFSM,
   auditSupplierDecision,
@@ -38,6 +39,8 @@ const T1 = 'TRAVEL-01';
 const T2 = 'TRAVEL-02';
 const T3 = 'TRAVEL-03';
 const T4 = 'TRAVEL-04';
+/** A console search term is a literal: `%` and `_` typed by an operator must match themselves, not everything. */
+const likeEscape = (s: string) => s.replace(/[%_\\]/g, (m) => `\\${m}`);
 const datetime = z.iso.datetime({ offset: true });
 const TIME_OF_DAY = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 const productType = z.enum(['TOUR', 'TICKET', 'ACTIVITY', 'PACKAGE']);
@@ -443,17 +446,38 @@ export default async function travelModule(app: FastifyInstance) {
   // ------------------------------------------------------------------ TRAVEL-01 admin review
   r.get(
     '/v1/admin/travel-products',
-    { schema: { summary: 'List travel products', tags: [T1], querystring: z.object({ status: z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'PAUSED', 'ARCHIVED']).optional() }) }, preHandler: requireRole('ADMIN', 'EDITOR', 'COMPLIANCE') },
+    {
+      schema: { summary: 'List travel products', tags: [T1],
+        querystring: z.object({
+          status: z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'PAUSED', 'ARCHIVED']).optional(),
+          type: productType.optional(),
+          supplierId: z.uuid().optional(),
+          q: z.string().trim().min(1).max(100).optional(),
+        }),
+      },
+      preHandler: requireRole('ADMIN', 'EDITOR', 'COMPLIANCE'),
+    },
     async (req) => {
+      const f = req.query;
       const rows = await q(
         pool,
-        `SELECT p.*, s.name AS supplier_name, s.merchant_of_record, s.is_house FROM travel_products p JOIN suppliers s ON s.id = p.supplier_id
-          WHERE ($1::text IS NULL OR p.status = $1) ORDER BY p.updated_at DESC LIMIT 500`,
-        [req.query.status ?? null],
+        // The open-departure count is what tells an operator whether a published product is actually sellable:
+        // a product with none is live on the catalog and bookable by nobody.
+        `SELECT p.*, s.name AS supplier_name, s.merchant_of_record, s.is_house,
+                (SELECT count(*)::int FROM travel_departures d
+                  WHERE d.product_id = p.id AND d.status IN ('OPEN','GUARANTEED') AND d.starts_at > now()) AS open_departures
+           FROM travel_products p JOIN suppliers s ON s.id = p.supplier_id
+          WHERE ($1::text IS NULL OR p.status = $1)
+            AND ($2::text IS NULL OR p.type = $2)
+            AND ($3::uuid IS NULL OR p.supplier_id = $3)
+            AND ($4::text IS NULL OR p.title ILIKE '%' || $4 || '%' OR s.name ILIKE '%' || $4 || '%')
+          ORDER BY p.updated_at DESC LIMIT 500`,
+        [f.status ?? null, f.type ?? null, f.supplierId ?? null, f.q ? likeEscape(f.q) : null],
       );
       // `isHouse` only here: it tells the console which rows are its own to edit, and it is nobody's business
       // on the public product page, where merchantOfRecord already says who sells it.
-      return { items: rows.map((p) => productDto(p, { isHouse: !!p.is_house })) };
+      // `seller` already carries the supplier's name, so the count is the only thing added here.
+      return { items: rows.map((p) => productDto(p, { isHouse: !!p.is_house, openDepartures: p.open_departures })) };
     },
   );
 
@@ -929,6 +953,88 @@ export default async function travelModule(app: FastifyInstance) {
       nextCursor: pg.nextCursor,
     };
   });
+
+  // ------------------------------------------------------------------ TRAVEL-04 backoffice order desk
+  /**
+   * Operator order intake. Buyer identity is limited to id + display name (contact data stays behind
+   * `/v1/admin/users`, which masks it per role) and bearer voucher codes are NOT in the list — an operator who
+   * needs one opens `/v1/orders/:id`, where the read is attributable to a single order.
+   * `CART` rows are drafts that no buyer has submitted, so the desk never lists them.
+   */
+  r.get(
+    '/v1/admin/orders',
+    {
+      schema: { summary: 'Console list of travel orders', tags: [T4, 'OPS-02'],
+        querystring: pagination.extend({
+          limit: z.coerce.number().int().min(1).max(200).default(50),
+          status: z.enum(['PENDING', 'PAYMENT_PENDING', 'PAID', 'FULFILLED', 'CANCELLED', 'PARTIALLY_REFUNDED', 'REFUNDED', 'PAYMENT_FAILED', 'EXPIRED']).optional(),
+          code: z.string().trim().max(40).optional(),
+          buyerId: z.uuid().optional(),
+          supplierId: z.uuid().optional(),
+          from: isoDate.optional(),
+          to: isoDate.optional(),
+        }),
+      },
+      preHandler: requireRole('ADMIN', 'SUPPORT', 'ACCOUNTING'),
+    },
+    async (req) => {
+      const f = req.query;
+      if (f.from && f.to && f.from > f.to) throw badRequest('INVALID_RANGE', 'from must be on or before to');
+      const c = decodeCursor(f.cursor);
+      const rows = await q(
+        pool,
+        `SELECT o.*, u.display_name AS buyer_name, ${cursorColumns('o')} FROM orders o JOIN users u ON u.id = o.buyer_id
+          WHERE o.status <> 'CART'
+            AND ($1::text IS NULL OR o.status = $1)
+            AND ($2::text IS NULL OR o.code = $2)
+            AND ($3::uuid IS NULL OR o.buyer_id = $3)
+            AND ($4::uuid IS NULL OR EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.supplier_id = $4))
+            AND ($5::date IS NULL OR o.created_at >= ($5::date::timestamp AT TIME ZONE 'Asia/Seoul'))
+            AND ($6::date IS NULL OR o.created_at < (($6::date + 1)::timestamp AT TIME ZONE 'Asia/Seoul'))
+            AND ($7::timestamptz IS NULL OR (o.created_at, o.id) < ($7::timestamptz, $8::uuid))
+          ORDER BY o.created_at DESC, o.id DESC LIMIT $9`,
+        [f.status ?? null, f.code ? f.code.toUpperCase() : null, f.buyerId ?? null, f.supplierId ?? null, f.from ?? null, f.to ?? null, c?.createdAt ?? null, c?.id ?? null, f.limit + 1],
+      );
+      const pg = page(rows, f.limit);
+      const ids = pg.items.map((o: any) => o.id);
+      const items = ids.length ? await q(pool, `SELECT * FROM order_items WHERE order_id = ANY($1::uuid[]) ORDER BY sellable_type, id`, [ids]) : [];
+      return {
+        items: pg.items.map((o: any) => ({ ...orderDto(o, items.filter((i: any) => i.order_id === o.id)), buyerName: o.buyer_name })),
+        nextCursor: pg.nextCursor,
+      };
+    },
+  );
+
+  /**
+   * Mark a paid order as delivered ("주문접수 완료") when the operator — not the departure clock — confirms it:
+   * open-dated tickets, a supplier confirming by phone, a departure whose lifecycle job has not caught up yet.
+   * Money never moves here; only the order's own status does, and the FSM refuses anything but PAID /
+   * PARTIALLY_REFUNDED so an unpaid or cancelled order cannot be marked delivered.
+   */
+  r.post(
+    '/v1/admin/orders/:id/fulfill',
+    { schema: { summary: 'Mark an order as fulfilled', tags: [T4, 'OPS-02'], params: idParams, body: z.object({ reason: z.string().min(3).max(500) }) }, preHandler: requireRole('ADMIN', 'SUPPORT') },
+    async (req) => {
+      const ctx = ctxFromRequest(req);
+      const row = await withTx(pool, async (tx) => {
+        const o = await maybeOne(tx, `SELECT id, status FROM orders WHERE id = $1 FOR UPDATE`, [req.params.id]);
+        if (!o) throw notFound('Order');
+        const { row } = await OrderFSM.transition(tx, ctx, {
+          table: 'orders',
+          id: o.id,
+          from: ['PAID', 'PARTIALLY_REFUNDED'],
+          to: 'FULFILLED',
+          reason: `STAFF: ${req.body.reason}`,
+          versioned: true,
+          set: { fulfilled_at: new Date() },
+        });
+        await audit(tx, ctx, { action: 'order.fulfill.staff', resourceType: 'order', resourceId: o.id, category: 'MONEY', reason: req.body.reason, before: { status: o.status }, after: { status: 'FULFILLED' } });
+        await emit(tx, ctx, { aggregateType: 'order', aggregateId: o.id, eventType: 'order.fulfilled', payload: { orderId: o.id, by: 'STAFF' } });
+        return row;
+      });
+      return { item: orderDto(row) };
+    },
+  );
 
   registerJob('travel.orders.expire', 60_000, (appCtx) => expireOrders(appCtx, systemCtx(appCtx, `job-orders-expire-${Date.now()}`)));
   registerJob('travel.departures.lifecycle', 5 * 60_000, (appCtx) => runDepartureLifecycle(appCtx, systemCtx(appCtx, `job-departures-${Date.now()}`)));

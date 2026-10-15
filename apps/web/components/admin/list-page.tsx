@@ -14,7 +14,7 @@ export interface AdminTab {
 }
 
 /** Config-driven admin list screen: tabs → query, searchable/sortable table, audited row actions. */
-export function AdminListPage({ title, subtitle, path, tabs, columns, actions, query, aside, actionsHeader, empty, search = true, searchParam = 'q' }: { title: string; subtitle?: string; path: string; tabs?: AdminTab[]; columns: Column[]; actions?: RowAction[]; query?: Record<string, string>; aside?: ReactNode; actionsHeader?: ReactNode; empty?: ReactNode; search?: boolean; searchParam?: string }) {
+export function AdminListPage({ title, subtitle, path, tabs, columns, actions, query, aside, actionsHeader, empty, search = true, searchParam = 'q', searchPlaceholder }: { title: string; subtitle?: string; path: string; tabs?: AdminTab[]; columns: Column[]; actions?: RowAction[]; query?: Record<string, string>; aside?: ReactNode; actionsHeader?: ReactNode; empty?: ReactNode; search?: boolean; searchParam?: string; searchPlaceholder?: string }) {
   const { L } = useI18n();
   const [tab, setTab] = useState(tabs?.[0]?.value ?? '');
   const [q, setQ] = useState('');
@@ -27,7 +27,7 @@ export function AdminListPage({ title, subtitle, path, tabs, columns, actions, q
       {search ? (
         <form className="row" style={{ margin: '16px 0' }} onSubmit={(e) => { e.preventDefault(); setK(k + 1); }} role="search">
           <label className="sr-only" htmlFor="adm-q">{L('서버 검색', 'Search')}</label>
-          <input id="adm-q" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={L('이메일, 이름으로 검색', 'Search by email or name')} style={{ maxWidth: 360 }} />
+          <input id="adm-q" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={searchPlaceholder ?? L('이메일, 이름으로 검색', 'Search by email or name')} style={{ maxWidth: 360 }} />
           <button className="btn">{L('검색', 'Search')}</button>
         </form>
       ) : (

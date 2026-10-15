@@ -1,0 +1,12 @@
+-- 0703 COMMS-01 cross-language messaging: the language a message was WRITTEN in.
+--
+-- Chat is the one place translation runs in both directions — a Vietnamese traveller and a Korean host each
+-- read the other in their own language — so "the source language" is not a constant like it is for the
+-- catalogue (always Korean). It is a property of the individual message, captured from the sender's account
+-- language at send time.
+--
+-- Stored on the row rather than joined from users.locale at read time: a member who later switches their
+-- display language must not retroactively relabel every message they ever wrote, and must not invalidate the
+-- translations already cached against it. NULL means "written before this column existed, or unknown" —
+-- readers fall back to showing the original without a language label.
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS source_locale text;

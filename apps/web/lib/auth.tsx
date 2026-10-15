@@ -19,6 +19,8 @@ export interface User {
    * older API or a degraded read, so it defaults to true — the safe reading, and the way it has always been.
    */
   staffMfaRequired: boolean;
+  /** The account's language (BCP-47). Background work — message translation, notifications — reads this one. */
+  locale: string;
   raw: any;
 }
 
@@ -60,6 +62,7 @@ function toUser(me: any, token: string | null): User | null {
     mfaEnabled: Boolean(f(user, 'mfaEnabled', 'mfa_enabled', 'totpEnabled') ?? f(u, 'mfaEnabled')),
     // Only an explicit false turns the staff gate off: a missing field must not read as "no MFA needed".
     staffMfaRequired: f(u, 'session.staffMfaRequired', 'staffMfaRequired') !== false,
+    locale: str(user, 'locale') || str(u, 'locale'),
     raw: u,
   };
 }

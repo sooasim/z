@@ -8,6 +8,7 @@ import { useApi } from '@/lib/hooks';
 import { newIdempotencyKey, post } from '@/lib/api';
 import { items, str, num, f } from '@/lib/shape';
 import { subscribeRealtime } from '@/lib/realtime';
+import { LANGS } from '@/lib/langs';
 import { RequireAuth } from '@/components/gate';
 import { StateView, EmptyState } from '@/components/states';
 import { Avatar, Button, ButtonLink, ErrorText, Icon, PageHeader, useConfirm, useMediaQuery } from '@/components/ui';
@@ -17,6 +18,52 @@ import { useContextSummary } from '@/components/traveler/hooks';
 import { clockTime, daySeparator, relTime, subjectLabel } from '@/components/traveler/labels';
 
 const CONTEXT_TONE: Record<string, string> = { EXCHANGE: 'exchange', INQUIRY: 'info', SUPPORT: 'warn' };
+
+/** The language's own name, so a Vietnamese reader sees "Tiếng Việt" rather than a BCP-47 tag. */
+const localeName = (locale: string): string => LANGS.find((l) => l.locale === locale)?.endonym ?? locale;
+
+/**
+ * A message as both halves: the machine translation in the reader's language, and the text as it was actually
+ * written. Both are shown — a translated price, date or address has to be checkable against the original, and
+ * a member who reads some of the other language wants to see it. The original can be collapsed, per bubble.
+ *
+ * With no translation (same language, feature off, or not translated yet) this is just the original, so the
+ * thread reads exactly as it did before.
+ */
+function MessageBody({ m }: { m: any }) {
+  const { L } = useI18n();
+  const [showSource, setShowSource] = useState(true);
+  const body = str(m, 'body', 'text', 'content');
+  const translated = str(m, 'translation.text');
+  const sourceLocale = str(m, 'sourceLocale');
+  if (f(m, 'redacted')) return <p style={{ margin: 0 }}><em className="muted">{L('가려진 메시지예요', 'Message hidden')}</em></p>;
+  if (!translated || translated === body) return <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{body}</p>;
+  return (
+    <div className="stack-xs">
+      <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{translated}</p>
+      <button
+        type="button"
+        className="btn ghost sm"
+        style={{ minHeight: 22, padding: 0, color: 'inherit', opacity: 0.75, fontSize: 'var(--fs-2xs)', justifyContent: 'flex-start' }}
+        aria-expanded={showSource}
+        onClick={() => setShowSource((v) => !v)}
+      >
+        {/* The label is a static phrase plus the language's own name, so it goes through the phrase table in
+            every language instead of falling back to English the way an interpolated sentence would. */}
+        {L('원문', 'Original')}
+        {sourceLocale ? ` (${localeName(sourceLocale)})` : ''} <span aria-hidden="true">{showSource ? '▾' : '▸'}</span>
+      </button>
+      {showSource && (
+        <p
+          lang={sourceLocale || undefined}
+          style={{ margin: 0, whiteSpace: 'pre-wrap', opacity: 0.75, fontSize: 'var(--fs-sm)', borderTop: '1px solid currentColor', borderTopColor: 'color-mix(in srgb, currentColor 20%, transparent)', paddingTop: 6 }}
+        >
+          {body}
+        </p>
+      )}
+    </div>
+  );
+}
 
 function ContextBadge({ type }: { type: string }) {
   const { lang } = useI18n();
@@ -115,16 +162,30 @@ function Thread({ cid, onActivity, names, conv }: { cid: string; onActivity: () 
       const m = e.json?.message ?? e.json?.payload ?? e.json;
       const c = str(m, 'conversationId') || str(e.json, 'conversationId');
       if (c === cid) {
-        if (str(m, 'id') && str(m, 'body', 'text')) setExtra((x) => (x.some((y) => str(y, 'id') === str(m, 'id')) ? x : [...x, m]));
-        else reload();
+        // Upsert, not append-if-new: a `message.translated` event carries a message already on screen, and
+        // ignoring it as a duplicate would drop the translation it exists to deliver.
+        if (str(m, 'id') && str(m, 'body', 'text')) {
+          setExtra((x) => {
+            const i = x.findIndex((y) => str(y, 'id') === str(m, 'id'));
+            if (i < 0) return [...x, m];
+            const next = [...x];
+            next[i] = { ...next[i], ...m };
+            return next;
+          });
+        } else reload();
       } else if (c) onActivity();
     });
   }, [cid, reload, onActivity]);
 
-  const base = items(st.data);
-  // API returns newest-first; display oldest-first.
-  const sorted = [...base].sort((a, b) => str(a, 'createdAt').localeCompare(str(b, 'createdAt')));
-  const all = [...sorted, ...extra.filter((m) => !sorted.some((x) => str(x, 'id') === str(m, 'id')))];
+  // API returns newest-first; display oldest-first. `extra` (optimistic sends + realtime pushes) is an overlay
+  // merged by id, so a translation pushed for a message already in the fetched page updates it in place.
+  const byId = new Map<string, any>();
+  for (const m of items(st.data)) byId.set(str(m, 'id'), m);
+  for (const m of extra) {
+    const id = str(m, 'id');
+    byId.set(id, byId.has(id) ? { ...byId.get(id), ...m } : m);
+  }
+  const all = [...byId.values()].sort((a, b) => str(a, 'createdAt').localeCompare(str(b, 'createdAt')));
   useEffect(() => endRef.current?.scrollIntoView({ block: 'end' }), [all.length]);
 
   const report = async (m: any) => {
@@ -167,11 +228,12 @@ function Thread({ cid, onActivity, names, conv }: { cid: string; onActivity: () 
                     </div>
                   )}
                   {system ? (
-                    <div className={s.systemBubble}>{str(m, 'body', 'text')}</div>
+                    // System copy is translated too; it is one line, so show the reader's language only.
+                    <div className={s.systemBubble}>{str(m, 'translation.text') || str(m, 'body', 'text')}</div>
                   ) : (
                     <div className={`bubble ${mine ? 'me' : ''}`}>
                       {!mine && <div className="xs" style={{ fontWeight: 700 }}>{names[str(m, 'senderId')] || str(m, 'senderName', 'sender.displayName')}</div>}
-                      <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{f(m, 'redacted') ? <em className="muted">{L('가려진 메시지예요', 'Message hidden')}</em> : str(m, 'body', 'text', 'content')}</p>
+                      <MessageBody m={m} />
                       <div className={s.bubbleMeta}>
                         <time dateTime={at}>{clockTime(at, lang)}</time>
                         {!mine && (

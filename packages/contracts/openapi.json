@@ -2884,6 +2884,153 @@
         }
       }
     },
+    "/v1/admin/orders": {
+      "get": {
+        "summary": "Console list of travel orders",
+        "tags": [
+          "TRAVEL-04",
+          "OPS-02"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "cursor",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PENDING",
+                "PAYMENT_PENDING",
+                "PAID",
+                "FULFILLED",
+                "CANCELLED",
+                "PARTIALLY_REFUNDED",
+                "REFUNDED",
+                "PAYMENT_FAILED",
+                "EXPIRED"
+              ]
+            },
+            "in": "query",
+            "name": "status",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            },
+            "in": "query",
+            "name": "code",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "query",
+            "name": "buyerId",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "query",
+            "name": "supplierId",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "in": "query",
+            "name": "from",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "in": "query",
+            "name": "to",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/admin/orders/{id}/fulfill": {
+      "post": {
+        "summary": "Mark an order as fulfilled",
+        "tags": [
+          "TRAVEL-04",
+          "OPS-02"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
     "/v1/admin/outbox/dead-letters": {
       "get": {
         "summary": "List dead-lettered outbox events",
@@ -6357,6 +6504,40 @@
             "in": "query",
             "name": "status",
             "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "TOUR",
+                "TICKET",
+                "ACTIVITY",
+                "PACKAGE"
+              ]
+            },
+            "in": "query",
+            "name": "type",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "query",
+            "name": "supplierId",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "query",
+            "name": "q",
+            "required": false
           }
         ],
         "responses": {
@@ -9803,7 +9984,7 @@
     },
     "/v1/conversations/{id}/messages": {
       "get": {
-        "summary": "List the messages of a conversation",
+        "summary": "List the messages of a conversation, with a translation into the reader’s language",
         "tags": [
           "COMMS-01"
         ],
@@ -9826,6 +10007,21 @@
             },
             "in": "query",
             "name": "cursor",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ko-KR",
+                "en-US",
+                "ja-JP",
+                "zh-CN",
+                "vi-VN"
+              ]
+            },
+            "in": "query",
+            "name": "locale",
             "required": false
           },
           {
@@ -17719,6 +17915,29 @@
       }
     },
     "/v1/supplier/products/{id}": {
+      "get": {
+        "summary": "Get one of the supplier's own products, with its options",
+        "tags": [
+          "TRAVEL-01"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
       "patch": {
         "summary": "Update a travel product",
         "tags": [
