@@ -36,13 +36,44 @@ async function user(label) {
   return { id, token };
 }
 
+// Placing a hold passes two gates that a freshly migrated database leaves shut, and only the dev seed opens:
+// the platform feature flag (migration 0007 ships it disabled) and compliance, which refuses a paid booking
+// on a property no APPROVED rule covers (NO_APPROVED_RULE -> REVIEW -> 403). The G6 job migrates without
+// seeding, so without both of these every hold in the race answers 403, the race never happens, and the
+// no-oversell check has nothing to look at. They belong to the fixture for the same reason the property
+// does: this script's job is a database the load scenario can actually run against. Neither gate is relaxed
+// for the run — the scenario satisfies them the way a real deployment does.
+const flagged = await db.query(`UPDATE feature_flags SET enabled = true WHERE flag_key = 'stay.paid_booking' RETURNING flag_key`);
+if (flagged.rowCount !== 1) {
+  console.error(`expected to enable feature flag stay.paid_booking, updated ${flagged.rowCount} rows — is the database migrated?`);
+  process.exit(2);
+}
+
+// The rule the fixture property is judged against: KR, every listing type, no permit required, so compliance
+// answers ALLOW without the fixture also having to mint verified permits. Approved by its own throwaway user
+// rather than a seeded admin, since the suite runs against a database that may only have been migrated.
+const approver = await user('compliance-approver');
+await db.query(`INSERT INTO user_roles(user_id, role) VALUES ($1,'ADMIN') ON CONFLICT DO NOTHING`, [approver.id]);
+await db.query(
+  `INSERT INTO compliance_rules(rule_key, subject_type, jurisdiction, applies_to, required_permit_types,
+                               effective_from, status, approved_by, approved_at, created_by, note)
+   VALUES ($1,'PROPERTY','KR','{}'::jsonb,'{}'::text[], current_date - 1, 'APPROVED', $2, now(), $2,
+           'G6 load fixture — not a legally approved rule; this database is for load testing only')`,
+  [`load-${run}-kr-stay`, approver.id],
+);
+
 const host = await user('host');
 await db.query(`INSERT INTO user_roles(user_id, role) VALUES ($1,'HOST') ON CONFLICT DO NOTHING`, [host.id]);
+// A hold snapshots the property's cancellation policy and refuses to exist without one
+// (CANCELLATION_POLICY_REQUIRED, 422), so the fixture picks one of the reference policies migration 0007
+// installs rather than leaving the column null.
+const { rows: [policy] } = await db.query(`SELECT id FROM cancellation_policies WHERE code = 'MODERATE'`);
+if (!policy) { console.error('no MODERATE cancellation policy — is the database migrated?'); process.exit(2); }
 const { rows: [prop] } = await db.query(
   `INSERT INTO properties(host_id, slug, title, property_type, max_guests, city, region, lat, lng, rental_enabled, instant_book,
-                          base_price_minor, currency, status, paid_booking_enabled, published_at)
-   VALUES ($1, $2, 'Load test stay', 'APARTMENT', 4, 'Seoul', 'Seoul', 37.5665, 126.9780, true, true, 100000, 'KRW', 'PUBLISHED', true, now())
-   RETURNING id`, [host.id, `load-${run}`]);
+                          base_price_minor, currency, status, paid_booking_enabled, cancellation_policy_id, published_at)
+   VALUES ($1, $2, 'Load test stay', 'APARTMENT', 4, 'Seoul', 'Seoul', 37.5665, 126.9780, true, true, 100000, 'KRW', 'PUBLISHED', true, $3, now())
+   RETURNING id`, [host.id, `load-${run}`, policy.id]);
 const guests = [];
 for (let i = 0; i < N; i++) guests.push((await user(`g${i}`)).token);
 await db.end();
