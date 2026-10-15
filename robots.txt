@@ -1,0 +1,24 @@
+User-Agent: *
+Allow: /
+Allow: /stay
+Allow: /exchange
+Allow: /guide-friends
+Allow: /travel
+Allow: /jetpool-charter
+Allow: /discover
+Allow: /stories
+Disallow: /admin
+Disallow: /account
+Disallow: /api/
+Disallow: /checkout
+Disallow: /trips
+Disallow: /messages
+Disallow: /host
+Disallow: /guide/
+Disallow: /supplier
+Disallow: /payments
+Disallow: /earnings
+Disallow: /auth/
+
+Host: https://sooasim.github.io/z
+Sitemap: https://sooasim.github.io/z/sitemap.xml
