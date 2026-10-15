@@ -39,6 +39,7 @@ export default function AdminOverviewView() {
             { label: L('여행 주문', 'Orders'), value: sumAll(ord), color: 'var(--sand-500)' },
           ];
           const cb = f<any>(o, 'complianceBacklog') ?? {};
+          const kb = f<any>(o, 'catalogBacklog') ?? {};
           const ob = f<any>(o, 'outbox') ?? {};
           const wh = f<any>(o, 'webhooks') ?? {};
           const incidents: Array<[string, number, string]> = [
@@ -55,6 +56,23 @@ export default function AdminOverviewView() {
                 <StatCard label={L('확정 맞교환', 'Confirmed exchanges')} value={confirmedEx} hint={`${L('전체', 'All')} ${sumAll(exc)}`} />
                 <StatCard label={L('환불률', 'Refund rate')} value={gross > 0 ? `${((refunded / gross) * 100).toFixed(1)}%` : '—'} hint={formatMoney(refunded, cur, lang)} />
               </div>
+              <Section title={L('관리 바로가기', 'Manage')}>
+                <div className="stats">
+                  {([
+                    ['/admin/travel/orders', L('주문 접수', 'Order intake'), L('여행 주문 처리·취소', 'Work and cancel travel orders')],
+                    ['/admin/products', L('관광 상품', 'Travel products'), L('상품 등록·심사·출발일', 'Register, review, departures')],
+                    ['/admin/suppliers', L('공급사 관리', 'Suppliers'), L('승인·수수료·판매 주체', 'Approval, commission, MoR')],
+                    ['/admin/members', L('회원 관리', 'Members'), L('역할·정지·계정 조회', 'Roles, suspension, lookup')],
+                    ['/admin/listings', L('숙소 관리', 'Stay listings'), L('등록 현황·공개 차단', 'Inventory and blocking')],
+                    ['/admin/bookings', L('예약 관리', 'Bookings'), L('숙소·맞교환·가이드', 'Stays, exchanges, guides')],
+                  ] as Array<[string, string, string]>).map(([href, label, hint]) => (
+                    <Link key={href} href={href} className="stat card link" style={{ textDecoration: 'none' }}>
+                      <span className="lbl">{label}</span>
+                      <span className="xs muted">{hint}</span>
+                    </Link>
+                  ))}
+                </div>
+              </Section>
               <div className="grid-2">
                 <Section title={L('숙소 예약 상태 분포', 'Reservations by status')}>
                   <div className="card">{resBars.length ? <BarChart data={resBars} label={L('숙소 예약 상태 분포', 'Reservations by status')} /> : <p className="muted">{L('데이터 없음', 'No data')}</p>}</div>
@@ -75,6 +93,9 @@ export default function AdminOverviewView() {
                     ['/admin/compliance', L('심사 중 숙소', 'Listings in review'), num(cb, 'listingsInReview') ?? 0],
                     ['/admin/compliance', L('가이드 자격 심사', 'Guide qualifications'), num(cb, 'guideQualificationsPending') ?? 0],
                     ['/admin/verifications', L('인증 심사 대기', 'Verifications pending'), num(o, 'verificationBacklog.pending') ?? 0],
+                    ['/admin/travel/orders', L('주문 접수 대기', 'Orders awaiting delivery'), sumStatus(ord, ['PAID', 'PARTIALLY_REFUNDED'])],
+                    ['/admin/products', L('관광 상품 심사 대기', 'Products in review'), num(kb, 'travelProductsInReview') ?? 0],
+                    ['/admin/suppliers', L('공급사 심사 대기', 'Suppliers pending'), num(kb, 'suppliersPending') ?? 0],
                     ['/admin/disputes', L('진행 중 분쟁', 'Open disputes'), num(o, 'disputes.open') ?? 0],
                     ['/admin/ops', L('아웃박스 대기', 'Outbox pending'), num(ob, 'pending') ?? 0],
                   ] as Array<[string, string, number]>).map(([href, label, n]) => (

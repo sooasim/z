@@ -15,7 +15,7 @@ export { recordAdminAction } from './actions.js';
 /** OPS-02 backoffice + PLAT-06 flags/config. */
 
 export async function overview(db: Db) {
-  const [gmvRows, reservations, exchanges, guideBookings, orders, disputes, verification, compliance, outbox, webhooks] = await Promise.all([
+  const [gmvRows, reservations, exchanges, guideBookings, orders, disputes, verification, compliance, catalog, outbox, webhooks] = await Promise.all([
     gmv(db),
     q(db, `SELECT status, count(*)::int AS n FROM reservations GROUP BY status ORDER BY status`),
     q(db, `SELECT status, count(*)::int AS n FROM exchange_requests GROUP BY status ORDER BY status`),
@@ -28,6 +28,12 @@ export async function overview(db: Db) {
       `SELECT (SELECT count(*)::int FROM property_permits WHERE status = 'PENDING') AS permits_pending,
               (SELECT count(*)::int FROM properties WHERE status = 'IN_REVIEW') AS listings_in_review,
               (SELECT count(*)::int FROM guide_qualifications WHERE status = 'PENDING') AS guide_qualifications_pending`,
+    ),
+    // travel catalog queues: what the product desk and the supplier desk owe a decision on
+    one(
+      db,
+      `SELECT (SELECT count(*)::int FROM travel_products WHERE status = 'IN_REVIEW') AS travel_products_in_review,
+              (SELECT count(*)::int FROM suppliers WHERE status = 'PENDING') AS suppliers_pending`,
     ),
     one(
       db,
@@ -52,6 +58,7 @@ export async function overview(db: Db) {
     disputes: { open: disputes.open, highSeverity: disputes.high_severity },
     verificationBacklog: { pending: verification.pending, oldestSubmittedAt: verification.oldest },
     complianceBacklog: { permitsPending: compliance.permits_pending, listingsInReview: compliance.listings_in_review, guideQualificationsPending: compliance.guide_qualifications_pending },
+    catalogBacklog: { travelProductsInReview: catalog.travel_products_in_review, suppliersPending: catalog.suppliers_pending },
     outbox: { pending: outbox.pending, oldestPendingAgeSec: outbox.oldest_pending_age_sec, deadLetters: outbox.dead_letters },
     webhooks: { failed: webhooks.failed, invalidSignature: webhooks.invalid_signature, stuck: webhooks.stuck },
   };

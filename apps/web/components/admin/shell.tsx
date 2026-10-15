@@ -19,6 +19,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
   // The sign-in page lives under /admin, so it has to render outside the staff gate and the console chrome.
   if (pathname === ADMIN_LOGIN_PATH) return <>{children}</>;
   const ops = L('운영', 'Operations');
+  const commerce = L('상품·주문', 'Catalog & orders');
+  const people = L('회원·예약', 'People & bookings');
   const trust = L('신뢰·안전', 'Trust & safety');
   const money = L('결제·정산', 'Money');
   const content = L('콘텐츠', 'Content');
@@ -35,6 +37,11 @@ export function AdminShell({ children }: { children: ReactNode }) {
               { href: '/admin', label: L('개요', 'Overview'), icon: 'chart', group: ops },
               { href: '/admin/analytics', label: L('분석', 'Analytics'), icon: 'chart' },
               { href: '/admin/support', label: L('고객 문의', 'Support desk'), icon: 'chat' },
+              { href: '/admin/travel/orders', label: L('주문 접수', 'Order intake'), icon: 'bag', group: commerce },
+              { href: '/admin/suppliers', label: L('공급사 관리', 'Suppliers'), icon: 'users' },
+              { href: '/admin/listings', label: L('숙소 관리', 'Stay listings'), icon: 'home' },
+              { href: '/admin/members', label: L('회원 관리', 'Members'), icon: 'user', group: people },
+              { href: '/admin/bookings', label: L('예약 관리', 'Bookings'), icon: 'calendar' },
               { href: '/admin/compliance', label: L('준수 심사', 'Compliance'), icon: 'shield', group: trust },
               { href: '/admin/verifications', label: L('본인·사업자 인증', 'Verifications'), icon: 'user' },
               { href: '/admin/disputes', label: L('분쟁', 'Disputes'), icon: 'alert' },
