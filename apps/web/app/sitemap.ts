@@ -5,7 +5,7 @@ import { items, str } from '@/lib/shape';
 
 export const revalidate = 3600;
 
-const STATIC = ['/', '/stay', '/map', '/exchange', '/guide-friends', '/travel', '/jetpool-charter', '/discover', '/stories', '/about', '/archive', '/credits', '/login', '/signup', '/support'];
+const STATIC = ['/', '/stay', '/map', '/exchange', '/guide-friends', '/travel', '/jetpool-charter', '/discover', '/stories', '/about', '/archive', '/credits', '/login', '/signup', '/support', '/help'];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();

@@ -56,6 +56,12 @@ const schema = z.object({
    * second factor rather than the staff role.
    */
   STAFF_MFA_REQUIRED: envBoolean(true),
+  /**
+   * CORE-01 demo sign-in: the login page offers one button per seeded role, and `/v1/auth/demo-login` opens a
+   * session for it with no password. Unset, it follows `OAUTH_MOCK` — a mocked environment is a demo
+   * environment — so a demo box needs no second switch and production, which forbids OAUTH_MOCK, never gets it.
+   */
+  DEMO_LOGINS: envBoolean(false),
   // Storage (STAY-02)
   S3_ENDPOINT: z.string().optional(),
   S3_REGION: z.string().default('ap-northeast-2'),
@@ -86,13 +92,19 @@ const schema = z.object({
 export type Config = z.infer<typeof schema>;
 
 export function loadConfig(overrides: Partial<Record<keyof Config, unknown>> = {}): Config {
-  const cfg = schema.parse({ ...process.env, ...overrides });
+  const raw = { ...process.env, ...overrides };
+  const cfg = schema.parse(raw);
+  // Blank counts as unset, the way every other envBoolean reads it: compose passes `DEMO_LOGINS: ${DEMO_LOGINS:-}`
+  // so an operator can turn it off, and an untouched .env must still follow OAUTH_MOCK rather than silently off.
+  const demo = raw.DEMO_LOGINS;
+  if (demo === undefined || (typeof demo === 'string' && demo.trim() === '')) cfg.DEMO_LOGINS = cfg.OAUTH_MOCK;
   if (cfg.NODE_ENV === 'production') {
     if (cfg.JWT_SECRET.startsWith('dev-only')) throw new Error('JWT_SECRET must be set in production');
     if (cfg.DATA_ENCRYPTION_KEY === '0'.repeat(64)) throw new Error('DATA_ENCRYPTION_KEY must be set in production');
     if (cfg.PAYMENT_PROVIDER === 'MOCK') throw new Error('MOCK payment provider is forbidden in production');
     if (cfg.OAUTH_MOCK) throw new Error('OAUTH_MOCK is forbidden in production');
     if (!cfg.STAFF_MFA_REQUIRED) throw new Error('STAFF_MFA_REQUIRED=false is forbidden in production');
+    if (cfg.DEMO_LOGINS) throw new Error('DEMO_LOGINS is forbidden in production');
   }
   return cfg;
 }

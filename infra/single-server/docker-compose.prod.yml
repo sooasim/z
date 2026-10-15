@@ -51,6 +51,9 @@ x-api-env: &api-env
   TOSS_CLIENT_KEY: ${TOSS_CLIENT_KEY:-}
   TOSS_WEBHOOK_SECRET: ${TOSS_WEBHOOK_SECRET:-}
   OAUTH_MOCK: ${OAUTH_MOCK:-true}
+  # Unset follows OAUTH_MOCK: a mocked box is a demo box, so the login page offers one button per seeded role.
+  # Set DEMO_LOGINS=false to take those buttons away while keeping mock OAuth. Forbidden in production.
+  DEMO_LOGINS: ${DEMO_LOGINS:-}
   # false = the admin console needs only the staff password (no authenticator). Forbidden in production.
   STAFF_MFA_REQUIRED: ${STAFF_MFA_REQUIRED:-true}
   GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}

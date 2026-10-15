@@ -105,6 +105,11 @@ password `admin1234` (override with `SEED_ADMIN_USERNAME` / `SEED_ADMIN_PASSWORD
 routes only and is refused in production. The main page (`/`) is edited from **Admin → Content → Main page**
 (`/admin/home`).
 
+On a demo deployment the login page also offers **one button per seeded role** — traveller, host, exchange member,
+guide friend, paid guide, supplier, finance, admin — which opens a session with no password (`DEMO_LOGINS`, which
+follows `OAUTH_MOCK` unless set and is refused in production). What each of those members can do, screen by screen,
+is written up at **`/help`**.
+
 ## Environment variables (API / worker)
 
 Defined and validated in `apps/api/src/platform/config.ts`. In `NODE_ENV=production` the API refuses to start with
@@ -126,6 +131,7 @@ default `JWT_SECRET`/`DATA_ENCRYPTION_KEY`, `PAYMENT_PROVIDER=MOCK` or `OAUTH_MO
 | `PAYMENT_TTL_SEC`, `HOLD_TTL_SEC`, `QUOTE_TTL_SEC` | `900`, `900`, `1800` | payment / hold / quote lifetimes (ADR-0004) |
 | `GOOGLE_*`, `KAKAO_*`, `NAVER_*` (`CLIENT_ID`/`CLIENT_SECRET`) | – | OAuth providers — **secret** |
 | `OAUTH_MOCK` | `false` | mock OAuth (dev/test only) |
+| `DEMO_LOGINS` | follows `OAUTH_MOCK` | one-click sign-in as a seeded demo account (`/v1/auth/demo-login`, buttons on `/login`); forbidden in prod |
 | `STAFF_MFA_REQUIRED` | `true` | staff routes need an AAL2 session; `false` accepts the staff password alone (forbidden in prod, never relaxes the account-holder AAL2 gates) |
 | `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET_PRIVATE`, `S3_BUCKET_PUBLIC`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | `ap-northeast-2`, `jetpool-private`, `jetpool-public` | media storage (on AWS use the task role, no keys) |
 | `CDN_BASE_URL` | `http://localhost:4000/media-dev` | public media base URL |

@@ -7,6 +7,7 @@ import { notFound } from '../../platform/errors.js';
 import { CONSENT_TYPES } from '../privacy/service.js';
 import { OAUTH_PROVIDERS } from './oauth.js';
 import { accountSummary } from './users.js';
+import { DEMO_ACCOUNTS, demoLogin, listDemoAccounts } from './demo-accounts.js';
 import * as svc from './service.js';
 
 const TAG = ['CORE-01'];
@@ -60,6 +61,27 @@ export default async function identityModule(app: FastifyInstance) {
     // `staffMfaRequired` rides along so the admin console knows whether to ask for a code it can actually
     // use: with the gate off and no authenticator enrolled, a step-up prompt would be a dead end.
   }, async (req) => ({ ...(await svc.passwordLogin(pool, ctxFromRequest(req), req.body)), staffMfaRequired: req.server.ctx.config.STAFF_MFA_REQUIRED }));
+
+  // ---- Demo sign-in (CORE-01): one button per seeded role on a demo deployment, nothing at all elsewhere.
+  r.get('/v1/auth/demo-accounts', {
+    schema: {
+      tags: TAG,
+      summary: 'Seeded demo accounts offered for one-click sign-in (empty unless DEMO_LOGINS is on)',
+      response: { 200: z.object({ items: z.array(z.object({ key: z.string(), email: z.string(), displayName: z.string(), roles: z.array(z.string()) })) }) },
+    },
+  }, async () => ({ items: await listDemoAccounts(pool, app.ctx.config.DEMO_LOGINS) }));
+
+  r.post('/v1/auth/demo-login', {
+    schema: {
+      tags: TAG,
+      summary: 'Open a session as a seeded demo account — no password, demo environments only',
+      body: z.object({ key: z.enum(DEMO_ACCOUNTS.map((a) => a.key) as [string, ...string[]]) }),
+      response: { 200: sessionOut.extend({ user: z.any() }) },
+    },
+    config: authLimit,
+    // `staffMfaRequired` rides along as it does on password login, so a console opened this way knows whether
+    // to ask for a code it could actually use.
+  }, async (req) => ({ ...(await demoLogin(pool, ctxFromRequest(req), req.body.key, app.ctx.config.DEMO_LOGINS)), staffMfaRequired: app.ctx.config.STAFF_MFA_REQUIRED }));
 
   r.post('/v1/auth/otp/request', {
     schema: { tags: TAG, summary: 'Request an email one-time login code (always 202; the code is delivered out-of-band only)', body: z.object({ email }) },

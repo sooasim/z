@@ -10,7 +10,7 @@ import { REFRESH_COOKIE, cookieOptions, splitAuthPayload } from '@/lib/bff';
  */
 export const dynamic = 'force-dynamic';
 
-const ALLOWED = /^(signup|login|refresh|logout|logout-all|otp\/(request|verify)|oauth\/(google|kakao|naver)\/(start|callback|link\/start)|mfa\/(challenge|recovery-codes|totp\/(enroll|verify))|password\/(change|reset\/request|reset\/confirm)|email\/verify\/(request|confirm))$/;
+const ALLOWED = /^(signup|login|demo-login|refresh|logout|logout-all|otp\/(request|verify)|oauth\/(google|kakao|naver)\/(start|callback|link\/start)|mfa\/(challenge|recovery-codes|totp\/(enroll|verify))|password\/(change|reset\/request|reset\/confirm)|email\/verify\/(request|confirm))$/;
 
 function secureFor(req: NextRequest) {
   return process.env.NODE_ENV === 'production' || req.nextUrl.protocol === 'https:';
