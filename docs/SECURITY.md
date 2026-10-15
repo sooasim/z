@@ -28,7 +28,7 @@ Trust boundaries: (B1) browser ↔ edge, (B2) edge ↔ ALB, (B3) app ↔ data st
 ### 2.1 Authentication & sessions (CORE-01)
 | STRIDE | Threat | Controls |
 |---|---|---|
-| S | Credential stuffing, OTP brute force, OAuth account-linking hijack | WAF `rate-limit-auth` (100 req/5 min/IP on `/v1/auth/*`), app rate limit, scrypt password hashing, account linking requires verified e-mail ownership + re-auth; OAuth `state`/PKCE |
+| S | Credential stuffing, OTP brute force, OAuth account-linking hijack | WAF `rate-limit-auth` (100 req/5 min/IP on `/v1/auth/*`), app rate limit, per-account backoff (5 failures in an hour → 1 min, doubling within the streak to 24 h; a streak with no failure for an hour starts over), scrypt password hashing, account linking requires verified e-mail ownership + re-auth; OAuth `state`/PKCE |
 | T | JWT tampering | HS256 with ≥ 32-byte `JWT_SECRET` from Secrets Manager; issuer check; short access TTL (15 min) |
 | R | "I didn't log in" | `sessions` rows (created, revoked), audit of security events |
 | I | Token leakage via logs | pino redaction of `authorization`, `cookie`, tokens, passwords (`REDACT_PATHS`) |

@@ -19,8 +19,23 @@ import { oauthAdapter, oauthRedirectUri, type OAuthProvider } from './oauth.js';
 // Policy constants
 // ---------------------------------------------------------------------------------------------------------
 export const LOGIN_MAX_ATTEMPTS = 5; // failures before a lockout
-export const LOCKOUT_BASE_SEC = 15 * 60; // first lockout; doubles for every further batch of failures (cap 24h)
+/**
+ * The first lockout, doubling for every further batch of failures in the same streak (1m, 2m, 4m … cap 24h).
+ * It starts at a minute rather than a quarter of an hour because the common case by far is a person who
+ * mistyped, not a password spray: a minute is long enough to make guessing hopeless at the rate the
+ * per-minute limit on /v1/auth/* allows, and short enough that nobody is locked out of their own console
+ * over a typo. Sustained guessing still walks up the curve.
+ */
+export const LOCKOUT_BASE_SEC = 60;
 export const LOCKOUT_MAX_SEC = 24 * 3600;
+/**
+ * How long a failed-login streak stays alive. Failures older than this stop counting, so mistypes spread
+ * over days no longer add up to a lockout, and the doubling cannot creep from 15 minutes towards a day for
+ * someone who simply keeps forgetting their password. A sustained attack still escalates: to reach the next
+ * batch it has to land five more failures while the streak is live, and the per-minute limit on
+ * /v1/auth/* caps how fast it can try.
+ */
+export const FAILED_LOGIN_WINDOW_SEC = 60 * 60;
 export const OTP_TTL_SEC = 10 * 60;
 export const OTP_MAX_ATTEMPTS = 5;
 export const OTP_MAX_PER_HOUR = 5;
@@ -37,6 +52,19 @@ const TOTP_PERIOD = 30;
 const ACCOUNT_LOCKED = (until: Date) =>
   new AppError(429, 'ACCOUNT_LOCKED', 'Too many failed attempts; try again later', { lockedUntil: until.toISOString() });
 const INVALID_CREDENTIALS = () => new AppError(401, 'INVALID_CREDENTIALS', 'Email or password is incorrect');
+
+/**
+ * The part of a stored failure count that is still part of this streak. A row with no timestamp is a legacy
+ * count from before the window existed (migration 0102) and is read as ended — an account must not sit on a
+ * lockout nobody can account for.
+ */
+export function activeFailures(stored: number, lastFailureAt: Date | string | null | undefined, now: Date = new Date()): number {
+  if (!stored) return 0;
+  if (!lastFailureAt) return 0;
+  const last = new Date(lastFailureAt).getTime();
+  if (!Number.isFinite(last)) return 0;
+  return now.getTime() - last > FAILED_LOGIN_WINDOW_SEC * 1000 ? 0 : stored;
+}
 
 export function lockoutSeconds(failures: number): number | null {
   if (failures < LOGIN_MAX_ATTEMPTS || failures % LOGIN_MAX_ATTEMPTS !== 0) return null;
@@ -286,7 +314,7 @@ export async function passwordLogin(pool: pg.Pool, ctx: Ctx, input: { email?: st
   const byUsername = byEmail ? null : normUsername(input.username ?? '');
   if (!byEmail && !byUsername) throw badRequest('VALIDATION_FAILED', 'email or username is required');
   const r = await withTx(pool, async (tx) => {
-    const cols = 'id, password_hash, status, failed_login_attempts, locked_until';
+    const cols = 'id, password_hash, status, failed_login_attempts, last_failed_login_at, locked_until';
     const u = byEmail
       ? await maybeOne(tx, `SELECT ${cols} FROM users WHERE email = $1 FOR UPDATE`, [byEmail])
       : await maybeOne(tx, `SELECT ${cols} FROM users WHERE username = $1 FOR UPDATE`, [byUsername]);
@@ -297,11 +325,12 @@ export async function passwordLogin(pool: pg.Pool, ctx: Ctx, input: { email?: st
     if (u.locked_until && new Date(u.locked_until) > new Date()) return { err: ACCOUNT_LOCKED(new Date(u.locked_until)) };
     const ok = await verifyPassword(input.password, u.password_hash);
     if (!ok) {
-      const failures = u.failed_login_attempts + 1;
+      const failures = activeFailures(u.failed_login_attempts, u.last_failed_login_at) + 1;
       const lockSec = lockoutSeconds(failures);
       const upd = await one(
         tx,
-        `UPDATE users SET failed_login_attempts = $2, locked_until = CASE WHEN $3::int IS NULL THEN locked_until ELSE now() + make_interval(secs => $3::int) END
+        `UPDATE users SET failed_login_attempts = $2, last_failed_login_at = now(),
+                locked_until = CASE WHEN $3::int IS NULL THEN locked_until ELSE now() + make_interval(secs => $3::int) END
           WHERE id = $1 RETURNING locked_until`,
         [u.id, failures, lockSec],
       );
@@ -309,7 +338,7 @@ export async function passwordLogin(pool: pg.Pool, ctx: Ctx, input: { email?: st
       return { err: lockSec !== null ? ACCOUNT_LOCKED(new Date(upd.locked_until)) : INVALID_CREDENTIALS() };
     }
     if (u.status === 'SUSPENDED' || u.status === 'DELETED') return { err: forbidden('ACCOUNT_SUSPENDED', 'Account is not active') };
-    await tx.query(`UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1`, [u.id]);
+    await tx.query(`UPDATE users SET failed_login_attempts = 0, last_failed_login_at = NULL, locked_until = NULL WHERE id = $1`, [u.id]);
     const s = await issueSession(tx, ctx, { userId: u.id, authMethod: 'PASSWORD' });
     await audit(tx, ctx, { action: 'auth.login', resourceType: 'session', resourceId: s.sessionId, after: { method: 'PASSWORD' }, category: 'SECURITY', actorId: u.id });
     return { ok: await withUser(tx, s) };
@@ -379,7 +408,7 @@ export async function requestEmailOtp(pool: pg.Pool, ctx: Ctx, rawEmail: string)
 export async function verifyEmailOtp(pool: pg.Pool, ctx: Ctx, input: { email: string; code: string }): Promise<AuthResult> {
   const email = normEmail(input.email);
   const r = await withTx(pool, async (tx) => {
-    const u = await maybeOne(tx, `SELECT id, status, locked_until, failed_login_attempts, email_verified_at FROM users WHERE email = $1 FOR UPDATE`, [email]);
+    const u = await maybeOne(tx, `SELECT id, status, locked_until, failed_login_attempts, last_failed_login_at, email_verified_at FROM users WHERE email = $1 FOR UPDATE`, [email]);
     if (u?.locked_until && new Date(u.locked_until) > new Date()) return { err: ACCOUNT_LOCKED(new Date(u.locked_until)) };
     const c = await checkChallenge(tx, 'EMAIL_OTP', email, input.code);
     if (!c.ok || !u) {
@@ -389,11 +418,12 @@ export async function verifyEmailOtp(pool: pg.Pool, ctx: Ctx, input: { email: st
       let lockSec: number | null = null;
       let lockedUntil: Date | null = null;
       if (!c.ok && c.guessed) {
-        const failures = u.failed_login_attempts + 1;
+        const failures = activeFailures(u.failed_login_attempts, u.last_failed_login_at) + 1;
         lockSec = lockoutSeconds(failures);
         const upd = await one(
           tx,
-          `UPDATE users SET failed_login_attempts = $2, locked_until = CASE WHEN $3::int IS NULL THEN locked_until ELSE now() + make_interval(secs => $3::int) END
+          `UPDATE users SET failed_login_attempts = $2, last_failed_login_at = now(),
+                  locked_until = CASE WHEN $3::int IS NULL THEN locked_until ELSE now() + make_interval(secs => $3::int) END
             WHERE id = $1 RETURNING locked_until`,
           [u.id, failures, lockSec],
         );
@@ -407,7 +437,7 @@ export async function verifyEmailOtp(pool: pg.Pool, ctx: Ctx, input: { email: st
     if (u.status === 'SUSPENDED' || u.status === 'DELETED') return { err: forbidden('ACCOUNT_SUSPENDED', 'Account is not active') };
     // possession of the inbox proves the email address; on the first proof, drop anything planted before it
     if (!u.email_verified_at) await claimUnverifiedAccount(tx, ctx, u.id, 'EMAIL_OTP');
-    await tx.query(`UPDATE users SET email_verified_at = coalesce(email_verified_at, now()), failed_login_attempts = 0, locked_until = NULL WHERE id = $1`, [u.id]);
+    await tx.query(`UPDATE users SET email_verified_at = coalesce(email_verified_at, now()), failed_login_attempts = 0, last_failed_login_at = NULL, locked_until = NULL WHERE id = $1`, [u.id]);
     const s = await issueSession(tx, ctx, { userId: u.id, authMethod: 'EMAIL_OTP' });
     await audit(tx, ctx, { action: 'auth.login', resourceType: 'session', resourceId: s.sessionId, after: { method: 'EMAIL_OTP' }, category: 'SECURITY', actorId: u.id });
     return { ok: await withUser(tx, s) };
@@ -479,7 +509,7 @@ export async function confirmPasswordReset(pool: pg.Pool, ctx: Ctx, input: { ema
     // first proof of inbox control: linked identities / MFA factors added before it may belong to a squatter
     if (!u.email_verified_at) await claimUnverifiedAccount(tx, ctx, u.id, 'PASSWORD_RESET');
     await tx.query(
-      `UPDATE users SET password_hash = $2, password_changed_at = now(), failed_login_attempts = 0, locked_until = NULL,
+      `UPDATE users SET password_hash = $2, password_changed_at = now(), failed_login_attempts = 0, last_failed_login_at = NULL, locked_until = NULL,
               email_verified_at = coalesce(email_verified_at, now()) WHERE id = $1`,
       [u.id, hash],
     );
