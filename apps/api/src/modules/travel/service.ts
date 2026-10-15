@@ -158,6 +158,54 @@ export async function supplierOf(db: Db, userId: string, opts: { allowPending?: 
   return s;
 }
 
+/** The in-house supplier's trading name. Editable afterwards like any other supplier name. */
+export const HOUSE_SUPPLIER_NAME = 'JETPOOL 직영';
+
+/** Is this actor's own supplier row present? (Staff who also run a supplier keep writing as that supplier.) */
+export async function hasOwnSupplier(db: Db, userId: string): Promise<boolean> {
+  return !!(await maybeOne(db, `SELECT 1 FROM suppliers WHERE owner_user_id = $1 AND status IN ('PENDING','APPROVED','SUSPENDED')`, [userId]));
+}
+
+/**
+ * The single JETPOOL-operated supplier (suppliers.is_house), created on first use.
+ *
+ * Head office could always review and publish a product but never author one, because products hang off a
+ * suppliers row and there was none for the platform itself. This is that row: owned by the company rather
+ * than by the admin who happened to click first (`owner_user_id IS NULL`), so nobody inherits the SUPPLIER
+ * role from it and it survives that person leaving.
+ *
+ * It is created APPROVED — a company does not review its own application, and `publish` refuses a supplier
+ * that is not approved — with merchant_of_record 'JETPOOL', which for an in-house product is simply the fact
+ * of who sells it (invariant 8: that stays a per-supplier decision, and a third-party supplier keeps its own).
+ * Commission is 0: a commission charged to itself would post two ledger entries that cancel out.
+ *
+ * Suspending the house supplier is respected — this never flips a status back.
+ */
+export async function houseSupplier(tx: Tx, ctx: Ctx) {
+  // Serialise the create: two admins saving their first product at once would otherwise both insert, and the
+  // unique index would fail one of their requests for no reason they could act on.
+  await tx.query(`SELECT pg_advisory_xact_lock(hashtext('supplier-house'))`);
+  const existing = await maybeOne(tx, `SELECT * FROM suppliers WHERE is_house ORDER BY created_at LIMIT 1`);
+  if (existing) return existing;
+  const s = await one(
+    tx,
+    `INSERT INTO suppliers(owner_user_id, name, supplier_type, is_house, status, merchant_of_record, commission_bps)
+     VALUES (NULL, $1, 'TOUR_OPERATOR', true, 'APPROVED', 'JETPOOL', 0) RETURNING *`,
+    [HOUSE_SUPPLIER_NAME],
+  );
+  await recordTransition(tx, ctx, { aggregateType: 'supplier', aggregateId: s.id, from: null, to: 'APPROVED', reason: 'HOUSE_SUPPLIER_CREATED' });
+  await audit(tx, ctx, {
+    action: 'supplier.house_created',
+    resourceType: 'supplier',
+    resourceId: s.id,
+    category: 'MONEY',
+    after: { name: s.name, merchantOfRecord: s.merchant_of_record, commissionBps: s.commission_bps },
+    reason: 'first in-house travel product',
+  });
+  await emit(tx, ctx, { aggregateType: 'supplier', aggregateId: s.id, eventType: 'supplier.approved', payload: { supplierId: s.id, isHouse: true } });
+  return s;
+}
+
 // ------------------------------------------------------------------------------------------------
 // orders
 // ------------------------------------------------------------------------------------------------

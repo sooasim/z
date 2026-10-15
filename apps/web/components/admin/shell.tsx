@@ -22,6 +22,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const trust = L('신뢰·안전', 'Trust & safety');
   const money = L('결제·정산', 'Money');
   const content = L('콘텐츠', 'Content');
+  const direct = L('직영 운영', 'Run in-house');
   const platform = L('플랫폼', 'Platform');
   return (
     <RequireAuth staff loginHref={ADMIN_LOGIN_PATH}>
@@ -43,8 +44,15 @@ export function AdminShell({ children }: { children: ReactNode }) {
               { href: '/admin/settlements', label: L('정산 승인', 'Settlements'), icon: 'coin' },
               { href: '/admin/ledger', label: L('원장', 'Ledger'), icon: 'doc' },
               { href: '/admin/finance/rules', label: L('수수료·세금 규칙', 'Fee & tax rules'), icon: 'settings' },
-              { href: '/admin/home', label: L('메인 첫 페이지', 'Main page'), icon: 'home', group: content },
+              { href: '/admin/products', label: L('관광 상품', 'Travel products'), icon: 'ticket', group: content },
+              { href: '/admin/home', label: L('메인 첫 페이지', 'Main page'), icon: 'home' },
               { href: '/admin/cms', label: L('CMS · 리다이렉트', 'CMS & redirects'), icon: 'doc' },
+              // Head office running its own inventory. These are the host tools, which a staff account may
+              // use as itself: a stay listed here belongs to the signed-in admin account, and publishing it
+              // still goes through the same compliance predicates as a member's listing (invariant 7).
+              { href: '/host/listings', label: L('직영 숙소', 'In-house stays'), icon: 'bed', group: direct },
+              { href: '/host/calendar', label: L('직영 숙소 달력·요금', 'Stay calendar & rates'), icon: 'calendar' },
+              { href: '/host/reservations', label: L('직영 숙소 예약', 'Stay reservations'), icon: 'list' },
               { href: '/admin/audit', label: L('감사 로그', 'Audit logs'), icon: 'doc', group: platform },
               { href: '/admin/access', label: L('권한 관리', 'Access & roles'), icon: 'user' },
               { href: '/admin/config', label: L('기능 플래그', 'Feature flags'), icon: 'settings' },
