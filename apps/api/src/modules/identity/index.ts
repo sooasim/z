@@ -57,7 +57,9 @@ export default async function identityModule(app: FastifyInstance) {
         .refine((b) => !!(b.email || b.username), { message: 'email or username is required', path: ['email'] }),
     },
     config: authLimit,
-  }, async (req) => svc.passwordLogin(pool, ctxFromRequest(req), req.body));
+    // `staffMfaRequired` rides along so the admin console knows whether to ask for a code it can actually
+    // use: with the gate off and no authenticator enrolled, a step-up prompt would be a dead end.
+  }, async (req) => ({ ...(await svc.passwordLogin(pool, ctxFromRequest(req), req.body)), staffMfaRequired: req.server.ctx.config.STAFF_MFA_REQUIRED }));
 
   r.post('/v1/auth/otp/request', {
     schema: { tags: TAG, summary: 'Request an email one-time login code (always 202; the code is delivered out-of-band only)', body: z.object({ email }) },
@@ -207,6 +209,6 @@ export default async function identityModule(app: FastifyInstance) {
     const actor = getActor(req);
     const user = await accountSummary(pool, actor.userId);
     if (!user) throw notFound('User');
-    return { user, session: { id: actor.sessionId, aal: actor.aal } };
+    return { user, session: { id: actor.sessionId, aal: actor.aal, staffMfaRequired: req.server.ctx.config.STAFF_MFA_REQUIRED } };
   });
 }

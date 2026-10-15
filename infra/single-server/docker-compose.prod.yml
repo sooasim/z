@@ -51,6 +51,8 @@ x-api-env: &api-env
   TOSS_CLIENT_KEY: ${TOSS_CLIENT_KEY:-}
   TOSS_WEBHOOK_SECRET: ${TOSS_WEBHOOK_SECRET:-}
   OAUTH_MOCK: ${OAUTH_MOCK:-true}
+  # false = the admin console needs only the staff password (no authenticator). Forbidden in production.
+  STAFF_MFA_REQUIRED: ${STAFF_MFA_REQUIRED:-true}
   GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
   GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
   KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:-}

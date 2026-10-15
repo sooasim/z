@@ -48,6 +48,14 @@ const schema = z.object({
   NAVER_CLIENT_SECRET: z.string().optional(),
   // strict: z.coerce.boolean() is Boolean(str), so the deployed OAUTH_MOCK="false" (k8s/terraform) meant TRUE
   OAUTH_MOCK: envBoolean(false),
+  /**
+   * Staff MFA gate (CORE-01): staff roles need an AAL2 session for staff routes. Setting this false lets a
+   * staff password login reach the admin console with no authenticator — for a demo console nobody can
+   * enroll on (no e-mail delivery, a shared handle). It is refused in production, and it does not relax the
+   * account-holder gates (`requireAal2`: payout accounts, MFA management), which are about the person's own
+   * second factor rather than the staff role.
+   */
+  STAFF_MFA_REQUIRED: envBoolean(true),
   // Storage (STAY-02)
   S3_ENDPOINT: z.string().optional(),
   S3_REGION: z.string().default('ap-northeast-2'),
@@ -84,6 +92,7 @@ export function loadConfig(overrides: Partial<Record<keyof Config, unknown>> = {
     if (cfg.DATA_ENCRYPTION_KEY === '0'.repeat(64)) throw new Error('DATA_ENCRYPTION_KEY must be set in production');
     if (cfg.PAYMENT_PROVIDER === 'MOCK') throw new Error('MOCK payment provider is forbidden in production');
     if (cfg.OAUTH_MOCK) throw new Error('OAUTH_MOCK is forbidden in production');
+    if (!cfg.STAFF_MFA_REQUIRED) throw new Error('STAFF_MFA_REQUIRED=false is forbidden in production');
   }
   return cfg;
 }

@@ -164,7 +164,7 @@ async function signupAndLogin(email: string, displayName: string) {
   const me = await call(t, user, 'GET', '/v1/me');
   expect(me.status).toBe(200);
   expect(me.body.user).toMatchObject({ id: user.id, email, emailVerified: true });
-  expect(me.body.session).toEqual({ id: login.body.sessionId, aal: 'aal1' });
+  expect(me.body.session).toEqual({ id: login.body.sessionId, aal: 'aal1', staffMfaRequired: true });
 
   const c = await call(t, user, 'GET', '/v1/consents');
   expect(c.status).toBe(200);

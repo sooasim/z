@@ -68,13 +68,19 @@ export async function requireAuth(req: FastifyRequest, _reply: FastifyReply) {
   getActor(req);
 }
 
-/** preHandler factory: any of the roles; staff roles additionally require AAL2. */
+/**
+ * Is the staff AAL2 gate switched on for this server? `STAFF_MFA_REQUIRED=false` (refused in production)
+ * drops it for staff routes only — the console then needs just the staff password.
+ */
+const staffMfaRequired = (req: FastifyRequest) => req.server.ctx.config.STAFF_MFA_REQUIRED;
+
+/** preHandler factory: any of the roles; staff roles additionally require AAL2 (unless STAFF_MFA_REQUIRED=false). */
 export function requireRole(...roles: Role[]) {
   return async (req: FastifyRequest, _reply: FastifyReply) => {
     const actor = getActor(req);
     if (!hasRole(actor, ...roles)) throw forbidden('ROLE_REQUIRED', `Requires one of: ${roles.join(', ')}`);
     const staffOnly = roles.every((r) => STAFF_ROLES.includes(r));
-    if (staffOnly && actor.aal !== 'aal2') throw forbidden('AAL2_REQUIRED', 'Multi-factor authentication is required for this action');
+    if (staffOnly && actor.aal !== 'aal2' && staffMfaRequired(req)) throw forbidden('AAL2_REQUIRED', 'Multi-factor authentication is required for this action');
   };
 }
 

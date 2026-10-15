@@ -264,10 +264,33 @@ cd ~/jetpool
 
 - 회원 로그인: `https://example.com/login` — 페르소나 이메일은 seed 출력에 표시, 비밀번호는 `logins` 출력
 - 관리자 콘솔: `https://example.com/admin/login` — 핸들 `admin`, 비밀번호는 `logins` 출력
-- 관리자(staff) 화면은 **AAL2 세션**이 필요합니다. 첫 로그인에서 인증 앱(OTP)을 등록하세요.
 - 메인 페이지(`/`)는 **Admin → Content → Main page**(`/admin/home`)에서 편집합니다.
 
 seed는 멱등합니다(여러 번 돌려도 중복이 안 생김). `NODE_ENV=production` 에서는 실행을 거부합니다.
+
+### 관리자 콘솔 — 비밀번호와 2단계 인증
+
+```bash
+./infra/single-server/jetpool.sh admin-password 'admin1234'   # 비밀번호 지금 바꾸기 (reseed 불필요)
+./infra/single-server/jetpool.sh admin-mfa off                 # 2단계 인증 요구 끄기
+./infra/single-server/jetpool.sh admin-mfa on                  # 다시 켜기
+```
+
+`admin-password` 는 `.env` 의 `SEED_ADMIN_PASSWORD` 와 DB의 해시를 **같이** 바꿉니다. 해시는 API
+컨테이너 안에서 API 자신의 형식(scrypt)으로 계산하고, 평문은 stdin으로만 흘러 명령줄에 남지 않습니다.
+계정 잠금(`locked_until`)과 실패 카운터도 함께 초기화하므로, 비밀번호를 여러 번 틀려 잠긴 상태도 풀립니다.
+seed를 다시 돌려도 같은 비밀번호로 수렴합니다. 인자를 빼면 정책을 만족하는 긴 비밀번호를 생성합니다.
+
+기본값은 운영진 화면에 **AAL2(인증 앱) 세션**을 요구합니다(CORE-01). `admin-mfa off` 는 API의
+`STAFF_MFA_REQUIRED=false` 를 세팅해 **staff 화면만** 비밀번호 하나로 열리게 합니다 — 메일 발송도 없고
+핸들도 공용인 데모 콘솔에서 인증 앱을 등록할 방법이 없을 때 쓰는 스위치입니다. 끄더라도:
+
+- 본인 2단계 인증이 걸린 곳(정산 계좌 등록, MFA 설정 변경)은 **그대로 막혀 있습니다.** staff 역할은
+  본인의 두 번째 인증 수단이 아니기 때문입니다.
+- 비밀번호를 아는 사람은 **모든 예약·정산을 볼 수 있습니다.** SSH 22번은 본인 IP로 좁히고, 비밀번호는
+  길게 쓰고, 실제 고객 데이터가 들어오기 전에 `admin-mfa on` 으로 되돌리세요.
+- `NODE_ENV=production` 에서는 API가 이 설정으로 **기동을 거부**합니다. `admin-mfa off` 도 production
+  이면 바꾸지 않고 멈춥니다(컨테이너가 재시작 루프에 빠지지 않도록).
 
 ---
 
@@ -360,6 +383,7 @@ CSP에 박히므로 `up` 이 아니라 `deploy` 여야 합니다). IP 모드는 
 | 메일 발송 | `SMTP_URL` | 없으면 production에서 인증코드 발송이 거부됩니다 |
 | 지오코딩 | `GEOCODER=KAKAO` + `KAKAO_REST_API_KEY` | 기본 `STATIC` 은 키가 필요 없지만 정확하지 않습니다 |
 | AI 도우미 | `ANTHROPIC_API_KEY` | 기능 플래그 `ai.assistant` 는 기본 OFF |
+| 관리자 2단계 인증 | `STAFF_MFA_REQUIRED=true` | `admin-mfa off` 로 꺼 둔 상태면 production에서 API가 기동하지 않습니다. `admin-mfa on` + 인증 앱 등록 |
 
 바꾼 뒤 `./infra/single-server/jetpool.sh deploy`. 또 production 전에 법무/세무 승인이 필요한 항목은
 릴리스 게이트 G9(`docs/CHECKLIST.md`)에 정리돼 있습니다.

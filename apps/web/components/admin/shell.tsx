@@ -53,7 +53,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
           />
         </aside>
         <div style={{ minWidth: 0 }}>
-          {user && user.aal !== 'aal2' && (
+          {/* Only warn where the AAL1 session is actually a problem: with STAFF_MFA_REQUIRED=false the
+              staff routes work at AAL1, so a standing warning would be noise with no action behind it. */}
+          {user && user.aal !== 'aal2' && user.staffMfaRequired && (
             <details className="card flat" style={{ marginBottom: 16, borderColor: 'var(--warn)' }}>
               <summary style={{ cursor: 'pointer', fontWeight: 700 }}>⚠️ {L('현재 세션은 AAL1입니다. 관리자 작업에는 MFA 인증이 필요합니다.', 'This session is AAL1 — admin actions need MFA.')}</summary>
               <div style={{ marginTop: 12 }}><MfaPrompt /></div>

@@ -33,12 +33,15 @@ export default function AdminLoginView() {
   const [fe, setFe] = useState<{ loginId?: string; password?: string }>({});
 
   const signedInStaff = ready && !!user && isStaff;
+  // A server with STAFF_MFA_REQUIRED=false lets staff work at AAL1, so there is nothing to step up to —
+  // asking for a code there would be a dead end on a console where nobody enrolled an authenticator.
+  const needsStepUp = signedInStaff && user?.aal !== 'aal2' && (user?.staffMfaRequired ?? true);
   useEffect(() => {
-    // Already a staff session at AAL2 — nothing left to do here.
-    if (signedInStaff && user?.aal === 'aal2' && !busy) router.replace(next);
-  }, [signedInStaff, user?.aal, busy, next, router]);
+    // Nothing left to do here once the session is as strong as this server asks for.
+    if (signedInStaff && !needsStepUp && !busy) router.replace(next);
+  }, [signedInStaff, needsStepUp, busy, next, router]);
 
-  if (stepUp || (signedInStaff && user?.aal !== 'aal2')) {
+  if (stepUp || needsStepUp) {
     return (
       <div style={{ maxWidth: 480, margin: '0 auto' }} className="stack-lg">
         <h1>{L('관리자 2단계 인증', 'Admin two-step verification')}</h1>
@@ -103,7 +106,8 @@ export default function AdminLoginView() {
               // A member who signs in here must not be walked through an MFA step-up: the "no staff role"
               // branch above renders on the next tick instead.
               if (!roles.some((r) => (STAFF_ROLES as readonly string[]).includes(r))) return;
-              if (j?.aal !== 'aal2' && extractAccessToken(j)) {
+              // `staffMfaRequired: false` (API STAFF_MFA_REQUIRED) means the password was the whole gate.
+              if (j?.aal !== 'aal2' && j?.staffMfaRequired !== false && extractAccessToken(j)) {
                 setStepUp(true);
                 return;
               }
