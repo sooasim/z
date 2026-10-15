@@ -80,7 +80,9 @@ jobs:
           done
           # The wait above only proves Pages is up — the PREVIOUS deployment already answers "/" with 200, so a
           # path this deploy adds can still 404 for a minute. Give every path the same retry budget.
-          for path in "" "stay/" "exchange/" "guide-friends/" "travel/" "login/" "about/" "archive/" "credits/" "opengraph-image.png" "media-map.json" "demo-backend.js" "demo-fixtures.json"; do
+          # "app/" is the manifest's start_url — what an installed home-screen icon opens. A deploy that
+          # published everything else but not that would leave the icon pointing at a 404.
+          for path in "" "stay/" "exchange/" "guide-friends/" "travel/" "login/" "about/" "archive/" "credits/" "app/" "manifest.webmanifest" "opengraph-image.png" "media-map.json" "demo-backend.js" "demo-fixtures.json"; do
             for i in $(seq 1 20); do
               code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/$path")
               if [ "$code" = "200" ]; then break; fi
