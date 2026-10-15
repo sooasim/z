@@ -14,6 +14,11 @@ export interface User {
   roles: string[];
   aal: 'aal1' | 'aal2';
   mfaEnabled: boolean;
+  /**
+   * Does this server make staff step up to AAL2 for staff routes (API `STAFF_MFA_REQUIRED`)? Absent on an
+   * older API or a degraded read, so it defaults to true — the safe reading, and the way it has always been.
+   */
+  staffMfaRequired: boolean;
   raw: any;
 }
 
@@ -53,6 +58,8 @@ function toUser(me: any, token: string | null): User | null {
     roles: roles.length ? roles : ['USER'],
     aal: (str(u, 'aal', 'session.aal') || claims.aal || 'aal1') as 'aal1' | 'aal2',
     mfaEnabled: Boolean(f(user, 'mfaEnabled', 'mfa_enabled', 'totpEnabled') ?? f(u, 'mfaEnabled')),
+    // Only an explicit false turns the staff gate off: a missing field must not read as "no MFA needed".
+    staffMfaRequired: f(u, 'session.staffMfaRequired', 'staffMfaRequired') !== false,
     raw: u,
   };
 }

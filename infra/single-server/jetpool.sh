@@ -6,6 +6,8 @@
 #   ./infra/single-server/jetpool.sh deploy                        # build images, migrate, start, smoke
 #   ./infra/single-server/jetpool.sh seed                           # demo content + demo logins
 #   ./infra/single-server/jetpool.sh logins                         # print the generated logins
+#   ./infra/single-server/jetpool.sh admin-password 'new-password'   # set the admin console password now
+#   ./infra/single-server/jetpool.sh admin-mfa off                   # console needs only the password (staging)
 #   ./infra/single-server/jetpool.sh doctor                          # why isn't it opening? run this
 #   ./infra/single-server/jetpool.sh deploy-key                      # mint the key the CI deploy job needs
 #   ./infra/single-server/jetpool.sh ps | logs [svc] | smoke | backup | update | down
@@ -268,8 +270,82 @@ cmd_logins() {
   echo "    handle    $(get_env SEED_ADMIN_USERNAME)"
   echo "    password  $(get_env SEED_ADMIN_PASSWORD)"
   echo
-  echo "  Staff routes need an AAL2 session — enroll an authenticator app on the first admin sign-in."
+  if [[ "$(get_env STAFF_MFA_REQUIRED)" == "false" ]]; then
+    echo "  STAFF_MFA_REQUIRED=false — the password alone opens the console. Anyone who learns it is"
+    echo "  inside, so keep SSH narrow and run '$0 admin-mfa on' before real customer data lands."
+  else
+    echo "  Staff routes need an AAL2 session — enroll an authenticator app on the first admin sign-in."
+    echo "  No authenticator to hand? '$0 admin-mfa off' drops that requirement (staging only)."
+  fi
   echo "  The main page is edited in Admin → Content → Main page (/admin/home)."
+}
+
+# ------------------------------------------------------------------ admin console access
+cmd_admin_mfa() { # on|off — the staff AAL2 requirement (API STAFF_MFA_REQUIRED)
+  [[ -f "$ENV_FILE" ]] || die "no $ENV_FILE — run init first"
+  local want="${1:-}"
+  case "$want" in
+    on)  set_env STAFF_MFA_REQUIRED true ;;
+    off)
+      # The API itself refuses to boot with the gate off in production; say so here instead of letting
+      # the container crash-loop after the restart.
+      [[ "$(get_env NODE_ENV)" == "production" ]] && die "NODE_ENV=production forbids STAFF_MFA_REQUIRED=false — the API will not boot.
+ Keep MFA on in production, or move this box back to NODE_ENV=staging first."
+      set_env STAFF_MFA_REQUIRED false
+      ;;
+    *) die "usage: $0 admin-mfa on|off" ;;
+  esac
+  log "STAFF_MFA_REQUIRED=$(get_env STAFF_MFA_REQUIRED) — restarting the API and worker"
+  dc up -d --no-deps api worker
+  if [[ "$want" == "off" ]]; then
+    warn "the admin console now needs only the staff password. Sessions already signed in keep working;"
+    warn "nothing else changed — a member's own second factor (payouts, MFA settings) is still required."
+  fi
+}
+
+cmd_admin_password() { # [password] — set the admin console password now, without re-seeding
+  cmd_check
+  local handle pw hash out
+  handle="$(get_env SEED_ADMIN_USERNAME)"; handle="${handle:-admin}"
+  [[ "$handle" =~ ^[a-z0-9._-]+$ ]] || die "SEED_ADMIN_USERNAME is not a plain handle: '$handle'"
+  pw="${1:-$(rand_pw)}"
+  [[ -n "$pw" ]] || die "empty password"
+
+  # The API's own format (scrypt$N$r$p$salt$hash — apps/api/src/platform/crypto.ts), computed inside the
+  # api container so the plaintext travels on stdin instead of a command line any `ps` could read.
+  hash="$(printf '%s' "$pw" | dc exec -T api node --input-type=module -e '
+import { randomBytes, scryptSync } from "node:crypto";
+let buf = "";
+process.stdin.setEncoding("utf8");
+for await (const chunk of process.stdin) buf += chunk;
+const salt = randomBytes(16);
+const h = scryptSync(buf, salt, 32, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
+process.stdout.write(`scrypt$16384$8$1$${salt.toString("base64url")}$${h.toString("base64url")}`);
+' 2>/dev/null)" || true
+  # The hash alphabet is base64url plus '$', so it is safe to inline in the SQL below; refuse anything else.
+  [[ "$hash" =~ ^scrypt\$16384\$8\$1\$[A-Za-z0-9_-]+\$[A-Za-z0-9_-]+$ ]] \
+    || die "could not hash the password in the api container (is it up? '$0 ps')"
+
+  # psql prints its command tag ("UPDATE 1") even under -At, which is how this tells "changed the one
+  # account" from "matched nothing because the seed never ran".
+  out="$(dc exec -T postgres psql -v ON_ERROR_STOP=1 -U jetpool -d jetpool -At -c \
+    "UPDATE users SET password_hash = '$hash', password_changed_at = now(), failed_login_attempts = 0, locked_until = NULL WHERE username = '$handle'")" \
+    || die "the UPDATE failed — see the output above"
+  case "$out" in
+    'UPDATE 1') : ;;
+    'UPDATE 0') die "no user with username '$handle' — run '$0 seed' first (that is what creates the admin account)" ;;
+    *) die "unexpected result from the update: '$out' (nothing was verified; check with '$0 psql')" ;;
+  esac
+
+  # Keep .env in step so a later 'seed' converges to the same password instead of resetting it.
+  set_env SEED_ADMIN_PASSWORD "$pw"
+  log "admin console password updated for handle '$handle'"
+  echo "  sign in at $(get_env PUBLIC_WEB_URL)/admin/login"
+  echo "  handle    $handle"
+  echo "  password  $pw"
+  echo
+  echo "  A short password is only as safe as what it guards: this is the console that can read every"
+  echo "  booking and payout. Change it to something long before this box holds real customers."
 }
 
 cmd_smoke() {
@@ -681,6 +757,8 @@ case "${1:-help}" in
   migrate) ensure_docker_access "$@"; cmd_migrate ;;
   seed)    ensure_docker_access "$@"; cmd_seed ;;
   logins)  cmd_logins ;;
+  admin-mfa)      ensure_docker_access "$@"; shift; cmd_admin_mfa "$@" ;;
+  admin-password) ensure_docker_access "$@"; shift; cmd_admin_password "$@" ;;
   smoke)   ensure_docker_access "$@"; cmd_smoke ;;
   doctor)  ensure_docker_access "$@"; cmd_doctor ;;
   deploy-key) shift; cmd_deploy_key "$@" ;;

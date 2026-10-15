@@ -100,8 +100,10 @@ For the managed targets (ECS / k8s / Fly) use `infra/scripts/deploy.sh` from the
 
 The dev seed prints the member logins it created. The **admin console is at `/admin/login`** — login handle `admin`,
 password `admin1234` (override with `SEED_ADMIN_USERNAME` / `SEED_ADMIN_PASSWORD`; `seed-dev` refuses to run with
-`NODE_ENV=production`). Staff routes need an AAL2 session, so enroll an authenticator on first sign-in. The main
-page (`/`) is edited from **Admin → Content → Main page** (`/admin/home`).
+`NODE_ENV=production`). Staff routes need an AAL2 session, so enroll an authenticator on first sign-in — or set
+`STAFF_MFA_REQUIRED=false` (single server: `jetpool.sh admin-mfa off`), which drops that requirement for staff
+routes only and is refused in production. The main page (`/`) is edited from **Admin → Content → Main page**
+(`/admin/home`).
 
 ## Environment variables (API / worker)
 
@@ -124,6 +126,7 @@ default `JWT_SECRET`/`DATA_ENCRYPTION_KEY`, `PAYMENT_PROVIDER=MOCK` or `OAUTH_MO
 | `PAYMENT_TTL_SEC`, `HOLD_TTL_SEC`, `QUOTE_TTL_SEC` | `900`, `900`, `1800` | payment / hold / quote lifetimes (ADR-0004) |
 | `GOOGLE_*`, `KAKAO_*`, `NAVER_*` (`CLIENT_ID`/`CLIENT_SECRET`) | – | OAuth providers — **secret** |
 | `OAUTH_MOCK` | `false` | mock OAuth (dev/test only) |
+| `STAFF_MFA_REQUIRED` | `true` | staff routes need an AAL2 session; `false` accepts the staff password alone (forbidden in prod, never relaxes the account-holder AAL2 gates) |
 | `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET_PRIVATE`, `S3_BUCKET_PUBLIC`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | `ap-northeast-2`, `jetpool-private`, `jetpool-public` | media storage (on AWS use the task role, no keys) |
 | `CDN_BASE_URL` | `http://localhost:4000/media-dev` | public media base URL |
 | `MEILI_HOST`, `MEILI_API_KEY` | unset → PostgreSQL search fallback | search projection (ADR-0006) |
