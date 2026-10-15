@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { getActor, hasRole, requireAuth, requireRole } from '../../platform/auth.js';
+import { getActor, hasRole, isStaff, requireAuth, requireRole, type Actor } from '../../platform/auth.js';
 import { ctxFromRequest, systemCtx } from '../../platform/context.js';
 import { maybeOne, one, q, withTx } from '../../platform/db.js';
 import { badRequest, conflict, notFound } from '../../platform/errors.js';
@@ -24,6 +24,8 @@ import {
   cancelOrder,
   createOrder,
   expireOrders,
+  hasOwnSupplier,
+  houseSupplier,
   loadOrder,
   orderDto,
   registerOrderPaymentSubject,
@@ -68,6 +70,7 @@ const ITEM_REF_TABLE: Record<string, string | null> = {
 const supplierDto = (s: any) => ({
   id: s.id,
   ownerUserId: s.owner_user_id,
+  isHouse: !!s.is_house,
   name: s.name,
   supplierType: s.supplier_type,
   businessProfileId: s.business_profile_id,
@@ -312,19 +315,54 @@ export default async function travelModule(app: FastifyInstance) {
   );
 
   // ------------------------------------------------------------------ TRAVEL-01 supplier extranet
-  const supplierOnly = requireRole('SUPPLIER');
+  /**
+   * The extranet is for whoever authors a product: a third-party supplier, or head office writing its own.
+   * Staff get in without a SUPPLIER grant — they write as the house supplier (see `writeAs`) — and every
+   * route below still checks that the product belongs to the supplier the caller resolved to, so an admin
+   * cannot edit another company's product here. Staff review of third-party products stays where it was:
+   * the /v1/admin/travel-products publish and reject routes.
+   */
+  const staffAuthor = requireRole('ADMIN', 'EDITOR');
+  const supplierOnly = async (req: any, reply: any) => {
+    // A supplier passes on its SUPPLIER grant, as before. Staff fall through to the staff gate, which keeps
+    // the AAL2 requirement on them: authoring in-house products must not be an easier door than reviewing.
+    if (hasRole(getActor(req), 'SUPPLIER')) return;
+    return staffAuthor(req, reply);
+  };
+
+  /** Which supplier this caller authors as: their own, or (staff with none of their own) the house supplier. */
+  async function writeAs(tx: any, actor: Actor, ctx: ReturnType<typeof ctxFromRequest>, opts: { allowPending?: boolean } = {}) {
+    if (isStaff(actor) && !(await hasOwnSupplier(tx, actor.userId))) return houseSupplier(tx, ctx);
+    return supplierOf(tx, actor.userId, opts);
+  }
+
+  /** Same resolution, read-only: null when head office has not created an in-house product yet. */
+  async function readAs(db: any, actor: Actor, opts: { allowPending?: boolean } = {}) {
+    if (isStaff(actor) && !(await hasOwnSupplier(db, actor.userId))) {
+      return maybeOne(db, `SELECT * FROM suppliers WHERE is_house ORDER BY created_at LIMIT 1`);
+    }
+    return supplierOf(db, actor.userId, opts);
+  }
 
   r.get('/v1/supplier/products', { schema: { summary: 'List the travel products of the supplier', tags: [T1], querystring: z.object({ status: z.string().optional() }) }, preHandler: supplierOnly }, async (req) => {
-    const s = await supplierOf(pool, getActor(req).userId, { allowPending: true });
+    const s = await readAs(pool, getActor(req), { allowPending: true });
+    if (!s) return { items: [] }; // staff, and no in-house product has been created yet
     const rows = await q(pool, `SELECT * FROM travel_products WHERE supplier_id = $1 AND ($2::text IS NULL OR status = $2) ORDER BY created_at DESC LIMIT 500`, [s.id, req.query.status ?? null]);
     return { items: rows.map((p) => productDto(p)) };
+  });
+
+  r.get('/v1/supplier/products/:id', { schema: { summary: 'Get one of the supplier\'s own products, with its options', tags: [T1], params: idParams }, preHandler: supplierOnly }, async (req) => {
+    const s = await readAs(pool, getActor(req), { allowPending: true });
+    const out = s ? await productWithOptions(pool, req.params.id) : null;
+    if (!out || out.row.supplier_id !== s!.id) throw notFound('Product');
+    return { item: productDto(out.row, { options: out.options }) };
   });
 
   r.post('/v1/supplier/products', { schema: { summary: 'Create a travel product draft', tags: [T1], body: z.object(productBase) }, preHandler: supplierOnly }, async (req, reply) => {
     const ctx = ctxFromRequest(req);
     const b = req.body;
     const id = await withTx(pool, async (tx) => {
-      const s = await supplierOf(tx, getActor(req).userId);
+      const s = await writeAs(tx, getActor(req), ctx);
       const p = await one(
         tx,
         `INSERT INTO travel_products(supplier_id, type, title, summary, description, city, country, duration_minutes, base_price_minor, currency, cancellation_terms, media_ids)
@@ -346,7 +384,7 @@ export default async function travelModule(app: FastifyInstance) {
       const b = req.body;
       const ctx = ctxFromRequest(req);
       await withTx(pool, async (tx) => {
-        const s = await supplierOf(tx, getActor(req).userId, { allowPending: true });
+        const s = await writeAs(tx, getActor(req), ctx, { allowPending: true });
         const p = await maybeOne(tx, `SELECT * FROM travel_products WHERE id = $1 FOR UPDATE`, [req.params.id]);
         if (!p || p.supplier_id !== s.id) throw notFound('Product');
         if (p.status === 'ARCHIVED') throw conflict('PRODUCT_ARCHIVED', 'Archived products cannot be edited');
@@ -394,7 +432,7 @@ export default async function travelModule(app: FastifyInstance) {
   r.post('/v1/supplier/products/:id/submit', { schema: { summary: 'Submit a travel product for review', tags: [T1], params: idParams }, preHandler: supplierOnly }, async (req) => {
     const ctx = ctxFromRequest(req);
     const row = await withTx(pool, async (tx) => {
-      const s = await supplierOf(tx, getActor(req).userId);
+      const s = await writeAs(tx, getActor(req), ctx);
       const p = await maybeOne(tx, `SELECT supplier_id FROM travel_products WHERE id = $1`, [req.params.id]);
       if (!p || p.supplier_id !== s.id) throw notFound('Product');
       return (await ProductFSM.transition(tx, ctx, { table: 'travel_products', id: req.params.id, from: ['DRAFT', 'PAUSED', 'PUBLISHED'], to: 'IN_REVIEW', reason: 'SUBMITTED' })).row;
@@ -409,11 +447,13 @@ export default async function travelModule(app: FastifyInstance) {
     async (req) => {
       const rows = await q(
         pool,
-        `SELECT p.*, s.name AS supplier_name, s.merchant_of_record FROM travel_products p JOIN suppliers s ON s.id = p.supplier_id
+        `SELECT p.*, s.name AS supplier_name, s.merchant_of_record, s.is_house FROM travel_products p JOIN suppliers s ON s.id = p.supplier_id
           WHERE ($1::text IS NULL OR p.status = $1) ORDER BY p.updated_at DESC LIMIT 500`,
         [req.query.status ?? null],
       );
-      return { items: rows.map((p) => productDto(p)) };
+      // `isHouse` only here: it tells the console which rows are its own to edit, and it is nobody's business
+      // on the public product page, where merchantOfRecord already says who sells it.
+      return { items: rows.map((p) => productDto(p, { isHouse: !!p.is_house })) };
     },
   );
 
@@ -544,7 +584,9 @@ export default async function travelModule(app: FastifyInstance) {
     async (req) => {
       const p = await maybeOne(pool, `SELECT p.status, p.detail, s.status AS supplier_status, s.owner_user_id FROM travel_products p JOIN suppliers s ON s.id = p.supplier_id WHERE p.id = $1`, [req.params.id]);
       if (!p) throw notFound('Product');
-      const owner = !!req.actor && p.owner_user_id === req.actor.userId;
+      // Staff read like the owner: the review queue has to show the departures of a product that is not public
+      // yet, and an in-house product has no owner user to match against.
+      const owner = !!req.actor && (p.owner_user_id === req.actor.userId || isStaff(req.actor));
       // a migrated heritage programme is readable like its product page; it simply has nothing on sale
       const heritage = p.detail?.legacy?.system === 'LEGACY_WONT' && p.status === 'ARCHIVED' && p.supplier_status === 'APPROVED';
       if (!owner && !heritage && !(p.status === 'PUBLISHED' && p.supplier_status === 'APPROVED')) throw notFound('Product');
@@ -586,7 +628,7 @@ export default async function travelModule(app: FastifyInstance) {
       const b = req.body;
       if (new Date(b.startsAt).getTime() <= Date.now()) throw badRequest('DEPARTURE_IN_PAST', 'startsAt must be in the future');
       const row = await withTx(pool, async (tx) => {
-        const s = await supplierOf(tx, getActor(req).userId);
+        const s = await writeAs(tx, getActor(req), ctx);
         const p = await maybeOne(tx, `SELECT supplier_id, status FROM travel_products WHERE id = $1`, [req.params.id]);
         if (!p || p.supplier_id !== s.id) throw notFound('Product');
         if (p.status === 'ARCHIVED') throw conflict('PRODUCT_ARCHIVED', 'Archived product');
@@ -609,7 +651,7 @@ export default async function travelModule(app: FastifyInstance) {
     async (req) => {
       const ctx = ctxFromRequest(req);
       const row = await withTx(pool, async (tx) => {
-        const s = await supplierOf(tx, getActor(req).userId);
+        const s = await writeAs(tx, getActor(req), ctx);
         const d = await maybeOne(tx, `SELECT d.*, p.supplier_id FROM travel_departures d JOIN travel_products p ON p.id = d.product_id WHERE d.id = $1 FOR UPDATE OF d`, [req.params.id]);
         if (!d || d.supplier_id !== s.id) throw notFound('Departure');
         if (req.body.capacity !== undefined) {
@@ -630,7 +672,7 @@ export default async function travelModule(app: FastifyInstance) {
     async (req) => {
       const ctx = ctxFromRequest(req);
       const n = await withTx(pool, async (tx) => {
-        const s = await supplierOf(tx, getActor(req).userId);
+        const s = await writeAs(tx, getActor(req), ctx);
         const d = await maybeOne(tx, `SELECT d.id, p.supplier_id FROM travel_departures d JOIN travel_products p ON p.id = d.product_id WHERE d.id = $1 FOR UPDATE OF d`, [req.params.id]);
         if (!d || d.supplier_id !== s.id) throw notFound('Departure');
         return cancelDeparture(tx, ctx, d.id, `SUPPLIER_CANCELLED: ${req.body.reason}`);
@@ -861,7 +903,8 @@ export default async function travelModule(app: FastifyInstance) {
   );
 
   r.get('/v1/supplier/orders', { schema: { summary: 'List orders for the products of the supplier', tags: [T4], querystring: pagination.extend({ status: z.string().optional() }) }, preHandler: supplierOnly }, async (req) => {
-    const s = await supplierOf(pool, getActor(req).userId, { allowPending: true });
+    const s = await readAs(pool, getActor(req), { allowPending: true });
+    if (!s) return { items: [], nextCursor: null };
     const c = decodeCursor(req.query.cursor);
     const rows = await q(
       pool,
