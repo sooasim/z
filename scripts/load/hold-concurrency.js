@@ -28,6 +28,10 @@ export const options = {
 
 export default function () {
   if (!fx) throw new Error('FIXTURE env is required');
+  // Give holds_created a sample on every iteration without changing its sum: a counter that is never
+  // touched can reach the end of the run with no data at all, and a threshold on a metric with no samples
+  // is not something to bet the gate on. Adding zero makes `count>0` a question k6 actually answers.
+  holdsCreated.add(0);
   const round = exec.vu.iterationInScenario;
   const token = fx.tokens[(exec.vu.idInTest - 1) % fx.tokens.length];
   const headers = { 'content-type': 'application/json', authorization: `Bearer ${token}` };
