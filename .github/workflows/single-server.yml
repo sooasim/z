@@ -379,10 +379,14 @@ jobs:
           echo "### HTTP as the public internet sees it"
           fail=0
           for n in $names; do
-            https_code="$(curl -sS -o /dev/null --max-time 25 -w '%{http_code}' "https://$n/" 2>/dev/null || echo 000)"
-            loc="$(curl -sSI --max-time 25 "https://$n/" 2>/dev/null | awk 'tolower($1)=="location:"{print $2}' | tr -d '\r' || true)"
-            http_code="$(curl -sS -o /dev/null --max-time 20 -w '%{http_code}' "http://$n/" 2>/dev/null || echo 000)"
-            printf '  %-28s https=%s%s  http=%s\n' "$n" "$https_code" "${loc:+ → $loc}" "$http_code"
+            # The API serves no route at /, where 404 is the correct answer and says nothing about
+            # whether the name works. Probe its health endpoint instead, as the smoke test does.
+            path='/'
+            case "$n" in api.*) path='/health' ;; esac
+            https_code="$(curl -sS -o /dev/null --max-time 25 -w '%{http_code}' "https://$n$path" 2>/dev/null || echo 000)"
+            loc="$(curl -sSI --max-time 25 "https://$n$path" 2>/dev/null | awk 'tolower($1)=="location:"{print $2}' | tr -d '\r' || true)"
+            http_code="$(curl -sS -o /dev/null --max-time 20 -w '%{http_code}' "http://$n$path" 2>/dev/null || echo 000)"
+            printf '  %-28s https=%s%s  http=%s\n' "$n$path" "$https_code" "${loc:+ → $loc}" "$http_code"
             case "$https_code" in
               2*|3*) ;;
               *) fail=1 ;;
