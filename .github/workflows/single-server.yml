@@ -317,6 +317,89 @@ jobs:
           ~/.ssh/jpssh "$USER_NAME@$HOST" \
               'cd ~/jetpool && ./infra/single-server/jetpool.sh doctor' || true
 
+      # The server cannot answer "does this open from the internet?" about itself: a request it makes to
+      # its own public address can turn around inside the cloud's NAT and never leave. The runner is a
+      # stranger on the public internet, which is exactly the vantage point the question is about.
+      - name: Check every public address from outside
+        if: always()
+        env:
+          HOST: ${{ secrets.JETPOOL_SSH_HOST }}
+          USER_NAME: ${{ secrets.JETPOOL_SSH_USER }}
+          SSHPASS: ${{ secrets.JETPOOL_SSH_PASSWORD }}
+          JP_PORT: ${{ secrets.JETPOOL_SSH_PORT }}
+        run: |
+          set -uo pipefail
+          # Ask the server which names it is configured to serve, rather than hard-coding them here.
+          names="$(~/.ssh/jpssh "$USER_NAME@$HOST" bash -s <<'REMOTE' || true
+          set -euo pipefail
+          env_file="$HOME/jetpool/infra/single-server/.env"
+          root="$(awk -F= '$1=="ROOT_DOMAIN"{sub(/^[^=]*=/,""); print; exit}' "$env_file")"
+          alts="$(awk -F= '$1=="ALT_DOMAINS"{sub(/^[^=]*=/,""); print; exit}' "$env_file" | tr ',' ' ')"
+          mode="$(awk -F= '$1=="DEPLOY_MODE"{sub(/^[^=]*=/,""); print; exit}' "$env_file")"
+          [ "$mode" = "domain" ] || exit 0
+          echo "$root www.$root api.$root $alts"
+          REMOTE
+          )"
+          names="$(tr -s '[:space:]' ' ' <<< "${names:-}")"
+          if [ -z "${names// /}" ]; then
+            echo "::warning::could not read the configured domains from the server (IP mode, or .env unreadable)"
+            exit 0
+          fi
+          echo "## From a GitHub runner — i.e. from the public internet"
+          echo
+          # DNS first. A registrar's own DNS panel is only consulted when the registry's NS records
+          # actually point at it, so print the delegation before blaming anything else.
+          echo "### DNS as the public internet sees it"
+          command -v dig >/dev/null 2>&1 || sudo apt-get install -y -qq dnsutils >/dev/null 2>&1 || true
+          server_ip="$(getent hosts "$HOST" | awk '{print $1; exit}' || true)"
+          if ! command -v dig >/dev/null 2>&1; then
+            echo "  (no dig on this runner — skipping the DNS section)"
+          else
+            seen_zones=''
+            for n in $names; do
+              zone="$(awk -F. '{ if (NF>=3 && ($(NF-1)=="co" || $(NF-1)=="or" || $(NF-1)=="ne" || $(NF-1)=="go")) print $(NF-2)"."$(NF-1)"."$NF; else if (NF>=2) print $(NF-1)"."$NF }' <<< "$n")"
+              case " $seen_zones " in *" $zone "*) ;; *)
+                seen_zones="$seen_zones $zone"
+                ns="$(dig +short NS "$zone" @1.1.1.1 2>/dev/null | sort | tr '\n' ' ' || true)"
+                printf '  %-28s NS  %s\n' "$zone" "${ns:-(none — the registry publishes no nameservers for this zone)}"
+                [ -n "${ns// /}" ] || echo "::warning::$zone has no NS delegation: the nameserver change at the registrar has not taken effect, so whatever DNS records you entered are never consulted"
+              ;; esac
+            done
+            for n in $names; do
+              a="$(dig +short A "$n" @1.1.1.1 2>/dev/null | grep -E '^[0-9.]+$' | tr '\n' ' ' || true)"
+              printf '  %-28s A   %s\n' "$n" "${a:-(no address)}"
+              if [ -z "${a// /}" ]; then
+                echo "::warning::$n does not resolve from the public internet — add an A record for it, or wait for the nameserver change"
+              elif [ -n "$server_ip" ] && ! grep -qw "$server_ip" <<< "$a"; then
+                echo "::warning::$n resolves somewhere other than this server"
+              fi
+            done
+          fi
+          echo
+          echo "### HTTP as the public internet sees it"
+          fail=0
+          for n in $names; do
+            https_code="$(curl -sS -o /dev/null --max-time 25 -w '%{http_code}' "https://$n/" 2>/dev/null || echo 000)"
+            loc="$(curl -sSI --max-time 25 "https://$n/" 2>/dev/null | awk 'tolower($1)=="location:"{print $2}' | tr -d '\r' || true)"
+            http_code="$(curl -sS -o /dev/null --max-time 20 -w '%{http_code}' "http://$n/" 2>/dev/null || echo 000)"
+            printf '  %-28s https=%s%s  http=%s\n' "$n" "$https_code" "${loc:+ → $loc}" "$http_code"
+            case "$https_code" in
+              2*|3*) ;;
+              *) fail=1 ;;
+            esac
+          done
+          echo
+          if [ "$fail" -eq 0 ]; then
+            echo "Every name above answers over HTTPS from outside this cloud. If a visitor still cannot"
+            echo "reach one, what is left is on their side: a stale DNS cache (a name that used to not"
+            echo "exist is remembered as missing for the SOA negative-TTL, often an hour) or their network."
+          else
+            echo "::warning::a name above did not answer over HTTPS from the public internet. https=000 means"
+            echo "the connection never completed: the cloud security group must allow inbound TCP 80 and 443,"
+            echo "and a name whose certificate was never issued cannot serve TLS (Caddy needs inbound 80, or"
+            echo "443 for TLS-ALPN, reachable at the moment it asks). A 4xx/5xx instead means it answered."
+          fi
+
       - name: Remove the credentials from the runner
         if: always()
         run: rm -f ~/.ssh/id_deploy ~/.ssh/jpssh
