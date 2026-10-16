@@ -27,6 +27,13 @@
 #   JETPOOL_SSH_HOST       the server's public IP or hostname
 #   JETPOOL_SSH_USER       login user; `root`, or a user with passwordless sudo
 #   JETPOOL_SSH_KEY        a PRIVATE SSH key whose public half is in that user's authorized_keys
+#   JETPOOL_SSH_PASSWORD   instead of the key, when you cannot get a shell on the server to mint one.
+#                          A key is minted ON the server, so requiring one means the first deploy needs
+#                          the very shell access this job exists to replace. The password breaks that
+#                          circle — and costs what a password costs: it works everywhere that password
+#                          works, and it cannot be revoked by deleting a line. Use it to get the first
+#                          deploy through, then run `jetpool.sh deploy-key`, store the four values it
+#                          prints, and DELETE this secret.
 #   JETPOOL_SSH_HOST_KEY   optional, recommended: the server's host key line, from
 #                          `ssh-keyscan <host>` run somewhere you trust. Pins the host so this job
 #                          cannot be pointed at an impostor. Without it the job trusts whatever
@@ -172,14 +179,22 @@ jobs:
           HOST_KEY: ${{ secrets.JETPOOL_SSH_HOST_KEY }}
           DOMAIN: ${{ inputs.domain }}
           EMAIL: ${{ inputs.email }}
+        env:
+          PASSWORD: ${{ secrets.JETPOOL_SSH_PASSWORD }}
         run: |
           missing=""
           [ -n "$HOST" ] || missing="$missing JETPOOL_SSH_HOST"
           [ -n "$USER_NAME" ] || missing="$missing JETPOOL_SSH_USER"
-          [ -n "$KEY" ] || missing="$missing JETPOOL_SSH_KEY"
+          # A key is the better credential, but it has to be minted ON the server, and someone who cannot
+          # get a shell there cannot mint one. The password is accepted so the first deploy needs nothing
+          # but this repository's settings page.
+          [ -n "$KEY" ] || [ -n "$PASSWORD" ] || missing="$missing JETPOOL_SSH_KEY(or JETPOOL_SSH_PASSWORD)"
           if [ -n "$missing" ]; then
             echo "::error::missing repository secrets:$missing — see the comments at the top of this workflow"
             exit 1
+          fi
+          if [ -z "$KEY" ]; then
+            echo "::warning::signing in with JETPOOL_SSH_PASSWORD. A password works everywhere that password works, so run 'jetpool.sh deploy-key' once this deploy succeeds, put the four values it prints in the secrets, and delete JETPOOL_SSH_PASSWORD."
           fi
           [ -n "$HOST_KEY" ] || echo "::warning::JETPOOL_SSH_HOST_KEY is not set, so this job trusts whatever host answers first"
           if [ -n "$DOMAIN" ] && [ -z "$EMAIL" ]; then
@@ -196,14 +211,33 @@ jobs:
         run: |
           set -euo pipefail
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$KEY" > ~/.ssh/id_deploy
-          chmod 600 ~/.ssh/id_deploy
+          if [ -n "$KEY" ]; then
+            printf '%s\n' "$KEY" > ~/.ssh/id_deploy
+            chmod 600 ~/.ssh/id_deploy
+          else
+            sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+          fi
           if [ -n "$HOST_KEY" ]; then
             printf '%s\n' "$HOST_KEY" > ~/.ssh/known_hosts
           else
             ssh-keyscan -p "${PORT:-22}" -H "$HOST" > ~/.ssh/known_hosts 2>/dev/null
           fi
           chmod 600 ~/.ssh/known_hosts
+
+          # One wrapper for both credentials, so the steps below never branch on which one is in use.
+          # The password path cannot use BatchMode (it disables password auth) and reads the password
+          # from $SSHPASS, never from a command line that `ps` on the runner could show.
+          cat > ~/.ssh/jpssh <<'WRAP'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          if [ -f "$HOME/.ssh/id_deploy" ]; then
+            exec ssh -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 \
+                 -i "$HOME/.ssh/id_deploy" -p "${JP_PORT:-22}" "$@"
+          fi
+          exec sshpass -e ssh -o PubkeyAuthentication=no -o PreferredAuthentications=password \
+               -o ConnectTimeout=20 -p "${JP_PORT:-22}" "$@"
+          WRAP
+          chmod 700 ~/.ssh/jpssh
 
       - name: Run the installer on the server
         env:
@@ -215,6 +249,8 @@ jobs:
           SEED: ${{ inputs.seed }}
           SKIP_DNS: ${{ inputs.skip_dns_check }}
           # A tag push re-deploys what is already configured; a dispatch sets a server up from scratch.
+          SSHPASS: ${{ secrets.JETPOOL_SSH_PASSWORD }}
+          JP_PORT: ${{ secrets.JETPOOL_SSH_PORT }}
           MODE: ${{ startsWith(github.ref, 'refs/tags/deploy-') && 'update' || 'install' }}
           # On a tag push `github.ref_name` is the tag, which is no branch to check out on the server, so
           # the update path ships the default branch — the tag is a button, not the payload.
@@ -223,8 +259,7 @@ jobs:
         run: |
           set -euo pipefail
           # The remote script is fed on stdin so nothing needs quoting through the shell twice.
-          ssh -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 \
-              -i ~/.ssh/id_deploy -p "${PORT:-22}" "$USER_NAME@$HOST" \
+          ~/.ssh/jpssh "$USER_NAME@$HOST" \
               env DOMAIN="$DOMAIN" EMAIL="$EMAIL" SEED="$SEED" SKIP_DNS="$SKIP_DNS" MODE="$MODE" \
                   BRANCH="$BRANCH" REPO="$REPO" bash -s <<'REMOTE'
           set -euo pipefail
@@ -275,12 +310,12 @@ jobs:
         env:
           HOST: ${{ secrets.JETPOOL_SSH_HOST }}
           USER_NAME: ${{ secrets.JETPOOL_SSH_USER }}
-          PORT: ${{ secrets.JETPOOL_SSH_PORT }}
+          SSHPASS: ${{ secrets.JETPOOL_SSH_PASSWORD }}
+          JP_PORT: ${{ secrets.JETPOOL_SSH_PORT }}
         run: |
-          ssh -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 \
-              -i ~/.ssh/id_deploy -p "${PORT:-22}" "$USER_NAME@$HOST" \
+          ~/.ssh/jpssh "$USER_NAME@$HOST" \
               'cd ~/jetpool && ./infra/single-server/jetpool.sh doctor' || true
 
-      - name: Remove the key from the runner
+      - name: Remove the credentials from the runner
         if: always()
-        run: rm -f ~/.ssh/id_deploy
+        run: rm -f ~/.ssh/id_deploy ~/.ssh/jpssh
