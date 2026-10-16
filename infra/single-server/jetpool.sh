@@ -9,6 +9,7 @@
 #   ./infra/single-server/jetpool.sh domain add example.co.kr        # one more domain → redirects here
 #   ./infra/single-server/jetpool.sh admin-password 'new-password'   # set the admin console password now
 #   ./infra/single-server/jetpool.sh admin-mfa off                   # console needs only the password (staging)
+#   ./infra/single-server/jetpool.sh admin-unlock                    # locked out by failed attempts? clear it
 #   ./infra/single-server/jetpool.sh doctor                          # why isn't it opening? run this
 #   ./infra/single-server/jetpool.sh deploy-key                      # mint the key the CI deploy job needs
 #   ./infra/single-server/jetpool.sh ps | logs [svc] | smoke | backup | update | down
@@ -459,6 +460,24 @@ cmd_logins() {
 }
 
 # ------------------------------------------------------------------ admin console access
+cmd_admin_unlock() { # clear a failed-attempt lockout on the admin account, without touching the password
+  cmd_check
+  local handle out
+  handle="$(get_env SEED_ADMIN_USERNAME)"; handle="${handle:-admin}"
+  [[ "$handle" =~ ^[a-z0-9._-]+$ ]] || die "SEED_ADMIN_USERNAME is not a plain handle: '$handle'"
+  out="$(dc exec -T postgres psql -v ON_ERROR_STOP=1 -U jetpool -d jetpool -At -c \
+    "UPDATE users SET failed_login_attempts = 0, last_failed_login_at = NULL, locked_until = NULL WHERE username = '$handle'")" \
+    || die "the UPDATE failed — see the output above"
+  case "$out" in
+    'UPDATE 1') : ;;
+    'UPDATE 0') die "no user with username '$handle' — run '$0 seed' first (that is what creates the admin account)" ;;
+    *) die "unexpected result from the update: '$out' (nothing was verified; check with '$0 psql')" ;;
+  esac
+  log "lockout cleared for handle '$handle' — sign in at $(get_env PUBLIC_WEB_URL)/admin/login"
+  echo "  The password is unchanged. Five more wrong tries within the hour lock it again for 15 minutes;"
+  echo "  an hour without a wrong try and the count starts over by itself."
+}
+
 cmd_admin_mfa() { # on|off — the staff AAL2 requirement (API STAFF_MFA_REQUIRED)
   [[ -f "$ENV_FILE" ]] || die "no $ENV_FILE — run init first"
   local want="${1:-}"
@@ -939,6 +958,7 @@ case "${1:-help}" in
   domain)  ensure_docker_access "$@"; shift; cmd_domain "$@" ;;
   admin-mfa)      ensure_docker_access "$@"; shift; cmd_admin_mfa "$@" ;;
   admin-password) ensure_docker_access "$@"; shift; cmd_admin_password "$@" ;;
+  admin-unlock)   ensure_docker_access "$@"; cmd_admin_unlock ;;
   smoke)   ensure_docker_access "$@"; cmd_smoke ;;
   doctor)  ensure_docker_access "$@"; cmd_doctor ;;
   deploy-key) shift; cmd_deploy_key "$@" ;;

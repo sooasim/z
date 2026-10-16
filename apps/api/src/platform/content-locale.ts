@@ -4,6 +4,7 @@ import { isEnabled } from './flags.js';
 import { applyTranslations, collect, translatable, translateMany, type TranslateDeps, type Translator } from './translate.js';
 import { TranslationQueue } from './translate-queue.js';
 import { ClaudeTranslator } from '../modules/ai/translator.js';
+import { LibreTranslator } from '../modules/ai/libre-translator.js';
 
 /** UI languages the product ships. A request for anything else is served in the source language. */
 export const SUPPORTED_LOCALES = ['ko-KR', 'en-US', 'ja-JP', 'zh-CN', 'vi-VN'] as const;
@@ -40,13 +41,23 @@ const match = (tag?: string): SupportedLocale | null => {
   return byPrimary.get(primary) ?? null;
 };
 
-/** The configured translator, or null when no provider is set up (the feature then no-ops). */
+/**
+ * The configured translator, or null when no provider is set up (the feature then no-ops).
+ *
+ * `TRANSLATE_PROVIDER=AUTO` prefers Claude when a key is configured — it is markedly better on the travel copy
+ * and the chat register this product translates — and otherwise uses a self-hosted LibreTranslate, which costs
+ * nothing and needs no key. Naming a provider explicitly means exactly that provider or nothing: a deployment
+ * that asked for LibreTranslate must not quietly start billing an Anthropic key that happens to be in the env.
+ */
 export function getTranslator(app: AppContext): Translator | null {
   const injected = app.adapters.get('i18n.translator') as Translator | undefined;
   if (injected) return injected;
-  if (!app.config.ANTHROPIC_API_KEY) return null;
-  const t = new ClaudeTranslator(app.config.ANTHROPIC_API_KEY, app.config.AI_MODEL);
-  app.adapters.set('i18n.translator', t);
+  const { TRANSLATE_PROVIDER: pick, ANTHROPIC_API_KEY, LIBRETRANSLATE_URL } = app.config;
+  if (pick === 'NONE') return null;
+  const claude = () => (ANTHROPIC_API_KEY ? new ClaudeTranslator(ANTHROPIC_API_KEY, app.config.AI_MODEL) : null);
+  const libre = () => (LIBRETRANSLATE_URL ? new LibreTranslator(LIBRETRANSLATE_URL, { apiKey: app.config.LIBRETRANSLATE_API_KEY }) : null);
+  const t = pick === 'ANTHROPIC' ? claude() : pick === 'LIBRETRANSLATE' ? libre() : (claude() ?? libre());
+  if (t) app.adapters.set('i18n.translator', t);
   return t;
 }
 
@@ -68,6 +79,18 @@ function getQueue(app: AppContext, translator: Translator): TranslationQueue {
  */
 export async function contentTranslation(ctx: Ctx, locale: SupportedLocale): Promise<TranslateDeps | null> {
   if (locale === SOURCE_LOCALE) return null;
+  return translationDeps(ctx);
+}
+
+/**
+ * The same dependencies without the source-language shortcut above.
+ *
+ * That shortcut encodes a fact about the catalogue — it is written in Korean, so a Korean reader needs no
+ * translation — which is simply false for chat: a Vietnamese traveller's message has to be translated INTO
+ * Korean for the host. Callers that translate member-to-member text use this; callers that render the
+ * catalogue use `contentTranslation` and keep the cheap Korean path.
+ */
+export async function translationDeps(ctx: Ctx): Promise<TranslateDeps | null> {
   if (!(await isEnabled(ctx.app.pool, 'content.auto_translate', ctx.actor ? { userId: ctx.actor.userId, roles: ctx.actor.roles } : undefined))) return null;
   const translator = getTranslator(ctx.app);
   // Without a provider the cache may still hold translations from a warm-up run, so keep reading it.

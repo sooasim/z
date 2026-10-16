@@ -31,9 +31,9 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy]') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -80,7 +80,14 @@ jobs:
           done
           # The wait above only proves Pages is up — the PREVIOUS deployment already answers "/" with 200, so a
           # path this deploy adds can still 404 for a minute. Give every path the same retry budget.
-          for path in "" "stay/" "exchange/" "guide-friends/" "travel/" "login/" "about/" "archive/" "credits/" "opengraph-image.png" "media-map.json" "demo-backend.js" "demo-fixtures.json"; do
+          # "app/" is the manifest's start_url — what an installed home-screen icon opens. A deploy that
+          # published everything else but not that would leave the icon pointing at a 404.
+          # The "help/" pages are per-member-grade guides generated from lib/roles.ts: one missing slug is a
+          # dead "Read the guide" link on the hub, which nothing else here would catch.
+          for path in "" "stay/" "exchange/" "guide-friends/" "travel/" "login/" "about/" "archive/" "credits/" "app/" \
+                      "help/" "help/traveler/" "help/host/" "help/exchange/" "help/guide-friend/" "help/guide-pro/" \
+                      "help/supplier/" "help/accounting/" "help/admin/" \
+                      "manifest.webmanifest" "opengraph-image.png" "media-map.json" "demo-backend.js" "demo-fixtures.json"; do
             for i in $(seq 1 20); do
               code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/$path")
               if [ "$code" = "200" ]; then break; fi

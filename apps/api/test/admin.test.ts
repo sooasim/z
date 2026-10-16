@@ -32,6 +32,8 @@ describe('OPS-02 overview', () => {
     expect(r.body.outbox.deadLetters).toBe(1);
     expect(r.body).toHaveProperty('verificationBacklog.pending');
     expect(r.body).toHaveProperty('complianceBacklog.permitsPending');
+    // the travel catalog queues the product / supplier desks work from
+    expect(r.body.catalogBacklog).toEqual({ travelProductsInReview: 0, suppliersPending: 0 });
   });
 
   it('requires a staff role with AAL2', async () => {

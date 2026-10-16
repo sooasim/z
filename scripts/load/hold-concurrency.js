@@ -17,8 +17,10 @@ const holdsUnexpected = new Counter('holds_unexpected_status');
 export const options = {
   scenarios: { race: { executor: 'per-vu-iterations', vus: VUS, iterations: ROUNDS, maxDuration: '5m' } },
   thresholds: {
-    // ROUNDS distinct date ranges -> at most ROUNDS successful holds in total
-    holds_created: [`count<=${ROUNDS}`],
+    // ROUNDS distinct date ranges -> at most ROUNDS successful holds in total, and at least one: a run where
+    // every hold was refused (a disabled feature flag, an expired token) satisfies "no oversell" without
+    // ever racing, so the lower bound is what keeps this gate from passing on an empty result.
+    holds_created: [`count<=${ROUNDS}`, 'count>0'],
     holds_unexpected_status: ['count==0'],
     'http_req_duration{name:hold}': ['p(95)<500'],
   },
@@ -26,6 +28,10 @@ export const options = {
 
 export default function () {
   if (!fx) throw new Error('FIXTURE env is required');
+  // Give holds_created a sample on every iteration without changing its sum: a counter that is never
+  // touched can reach the end of the run with no data at all, and a threshold on a metric with no samples
+  // is not something to bet the gate on. Adding zero makes `count>0` a question k6 actually answers.
+  holdsCreated.add(0);
   const round = exec.vu.iterationInScenario;
   const token = fx.tokens[(exec.vu.idInTest - 1) % fx.tokens.length];
   const headers = { 'content-type': 'application/json', authorization: `Bearer ${token}` };

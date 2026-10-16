@@ -6,6 +6,7 @@ import { useI18n } from '@/lib/i18n';
 import { useAuth, extractAccessToken } from '@/lib/auth';
 import { ErrorText, Input, Tabs, Alert, Button } from '@/components/ui';
 import { SocialButtons, safeNext } from '@/components/auth/social';
+import { DemoLoginPanel } from '@/components/auth/demo-accounts';
 import s from '@/components/public/public.module.css';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -210,6 +211,8 @@ export default function LoginView() {
           <p className="center">
             {L('처음이신가요?', 'New here?')} <Link href={`/signup?next=${encodeURIComponent(next)}`}>{L('회원가입', 'Sign up')}</Link>
           </p>
+          {/* Demo deployments only: renders nothing when the API offers no demo accounts. */}
+          <DemoLoginPanel next={sp.get('next') ? next : undefined} />
         </>
       )}
     </div>

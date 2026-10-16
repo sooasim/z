@@ -272,6 +272,7 @@ seed는 멱등합니다(여러 번 돌려도 중복이 안 생김). `NODE_ENV=pr
 
 ```bash
 ./infra/single-server/jetpool.sh admin-password 'admin1234'   # 비밀번호 지금 바꾸기 (reseed 불필요)
+./infra/single-server/jetpool.sh admin-unlock                  # 로그인 실패로 잠긴 것만 풀기 (비밀번호 유지)
 ./infra/single-server/jetpool.sh admin-mfa off                 # 2단계 인증 요구 끄기
 ./infra/single-server/jetpool.sh admin-mfa on                  # 다시 켜기
 ```
@@ -280,6 +281,13 @@ seed는 멱등합니다(여러 번 돌려도 중복이 안 생김). `NODE_ENV=pr
 컨테이너 안에서 API 자신의 형식(scrypt)으로 계산하고, 평문은 stdin으로만 흘러 명령줄에 남지 않습니다.
 계정 잠금(`locked_until`)과 실패 카운터도 함께 초기화하므로, 비밀번호를 여러 번 틀려 잠긴 상태도 풀립니다.
 seed를 다시 돌려도 같은 비밀번호로 수렴합니다. 인자를 빼면 정책을 만족하는 긴 비밀번호를 생성합니다.
+
+#### 로그인을 여러 번 틀렸을 때
+
+비밀번호를 **1시간 안에 5번** 틀리면 그 계정은 **1분** 잠깁니다. 계속 틀리면 같은 streak 안에서 2분·4분…
+으로 늘어나고(최대 24시간), **마지막 실패로부터 1시간이 지나면 카운터는 스스로 0으로 돌아갑니다.** 어제의
+오타가 오늘의 잠금으로 쌓이지 않는다는 뜻입니다. 지금 당장 풀어야 하면 `admin-unlock` 이 카운터와
+`locked_until` 만 지웁니다(비밀번호는 그대로). `admin-password` 도 같이 풀어 주지만 비밀번호가 바뀝니다.
 
 기본값은 운영진 화면에 **AAL2(인증 앱) 세션**을 요구합니다(CORE-01). `admin-mfa off` 는 API의
 `STAFF_MFA_REQUIRED=false` 를 세팅해 **staff 화면만** 비밀번호 하나로 열리게 합니다 — 메일 발송도 없고

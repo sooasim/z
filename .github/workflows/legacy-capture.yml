@@ -31,8 +31,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Install Playwright (isolated, does not touch the workspace lockfile)
@@ -51,7 +51,7 @@ jobs:
           node -e "const m=require('./out/legacy-raw/manifest.json');console.log('legacy',JSON.stringify(m.summary))" | tee -a "$GITHUB_STEP_SUMMARY"
           test -f out/photos-raw/manifest.json && node -e "const m=require('./out/photos-raw/manifest.json');console.log('photos',JSON.stringify(m.summary))" | tee -a "$GITHUB_STEP_SUMMARY" || true
           du -sh out/* | tee -a "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: legacy-capture
           path: out

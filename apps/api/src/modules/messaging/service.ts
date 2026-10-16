@@ -24,7 +24,15 @@ export interface MessageRow {
   client_message_id: string | null;
   redacted_at: string | null;
   metadata: Record<string, unknown>;
+  /** The language this message was written in (the sender's account language at send time); null before 0703. */
+  source_locale: string | null;
   created_at: string;
+}
+
+/** A machine translation shown ALONGSIDE the original, never instead of it. */
+export interface MessageTranslation {
+  locale: string;
+  text: string;
 }
 
 const lockKey = (contextType: string, contextId: string) => `conversation:${contextType}:${contextId}`;
@@ -95,9 +103,10 @@ export async function ensureConversation(
 export async function postSystemMessage(db: Db, ctx: Ctx, conversationId: string, body: string): Promise<MessageRow> {
   const conv = await maybeOne(db, `SELECT id FROM conversations WHERE id = $1`, [conversationId]);
   if (!conv) throw notFound('Conversation');
+  // System copy is written in the catalogue language, so it translates like any other message.
   const msg = await one<MessageRow>(
     db,
-    `INSERT INTO messages(conversation_id, sender_id, type, body) VALUES ($1, NULL, 'SYSTEM', $2) RETURNING *`,
+    `INSERT INTO messages(conversation_id, sender_id, type, body, source_locale) VALUES ($1, NULL, 'SYSTEM', $2, 'ko-KR') RETURNING *`,
     [conversationId, body.slice(0, MAX_BODY_LENGTH)],
   );
   await afterInsert(db, ctx, msg);
@@ -227,7 +236,12 @@ export async function listMyConversations(db: Db, userId: string, opts: { limit:
   return { items, nextCursor: last ? encodeCursor({ created_at: last.sort_at, id: last.id }) : null };
 }
 
-export function toMessageDto(m: MessageRow) {
+/**
+ * `body` is always the text as written — a translation is additive, so the reader can check a price or a date
+ * against the original. `translation` is the reader's language only, and is absent when the message is already
+ * in it, when nothing is cached yet, or when translation is switched off.
+ */
+export function toMessageDto(m: MessageRow, translation?: MessageTranslation | null) {
   return {
     id: m.id,
     conversationId: m.conversation_id,
@@ -238,12 +252,32 @@ export function toMessageDto(m: MessageRow) {
     clientMessageId: m.client_message_id,
     redacted: !!m.redacted_at,
     metadata: m.metadata ?? {},
+    sourceLocale: m.source_locale,
+    translation: m.redacted_at ? null : (translation ?? null),
     createdAt: m.created_at,
   };
 }
 
+/** Attach each row's cached translation, given one source → translated map for the reader's locale. */
+export function withTranslations(rows: MessageRow[], locale: string | null, map: Map<string, string>) {
+  return rows.map((m) => {
+    // The source-language guard is repeated here so a stale cache row can never surface as a self-translation.
+    const t = locale && needsTranslation(m, locale) ? map.get(m.body as string) : undefined;
+    return toMessageDto(m, t && locale ? { locale, text: t } : null);
+  });
+}
+
+/**
+ * Reader's language and its cached translations, supplied by the route. Passed in as a callback rather than
+ * imported so this file stays free of the translation module (which imports back from here for MessageRow).
+ */
+export interface MessageLocalizer {
+  locale: string;
+  translate: (bodies: string[]) => Promise<Map<string, string>>;
+}
+
 /** Keyset pagination, newest first. Caller must have checked access. */
-export async function pageMessages(db: Db, conversationId: string, opts: { limit: number; cursor?: string }) {
+export async function pageMessages(db: Db, conversationId: string, opts: { limit: number; cursor?: string }, localizer?: MessageLocalizer | null) {
   const c = decodeCursor(opts.cursor);
   const rows = await q<MessageRow>(
     db,
@@ -253,12 +287,30 @@ export async function pageMessages(db: Db, conversationId: string, opts: { limit
     [conversationId, c?.createdAt ?? null, c?.id ?? null, opts.limit + 1],
   );
   const items = rows.slice(0, opts.limit);
-  return { items: items.map(toMessageDto), nextCursor: rows.length > opts.limit ? encodeCursor(items[items.length - 1]) : null };
+  // One cache lookup for the whole page, not one per message — and never for a message already written in the
+  // reader's language. Asking for that would also QUEUE it (translateMany fills misses in the background), so
+  // the thread would acquire pointless vi→vi "translations" of the reader's own messages.
+  const bodies = localizer ? items.filter((m) => needsTranslation(m, localizer.locale)).map((m) => m.body as string) : [];
+  const map = localizer && bodies.length ? await localizer.translate(bodies) : new Map<string, string>();
+  return {
+    items: withTranslations(items, localizer?.locale ?? null, map),
+    nextCursor: rows.length > opts.limit ? encodeCursor(items[items.length - 1]) : null,
+  };
 }
 
-export async function listMessagesAsMember(db: Db, conversationId: string, userId: string, opts: { limit: number; cursor?: string }) {
+/** A message needs translating only when it is readable text in a language the reader does not read. */
+const needsTranslation = (m: MessageRow, locale: string): boolean =>
+  !m.redacted_at && typeof m.body === 'string' && m.body.trim().length > 1 && m.source_locale !== locale;
+
+export async function listMessagesAsMember(
+  db: Db,
+  conversationId: string,
+  userId: string,
+  opts: { limit: number; cursor?: string },
+  localizer?: MessageLocalizer | null,
+) {
   await assertMember(db, conversationId, userId);
-  return pageMessages(db, conversationId, opts);
+  return pageMessages(db, conversationId, opts, localizer);
 }
 
 // ---------------------------------------------------------------- commands
@@ -305,12 +357,15 @@ export async function sendMessage(
       metadata.notice = CONTACT_MASK_NOTICE;
     }
   }
+  // The language the message is written in, taken from the sender's account language (COMMS-01 / 0703). Stored
+  // on the row so the translation targets and the "original language" label stay fixed if they later switch.
+  const sender = await maybeOne<{ locale: string | null }>(db, `SELECT locale FROM users WHERE id = $1`, [args.senderId]);
   const ins = await maybeOne<MessageRow>(
     db,
-    `INSERT INTO messages(conversation_id, sender_id, type, body, media_id, client_message_id, metadata)
-     VALUES ($1,$2,$3,$4,$5,$6,$7)
+    `INSERT INTO messages(conversation_id, sender_id, type, body, media_id, client_message_id, metadata, source_locale)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
      ON CONFLICT (conversation_id, sender_id, client_message_id) DO NOTHING RETURNING *`,
-    [args.conversationId, args.senderId, args.mediaId ? 'IMAGE' : 'TEXT', finalBody || null, args.mediaId ?? null, args.clientMessageId ?? null, JSON.stringify(metadata)],
+    [args.conversationId, args.senderId, args.mediaId ? 'IMAGE' : 'TEXT', finalBody || null, args.mediaId ?? null, args.clientMessageId ?? null, JSON.stringify(metadata), sender?.locale ?? null],
   );
   if (!ins) {
     // concurrent duplicate with the same client_message_id committed first
@@ -420,12 +475,32 @@ export async function readAsStaff(db: Db, ctx: Ctx, conversationId: string, opts
  * Re-read a committed message and publish it to each member's realtime channel (`user:<id>`).
  * Called by the LISTEN bridge (multi-instance) or directly after commit when no bridge runs (tests/single process).
  */
-export async function deliverRealtime(app: AppContext, messageId: string): Promise<number> {
+export async function deliverRealtime(app: AppContext, messageId: string, opts: { translated?: boolean } = {}): Promise<number> {
   const msg = await maybeOne<MessageRow>(app.pool, `SELECT * FROM messages WHERE id = $1`, [messageId]);
   if (!msg) return 0;
-  const members = await q<{ user_id: string }>(app.pool, `SELECT user_id FROM conversation_members WHERE conversation_id = $1`, [msg.conversation_id]);
-  const dto = toMessageDto(msg);
-  for (const m of members) app.realtime.publish(`user:${m.user_id}`, { type: 'message', message: dto });
-  app.realtime.publish(`conversation:${msg.conversation_id}`, { type: 'message', message: dto });
+  const members = await q<{ user_id: string; locale: string | null }>(
+    app.pool,
+    `SELECT cm.user_id, u.locale FROM conversation_members cm JOIN users u ON u.id = cm.user_id WHERE cm.conversation_id = $1`,
+    [msg.conversation_id],
+  );
+  // Each member is pushed the message in their OWN language: one cached lookup per distinct locale, and none
+  // at all on the first delivery (nothing is translated yet) or when translation is off.
+  const lookup = app.adapters.get('messaging.translationLookup') as
+    | ((bodies: string[], locale: string) => Promise<Map<string, string>>)
+    | undefined;
+  const byLocale = new Map<string, Map<string, string>>();
+  if (lookup && msg.body && !msg.redacted_at) {
+    for (const locale of new Set(members.map((m) => m.locale).filter((l): l is string => !!l && l !== msg.source_locale))) {
+      byLocale.set(locale, await lookup([msg.body], locale).catch(() => new Map()));
+    }
+  }
+  // `message.translated` is a distinct type so a client updates the bubble it already rendered instead of
+  // appending a duplicate (its de-duplication is by message id).
+  const type = opts.translated ? 'message.translated' : 'message';
+  for (const m of members) {
+    const t = m.locale ? byLocale.get(m.locale)?.get(msg.body ?? '') : undefined;
+    app.realtime.publish(`user:${m.user_id}`, { type, message: toMessageDto(msg, t && m.locale ? { locale: m.locale, text: t } : null) });
+  }
+  app.realtime.publish(`conversation:${msg.conversation_id}`, { type, message: toMessageDto(msg) });
   return members.length;
 }

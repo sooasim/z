@@ -12,7 +12,8 @@
  *   provider, an inquiry thread, favorites, home exchanges, guide requests/offers, a tour order). Only use
  *   it against an isolated recording database — scripts/pages/record.sh sets that up.
  * - Tokens/secrets are scrubbed. Identical bodies are stored once in a body table.
- * - Side effect: the admin AAL2 step-up ENROLLS a TOTP factor for admin@jetpool.dev on the target database. Pass
+ * - Side effect: the staff AAL2 step-up ENROLLS a TOTP factor for admin@jetpool.dev and accounting@jetpool.dev on
+ *   the target database. Pass
  *   --no-admin-mfa when recording against a shared dev API (admin screens are then recorded at AAL1).
  */
 import { createHash } from 'node:crypto';
@@ -44,6 +45,9 @@ const PERSONAS = {
   guide: 'friend.guide@jetpool.dev',
   proGuide: 'pro.guide@jetpool.dev',
   supplier: 'supplier@jetpool.dev',
+  // the finance role: the only staff account that is not the all-roles admin, and the one the ledger and
+  // settlement screens are actually for
+  accounting: 'accounting@jetpool.dev',
   admin: 'admin@jetpool.dev',
 };
 
@@ -125,7 +129,9 @@ async function loginAll() {
     }
     sessions[key] = { email, accessToken: r.body.accessToken, refreshToken: r.body.refreshToken, user: r.body.user, aal: r.body.aal, login: r.body };
   }
-  if (sessions.admin && !flag('no-admin-mfa')) await stepUpAdmin();
+  // Every staff persona, not just the all-roles admin: a finance session recorded at AAL1 makes the
+  // settlement and ledger screens replay as "MFA required" for the rest of the demo's life.
+  if (!flag('no-admin-mfa')) for (const k of STAFF_PERSONAS) if (sessions[k]) await stepUpStaff(k);
 }
 
 async function totpCode(secret) {
@@ -134,31 +140,33 @@ async function totpCode(secret) {
   return new OTPAuth.TOTP({ secret: OTPAuth.Secret.fromBase32(secret), digits: 6, period: 30 }).generate();
 }
 
-async function stepUpAdmin() {
-  const s = sessions.admin;
-  const enroll = await call('admin', 'POST', '/v1/auth/mfa/totp/enroll', { body: {} });
+const STAFF_PERSONAS = ['admin', 'accounting'];
+
+async function stepUpStaff(key) {
+  const s = sessions[key];
+  const enroll = await call(key, 'POST', '/v1/auth/mfa/totp/enroll', { body: {} });
   if (enroll.status === 201 && enroll.body?.secret) {
-    const v = await call('admin', 'POST', '/v1/auth/mfa/totp/verify', { body: { factorId: enroll.body.factorId, code: await totpCode(enroll.body.secret) } });
+    const v = await call(key, 'POST', '/v1/auth/mfa/totp/verify', { body: { factorId: enroll.body.factorId, code: await totpCode(enroll.body.secret) } });
     if (v.status === 200 && v.body?.accessToken) {
       s.accessToken = v.body.accessToken;
       s.aal = 'aal2';
-      log('admin: TOTP enrolled, session upgraded to AAL2');
+      log(`${key}: TOTP enrolled, session upgraded to AAL2`);
       return;
     }
-    warn('admin TOTP verify failed', v.status, JSON.stringify(v.body).slice(0, 200));
+    warn(`${key} TOTP verify failed`, v.status, JSON.stringify(v.body).slice(0, 200));
   }
-  const secret = process.env.ADMIN_TOTP_SECRET;
-  const recovery = process.env.ADMIN_RECOVERY_CODE;
+  const secret = key === 'admin' ? process.env.ADMIN_TOTP_SECRET : undefined;
+  const recovery = key === 'admin' ? process.env.ADMIN_RECOVERY_CODE : undefined;
   if (secret || recovery) {
-    const c = await call('admin', 'POST', '/v1/auth/mfa/challenge', { body: secret ? { code: await totpCode(secret) } : { recoveryCode: recovery } });
+    const c = await call(key, 'POST', '/v1/auth/mfa/challenge', { body: secret ? { code: await totpCode(secret) } : { recoveryCode: recovery } });
     if (c.status === 200 && c.body?.accessToken) {
       s.accessToken = c.body.accessToken;
       s.aal = 'aal2';
-      log('admin: MFA challenge passed (AAL2)');
+      log(`${key}: MFA challenge passed (AAL2)`);
       return;
     }
   }
-  warn('admin stays at AAL1 (MFA already enrolled? set ADMIN_TOTP_SECRET or ADMIN_RECOVERY_CODE) — admin screens will show AAL2-required errors');
+  warn(`${key} stays at AAL1 (MFA already enrolled? set ADMIN_TOTP_SECRET or ADMIN_RECOVERY_CODE) — staff screens will show AAL2-required errors`);
 }
 
 // ------------------------------------------------------------------------------------------ demo scenario
@@ -355,6 +363,24 @@ async function walk(dir, out = []) {
   return out;
 }
 
+/**
+ * Does the `/` at `i` open a regex literal? The usual heuristic: look back past whitespace at the previous
+ * meaningful character — after a value (identifier, `)`, `]`, number) a slash is division; after an operator,
+ * a comma, an opening bracket or a keyword it starts a pattern.
+ */
+function isRegexStart(src, i) {
+  let j = i - 1;
+  while (j >= 0 && /\s/.test(src[j])) j--;
+  if (j < 0) return true;
+  const c = src[j];
+  if (/[A-Za-z0-9_$)\]]/.test(c)) {
+    // `return /re/`, `typeof /re/`… — a keyword ends in a letter but is not a value
+    const word = /[A-Za-z0-9_$]+$/.exec(src.slice(Math.max(0, j - 12), j + 1))?.[0] ?? '';
+    return ['return', 'typeof', 'case', 'in', 'of', 'do', 'else', 'void', 'delete', 'instanceof', 'new', 'yield', 'await'].includes(word);
+  }
+  return true;
+}
+
 /** Collect string/template literals containing '/v1/' (template expressions become '{}'). */
 function literals(src) {
   const out = [];
@@ -409,6 +435,27 @@ function literals(src) {
     if (c === '/' && src[i + 1] === '*') {
       const e = src.indexOf('*/', i + 2);
       i = e < 0 ? n : e + 2;
+      continue;
+    }
+    // A regex literal, not division. Without this a pattern like /`([^`]+)`/ opens a template string that
+    // swallows the rest of the file — and every API path in it disappears from the recording.
+    if (c === '/' && isRegexStart(src, i)) {
+      i++;
+      let cls = false;
+      while (i < n && src[i] !== '\n') {
+        const d = src[i];
+        if (d === '\\') {
+          i += 2;
+          continue;
+        }
+        if (d === '[') cls = true;
+        else if (d === ']') cls = false;
+        else if (d === '/' && !cls) {
+          i++;
+          break;
+        }
+        i++;
+      }
       continue;
     }
     if (c === "'" || c === '"') {

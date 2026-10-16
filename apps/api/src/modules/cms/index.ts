@@ -3,6 +3,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { getActor, hasRole, requireRole } from '../../platform/auth.js';
 import { ctxFromRequest, type Ctx } from '../../platform/context.js';
+import { contentLocale, contentTranslation, localize } from '../../platform/content-locale.js';
 import { withTx, type Tx } from '../../platform/db.js';
 import { AppError, badRequest } from '../../platform/errors.js';
 import { recordAdminAction } from '../admin/actions.js';
@@ -106,6 +107,14 @@ export default async function cmsModule(app: FastifyInstance) {
   }
 
   // ---- public content (published only, locale fallback ko-KR)
+  //
+  // The fallback above is per-slug: asking for `vi-VN` serves the Korean row whenever no Vietnamese row has
+  // been authored, which today is every entry. Machine translation closes that gap so /about, /stories and
+  // /archive read in the visitor's language like the rest of the site — and an authored row for the locale
+  // still wins, because then there is nothing left to translate.
+  const CMS_LIST_TEXT = ['items[].title', 'items[].summary'] as const;
+  const CMS_ENTRY_TEXT = ['item.title', 'item.summary', 'item.bodyMd'] as const;
+
   r.get(
     '/v1/content/:type',
     {
@@ -117,13 +126,21 @@ export default async function cmsModule(app: FastifyInstance) {
     },
     async (req) => {
       const res = await pagePublished(pool, parseEntryType(req.params.type), req.query.locale, req.query.limit, req.query.cursor);
-      return { items: res.items.map((e) => toPublicEntryDto(e, webUrl)), nextCursor: res.nextCursor };
+      const body = { items: res.items.map((e) => toPublicEntryDto(e, webUrl)), nextCursor: res.nextCursor };
+      const want = contentLocale(req);
+      return localize(await contentTranslation(ctxFromRequest(req), want), body, CMS_LIST_TEXT, want);
     },
   );
   r.get(
     '/v1/content/:type/:slug',
     { schema: { summary: 'Get published content by slug', tags: TAG, params: z.object({ type: z.string().max(40), slug: z.string().max(120) }), querystring: z.object({ locale: locale.default('ko-KR') }) } },
-    async (req) => ({ item: toPublicEntryDto(await getPublished(pool, parseEntryType(req.params.type), req.params.slug, req.query.locale), webUrl) }),
+    async (req) => {
+      const item = toPublicEntryDto(await getPublished(pool, parseEntryType(req.params.type), req.params.slug, req.query.locale), webUrl);
+      const want = contentLocale(req);
+      // An entry authored in the requested language needs no translation pass at all.
+      if (item.locale === want) return { item };
+      return localize(await contentTranslation(ctxFromRequest(req), want), { item }, CMS_ENTRY_TEXT, want);
+    },
   );
 
   // ---- SEO redirects

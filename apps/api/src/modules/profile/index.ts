@@ -3,6 +3,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { getActor, requireAuth } from '../../platform/auth.js';
 import { ctxFromRequest } from '../../platform/context.js';
+import { contentLocale, contentTranslation, localize } from '../../platform/content-locale.js';
 import { idParams } from '../../platform/http.js';
 import { notFound } from '../../platform/errors.js';
 import { SUPPORTED_CURRENCIES } from '../../platform/money.js';
@@ -66,6 +67,8 @@ export default async function profileModule(app: FastifyInstance) {
   r.get('/v1/users/:id/profile', { schema: { tags: TAG, summary: 'Public profile (no contact data)', params: idParams } }, async (req) => {
     const item = await svc.getPublicProfile(pool, req.params.id);
     if (!item) throw notFound('User');
-    return { item };
+    // The bio is member-written prose shown to every visitor, so it translates like a listing description.
+    const locale = contentLocale(req);
+    return localize(await contentTranslation(ctxFromRequest(req), locale), { item }, ['item.bio'], locale);
   });
 }

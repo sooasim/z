@@ -73,6 +73,28 @@ export function personaByUsername(name: string): Persona | null {
   return null;
 }
 
+/**
+ * `/v1/auth/demo-accounts` keys → demo personas. The API registry keys the seeded accounts by role
+ * (apps/api/src/modules/identity/demo-accounts.ts); the recorded fixtures key the same people by persona, and
+ * only the two host accounts differ in name.
+ */
+const DEMO_KEY_PERSONA: Record<string, string> = {
+  guest: 'guest',
+  'host-seoul': 'host',
+  'host-jeju': 'hostJeju',
+  exchange: 'exchange',
+  'guide-friend': 'guide',
+  'guide-pro': 'proGuide',
+  supplier: 'supplier',
+  accounting: 'accounting',
+  admin: 'admin',
+};
+
+export function personaByDemoKey(key: string): Persona | null {
+  const p = DEMO_KEY_PERSONA[key];
+  return p ? persona(p) : null;
+}
+
 export function personaByUserId(id: string): Persona | null {
   for (const k of Object.keys(F.personas)) if (F.personas[k].userId === id) return persona(k);
   const a = accounts().find((x) => x.userId === id);
@@ -184,6 +206,17 @@ export function handleBff(sub: string, method: string, body: Obj, base: string):
       const accepted = [F.password, acct?.password, USERNAME_PASSWORD[p.key]].filter(Boolean) as string[];
       if (!accepted.includes(pw)) return handle ? invalidHandle() : invalid();
       return startSession(p.key);
+    }
+    // The one-click demo sign-in the login page offers (API: POST /v1/auth/demo-login). The recorded
+    // /v1/auth/demo-accounts listing names the keys; here they are simply persona keys.
+    case 'demo-login': {
+      const key = String(body.key || '');
+      const p = personaByDemoKey(key);
+      if (!p) return problem(404, 'NOT_FOUND', 'Demo account not found');
+      // Staff land at AAL2: a static demo has no authenticator to enrol, so an AAL1 staff session would be a
+      // button that opens a locked console. The real API gates this with STAFF_MFA_REQUIRED instead.
+      const staff = p.roles.some((r) => ['ADMIN', 'COMPLIANCE', 'ACCOUNTING', 'SUPPORT', 'EDITOR'].includes(r));
+      return startSession(p.key, staff ? 'aal2' : undefined);
     }
     case 'logout':
     case 'logout-all':

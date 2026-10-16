@@ -406,6 +406,9 @@ export function Header() {
           <Link href="/assistant" onClick={() => setOpen(false)}>
             <Icon name="sparkle" size={18} /> {L('AI 여행 도우미', 'AI assistant')}
           </Link>
+          <Link href="/help" onClick={() => setOpen(false)}>
+            <Icon name="doc" size={18} /> {L('사용 안내', 'How to use')}
+          </Link>
           <Link href="/support" onClick={() => setOpen(false)}>
             <Icon name="support" size={18} /> {L('고객센터', 'Help')}
           </Link>
@@ -583,6 +586,7 @@ export function Footer() {
           </nav>
           <nav aria-labelledby="ft-support">
             <h2 className="footer-h" id="ft-support">{L('지원', 'Support')}</h2>
+            <Link href="/help">{L('사용 안내', 'How to use')}</Link>
             <Link href="/support">{L('고객센터', 'Help center')}</Link>
             <Link href="/support/disputes">{L('분쟁·안전 신고', 'Disputes & safety')}</Link>
             <Link href="/assistant">{L('AI 여행 도우미', 'AI assistant')}</Link>

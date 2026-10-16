@@ -188,6 +188,47 @@ describe('CORE-01 email OTP', () => {
   });
 });
 
+describe('CORE-01 login lockout window', () => {
+  it('a streak that has gone quiet stops counting, so old mistypes do not add up to a lockout', async () => {
+    await signup('streak@example.com');
+    const miss = () => call(t, null, 'POST', '/v1/auth/login', { email: 'streak@example.com', password: 'nope-nope-nope' });
+    for (let i = 0; i < 4; i++) expect((await miss()).body.code).toBe('INVALID_CREDENTIALS');
+    // Four failures, then a quiet hour: the fifth must not be the one that locks the account.
+    await t.pool.query(`UPDATE users SET last_failed_login_at = now() - interval '2 hours' WHERE email = 'streak@example.com'`);
+    expect((await miss()).body.code).toBe('INVALID_CREDENTIALS');
+    const ok = await call(t, null, 'POST', '/v1/auth/login', { email: 'streak@example.com', password: 'Sup3r-secret-pw' });
+    expect(ok.status).toBe(200);
+    const { rows } = await t.pool.query(`SELECT failed_login_attempts, last_failed_login_at FROM users WHERE email = 'streak@example.com'`);
+    expect(rows[0]).toMatchObject({ failed_login_attempts: 0, last_failed_login_at: null });
+  });
+
+  it('still locks a live streak, and the right password waits with everyone else', async () => {
+    await signup('burst@example.com');
+    const miss = () => call(t, null, 'POST', '/v1/auth/login', { email: 'burst@example.com', password: 'nope-nope-nope' });
+    for (let i = 0; i < 4; i++) await miss();
+    const fifth = await miss();
+    expect(fifth.status).toBe(429);
+    expect(fifth.body.code).toBe('ACCOUNT_LOCKED');
+    const right = await call(t, null, 'POST', '/v1/auth/login', { email: 'burst@example.com', password: 'Sup3r-secret-pw' });
+    expect(right.body.code).toBe('ACCOUNT_LOCKED');
+    // A typo must not cost a quarter of an hour: the first step of the curve is a minute.
+    const { rows: lock } = await t.pool.query(`SELECT extract(epoch from (locked_until - now())) AS secs FROM users WHERE email = 'burst@example.com'`);
+    expect(Number(lock[0].secs)).toBeLessThanOrEqual(60);
+    // Once the lock lapses the password is enough again — no second lockout inherited from the same streak.
+    await t.pool.query(`UPDATE users SET locked_until = now() - interval '1 second' WHERE email = 'burst@example.com'`);
+    expect((await call(t, null, 'POST', '/v1/auth/login', { email: 'burst@example.com', password: 'Sup3r-secret-pw' })).status).toBe(200);
+  });
+
+  it('a legacy count with no timestamp is read as ended (migration 0102)', async () => {
+    await signup('legacy@example.com');
+    await t.pool.query(`UPDATE users SET failed_login_attempts = 40, last_failed_login_at = NULL WHERE email = 'legacy@example.com'`);
+    const r = await call(t, null, 'POST', '/v1/auth/login', { email: 'legacy@example.com', password: 'nope-nope-nope' });
+    expect(r.body.code).toBe('INVALID_CREDENTIALS');
+    const { rows } = await t.pool.query(`SELECT failed_login_attempts FROM users WHERE email = 'legacy@example.com'`);
+    expect(rows[0].failed_login_attempts).toBe(1);
+  });
+});
+
 describe('CORE-01 refresh rotation & logout', () => {
   it('rotates refresh tokens and detects reuse (revokes every session of the user)', async () => {
     const s = await signup('rot@example.com');

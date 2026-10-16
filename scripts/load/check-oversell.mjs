@@ -22,7 +22,16 @@ const multi = (await db.query(
       WHERE h.property_id = $1 AND h.status IN ('ACTIVE','CONVERTED') GROUP BY 1,2 HAVING count(*) > 1) x`, [fx.propertyId])).rows[0].n;
 const holds = (await db.query(`SELECT count(*)::int AS n FROM reservation_holds WHERE property_id = $1`, [fx.propertyId])).rows[0].n;
 await db.end();
-const result = { gate: 'G6', check: 'no-oversell', ok: overlaps === 0 && multi === 0, detail: `holds=${holds}, overlapping active blocks=${overlaps}, ranges with >1 hold=${multi}` };
+// A property with no holds has no overlaps either, so holds=0 would report "no oversell" about a race that
+// never ran. The absence of a result is not a pass: this check only means something once the race placed a
+// hold, so zero holds is a failure of the gate, reported as such rather than silently green.
+const result = {
+  gate: 'G6',
+  check: 'no-oversell',
+  ok: holds > 0 && overlaps === 0 && multi === 0,
+  detail: `holds=${holds}, overlapping active blocks=${overlaps}, ranges with >1 hold=${multi}`
+    + (holds === 0 ? ' — no hold was placed at all, so nothing was verified (check the k6 hold-concurrency output)' : ''),
+};
 if (process.argv[3]) writeFileSync(process.argv[3], JSON.stringify(result, null, 2));
 console.log(JSON.stringify(result));
 process.exit(result.ok ? 0 : 1);

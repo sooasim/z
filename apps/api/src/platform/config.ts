@@ -56,6 +56,12 @@ const schema = z.object({
    * second factor rather than the staff role.
    */
   STAFF_MFA_REQUIRED: envBoolean(true),
+  /**
+   * CORE-01 demo sign-in: the login page offers one button per seeded role, and `/v1/auth/demo-login` opens a
+   * session for it with no password. Unset, it follows `OAUTH_MOCK` — a mocked environment is a demo
+   * environment — so a demo box needs no second switch and production, which forbids OAUTH_MOCK, never gets it.
+   */
+  DEMO_LOGINS: envBoolean(false),
   // Storage (STAY-02)
   S3_ENDPOINT: z.string().optional(),
   S3_REGION: z.string().default('ap-northeast-2'),
@@ -73,6 +79,15 @@ const schema = z.object({
   // AI (AI-01)
   ANTHROPIC_API_KEY: z.string().optional(),
   AI_MODEL: z.string().default('claude-sonnet-5-5'),
+  /**
+   * Machine translation of member-written content and messages.
+   * AUTO prefers Claude when ANTHROPIC_API_KEY is set and falls back to a self-hosted LibreTranslate when
+   * LIBRETRANSLATE_URL is; NONE switches translation off even where the feature flag is on.
+   */
+  TRANSLATE_PROVIDER: z.enum(['AUTO', 'ANTHROPIC', 'LIBRETRANSLATE', 'NONE']).default('AUTO'),
+  /** Self-hosted LibreTranslate (docker compose up libretranslate → http://localhost:5000). */
+  LIBRETRANSLATE_URL: z.string().optional(),
+  LIBRETRANSLATE_API_KEY: z.string().optional(),
   // Geo (PLAT-02)
   GEOCODER: z.enum(['NOMINATIM', 'KAKAO', 'STATIC']).default('STATIC'),
   KAKAO_REST_API_KEY: z.string().optional(),
@@ -86,13 +101,19 @@ const schema = z.object({
 export type Config = z.infer<typeof schema>;
 
 export function loadConfig(overrides: Partial<Record<keyof Config, unknown>> = {}): Config {
-  const cfg = schema.parse({ ...process.env, ...overrides });
+  const raw = { ...process.env, ...overrides };
+  const cfg = schema.parse(raw);
+  // Blank counts as unset, the way every other envBoolean reads it: compose passes `DEMO_LOGINS: ${DEMO_LOGINS:-}`
+  // so an operator can turn it off, and an untouched .env must still follow OAUTH_MOCK rather than silently off.
+  const demo = raw.DEMO_LOGINS;
+  if (demo === undefined || (typeof demo === 'string' && demo.trim() === '')) cfg.DEMO_LOGINS = cfg.OAUTH_MOCK;
   if (cfg.NODE_ENV === 'production') {
     if (cfg.JWT_SECRET.startsWith('dev-only')) throw new Error('JWT_SECRET must be set in production');
     if (cfg.DATA_ENCRYPTION_KEY === '0'.repeat(64)) throw new Error('DATA_ENCRYPTION_KEY must be set in production');
     if (cfg.PAYMENT_PROVIDER === 'MOCK') throw new Error('MOCK payment provider is forbidden in production');
     if (cfg.OAUTH_MOCK) throw new Error('OAUTH_MOCK is forbidden in production');
     if (!cfg.STAFF_MFA_REQUIRED) throw new Error('STAFF_MFA_REQUIRED=false is forbidden in production');
+    if (cfg.DEMO_LOGINS) throw new Error('DEMO_LOGINS is forbidden in production');
   }
   return cfg;
 }
