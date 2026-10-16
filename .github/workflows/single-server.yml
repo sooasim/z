@@ -14,14 +14,14 @@
 #
 #   workflow_dispatch + deploy=true   FIRST setup of a server: runs install.sh, which writes .env, the
 #                                     Caddy mode and the public addresses from the inputs you give it.
-#   push of a tag `deploy-*`          RE-deploy of a server that is already set up: ships the current
+#   push of `deploy-*` (tag or branch) RE-deploy of a server that is already set up: ships the current
 #                                     default branch with `jetpool.sh deploy` (build → migrate → up →
 #                                     smoke) and never touches .env or the domain mode. No inputs, so
 #                                     nothing can accidentally rewrite a live site into IP mode — and a
 #                                     tag push needs no `actions: write`, so anyone (or any agent) who
 #                                     can push can ship:
 #
-#                                       git tag deploy-$(date -u +%Y%m%d-%H%M) && git push origin --tags
+#                                       git push origin HEAD:refs/heads/deploy-$(date -u +%Y%m%d-%H%M)
 #
 # Secrets for `deploy` (Settings → Secrets and variables → Actions):
 #   JETPOOL_SSH_HOST       the server's public IP or hostname
@@ -68,8 +68,10 @@ on:
         type: boolean
         default: false
   push:
-    # A re-deploy button that needs no API permission: push the tag, the runner ships the branch.
+    # A re-deploy button that needs no API permission: push the ref, the runner ships the branch.
+    # Tag or branch, because some git proxies refuse to forward a tag push but pass branches fine.
     tags: ['deploy-*']
+    branches: ['deploy-*']
 
 permissions:
   contents: read
@@ -168,7 +170,7 @@ jobs:
   deploy:
     name: deploy over SSH
     needs: verify
-    if: ${{ inputs.deploy || startsWith(github.ref, 'refs/tags/deploy-') }}
+    if: ${{ inputs.deploy || (startsWith(github.ref, 'refs/tags/deploy-') || startsWith(github.ref, 'refs/heads/deploy-')) }}
     runs-on: ubuntu-latest
     steps:
       - name: Check the secrets are present
@@ -177,10 +179,9 @@ jobs:
           USER_NAME: ${{ secrets.JETPOOL_SSH_USER }}
           KEY: ${{ secrets.JETPOOL_SSH_KEY }}
           HOST_KEY: ${{ secrets.JETPOOL_SSH_HOST_KEY }}
+          PASSWORD: ${{ secrets.JETPOOL_SSH_PASSWORD }}
           DOMAIN: ${{ inputs.domain }}
           EMAIL: ${{ inputs.email }}
-        env:
-          PASSWORD: ${{ secrets.JETPOOL_SSH_PASSWORD }}
         run: |
           missing=""
           [ -n "$HOST" ] || missing="$missing JETPOOL_SSH_HOST"
@@ -251,10 +252,10 @@ jobs:
           # A tag push re-deploys what is already configured; a dispatch sets a server up from scratch.
           SSHPASS: ${{ secrets.JETPOOL_SSH_PASSWORD }}
           JP_PORT: ${{ secrets.JETPOOL_SSH_PORT }}
-          MODE: ${{ startsWith(github.ref, 'refs/tags/deploy-') && 'update' || 'install' }}
+          MODE: ${{ (startsWith(github.ref, 'refs/tags/deploy-') || startsWith(github.ref, 'refs/heads/deploy-')) && 'update' || 'install' }}
           # On a tag push `github.ref_name` is the tag, which is no branch to check out on the server, so
           # the update path ships the default branch — the tag is a button, not the payload.
-          BRANCH: ${{ startsWith(github.ref, 'refs/tags/deploy-') && github.event.repository.default_branch || github.ref_name }}
+          BRANCH: ${{ (startsWith(github.ref, 'refs/tags/deploy-') || startsWith(github.ref, 'refs/heads/deploy-')) && github.event.repository.default_branch || github.ref_name }}
           REPO: ${{ github.server_url }}/${{ github.repository }}.git
         run: |
           set -euo pipefail
