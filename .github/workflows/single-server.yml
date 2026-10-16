@@ -179,10 +179,9 @@ jobs:
           USER_NAME: ${{ secrets.JETPOOL_SSH_USER }}
           KEY: ${{ secrets.JETPOOL_SSH_KEY }}
           HOST_KEY: ${{ secrets.JETPOOL_SSH_HOST_KEY }}
+          PASSWORD: ${{ secrets.JETPOOL_SSH_PASSWORD }}
           DOMAIN: ${{ inputs.domain }}
           EMAIL: ${{ inputs.email }}
-        env:
-          PASSWORD: ${{ secrets.JETPOOL_SSH_PASSWORD }}
         run: |
           missing=""
           [ -n "$HOST" ] || missing="$missing JETPOOL_SSH_HOST"
