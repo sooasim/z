@@ -312,6 +312,48 @@ seed를 다시 돌려도 같은 비밀번호로 수렴합니다. 인자를 빼�
 
 ---
 
+## 도메인 하나 더 붙이기 (`jetpoolworld.co.kr` 처럼)
+
+```bash
+# 1) DNS: 새 도메인의 A 레코드 2개를 이 서버 공인 IP로
+#    jetpoolworld.co.kr        A   <공인-IP>
+#    www.jetpoolworld.co.kr    A   <공인-IP>
+# 2) 서버에서
+./infra/single-server/jetpool.sh domain add jetpoolworld.co.kr
+./infra/single-server/jetpool.sh domain list
+./infra/single-server/jetpool.sh domain remove jetpoolworld.co.kr   # 되돌리기
+```
+
+새 도메인은 **자기 인증서를 받고 운영 도메인으로 301 리다이렉트**합니다. 복사본을 두 주소에서 따로
+서비스하지 않는 이유는 그게 더 적게 작동해서가 아니라, 주소가 둘이면 **세션·쿠키·OAuth 콜백·검색
+결과가 둘로 갈라지기** 때문입니다. `.co.kr` 로 들어온 사람도 로그인 상태가 그대로 유지됩니다.
+
+- `--no-www` 로 www 없이, `--force` 로 DNS 검사를 건너뜁니다.
+- **DNS가 아직 여기를 가리키지 않으면 거부합니다.** 그 상태로 적용하면 Caddy가 검증할 수 없는 인증서를
+  요청하고, 몇 번 실패하면 그 도메인의 **주간 발급 한도**를 태웁니다. 레코드를 넣고 다시 실행하세요.
+- apex와 www를 **각각 별도 블록**으로 씁니다. 한 블록에 두 이름을 넣으면 인증서 하나로 묶여서, www
+  레코드가 아직 없을 때 apex까지 같이 발급 실패합니다.
+- 적용은 무중단 `caddy reload` 입니다(실패하면 컨테이너 재시작). `.env` 의 `ALT_DOMAINS` 와
+  생성 파일 `alt-domains.caddy` 가 한 쌍이며, 손으로 고치지 말고 이 명령으로만 바꾸세요.
+- `doctor` 가 추가 도메인의 A 레코드도 같이 검사합니다.
+
+### 운영 도메인을 `.co.kr` 로 **바꾸려면**
+
+리다이렉트 방향을 뒤집는 것이므로 명령이 다릅니다. 공개 주소가 웹 번들과 CSP에 박히기 때문에
+**재빌드가 필요**합니다.
+
+```bash
+./infra/single-server/jetpool.sh domain remove jetpoolworld.co.kr
+./infra/single-server/jetpool.sh init --domain jetpoolworld.co.kr --email <메일>
+./infra/single-server/jetpool.sh domain add jetpoolworld.com
+./infra/single-server/jetpool.sh deploy
+```
+
+이때 `api.jetpoolworld.co.kr` A 레코드도 필요하고, 소셜 로그인 콘솔의 redirect URI도 새 도메인으로
+바꿔야 합니다(`https://도메인/auth/callback/google` 등).
+
+---
+
 ## 도메인 없이 먼저 확인하기 (선택)
 
 DNS 전파를 기다리는 동안 공인 IP로 동작만 점검할 수 있습니다.
