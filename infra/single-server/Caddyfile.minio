@@ -35,6 +35,9 @@ www.{$ROOT_DOMAIN} {
 	redir https://{$ROOT_DOMAIN}{uri} permanent
 }
 
+# Extra domains that point at this server (`jetpool.sh domain add <name>`), each redirecting here.
+import /etc/caddy/alt-domains.caddy
+
 api.{$ROOT_DOMAIN} {
 	import common
 
