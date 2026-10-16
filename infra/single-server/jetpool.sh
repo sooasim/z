@@ -824,6 +824,21 @@ cmd_doctor() {
     else
       note "caddy has not logged a certificate result yet"
     fi
+
+    # Each extra domain has its own certificate, so "the site works" says nothing about them. Ask Caddy
+    # directly, over the loopback with the name forced, which tests its certificate and its redirect
+    # without depending on this server's own DNS or on the public route back to it.
+    local alt code loc
+    for alt in $(get_env ALT_DOMAINS | tr ',' ' '); do
+      [[ -n "$alt" ]] || continue
+      code="$(curl -skI --max-time 12 --resolve "$alt:443:127.0.0.1" "https://$alt/" -o /dev/null -w '%{http_code}' 2>/dev/null || true)"
+      loc="$(curl -skI --max-time 12 --resolve "$alt:443:127.0.0.1" "https://$alt/" 2>/dev/null | awk 'tolower($1)=="location:"{print $2}' | tr -d '\r' || true)"
+      case "$code" in
+        30[1278]) ok "$alt → ${loc:-(no Location header)} ($code)" ;;
+        000) bad "$alt does not answer over https inside the box — Caddy has no certificate for it yet (it asks Let's Encrypt on the first request; check 'logs caddy')" ;;
+        *)   note "$alt answered $code instead of a redirect — check that ALT_DOMAINS and alt-domains.caddy agree" ;;
+      esac
+    done
   fi
 
   bold "10. resources"
